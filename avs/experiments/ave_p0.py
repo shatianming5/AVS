@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import random
 import time
 from dataclasses import dataclass
@@ -11,7 +12,13 @@ import numpy as np
 import torch
 
 from avs.audio.features import audio_features_per_second
-from avs.audio.eventness import anchors_from_scores, compute_eventness_wav_energy, compute_eventness_wav_energy_delta, topk_anchors
+from avs.audio.eventness import (
+    anchors_from_scores,
+    anchors_from_scores_with_debug,
+    compute_eventness_wav_energy,
+    compute_eventness_wav_energy_delta,
+    topk_anchors,
+)
 from avs.audio.ast_probe import ASTEventnessProbe, ASTProbeConfig
 from avs.datasets.ave import AVEIndex, ensure_ave_meta
 from avs.datasets.layout import ave_paths
@@ -35,6 +42,11 @@ class P0Config:
     anchor_select: str = "topk"  # topk|nms|nms_strong
     anchor_nms_radius: int = 1
     anchor_nms_strong_gap: float = 0.6
+    anchor_window: int = 3
+    anchor_smooth_window: int = 0
+    anchor_smooth_mode: str = "mean"
+    anchor_conf_metric: str | None = None  # std|top1_med|top12_gap|gini (None => legacy std_threshold)
+    anchor_conf_threshold: float | None = None  # None => legacy std_threshold
     anchor_base_alloc: str = "distance"  # distance|score|farthest|mixed
     anchor_high_policy: str = "fixed"  # fixed|adaptive_v1
     anchor_high_adjacent_dist: int = 1
@@ -304,7 +316,8 @@ def _plan_for_baseline(
         return uniform_plan(num_segments=num_segments, resolution=cfg.low_res, patch_size=cfg.patch_size)
 
     if baseline in ("uniform", "audio_concat_uniform", "audio_feat_concat_uniform"):
-        use_anchors: list[int] = []
+        return uniform_plan(num_segments=num_segments, resolution=cfg.base_res, patch_size=cfg.patch_size)
+
     elif baseline == "random_top2":
         use_anchors = rng.sample(range(num_segments), k=min(cfg.k, num_segments))
     elif baseline in ("anchored_top2", "audio_concat_anchored_top2", "audio_feat_concat_anchored_top2"):
@@ -318,19 +331,18 @@ def _plan_for_baseline(
     if baseline in ("anchored_top2", "audio_concat_anchored_top2", "audio_feat_concat_anchored_top2"):
         max_high_anchors = _max_high_anchors_for_clip(cfg=cfg, anchors=use_anchors, scores=scores)
 
+    alloc = str(cfg.anchor_base_alloc)
     use_scores_for_base: list[float] | None = None
-    if baseline in ("anchored_top2", "audio_concat_anchored_top2", "audio_feat_concat_anchored_top2"):
-        alloc = str(cfg.anchor_base_alloc)
-        if alloc == "distance":
-            use_scores_for_base = None
-        elif alloc == "score":
+
+    if alloc == "score":
+        # Base allocation by score only makes sense when the baseline is audio-guided; avoid leaking
+        # audio signal into random/oracle baselines (and avoid requiring scores for uniform/oracle).
+        if baseline in ("anchored_top2", "audio_concat_anchored_top2", "audio_feat_concat_anchored_top2"):
+            if scores is None:
+                raise ValueError("anchor_base_alloc=score requires per-second scores to be provided")
             use_scores_for_base = scores
-        elif alloc == "farthest":
-            use_scores_for_base = None
-        elif alloc == "mixed":
-            use_scores_for_base = None
         else:
-            raise ValueError(f"unknown anchor_base_alloc: {alloc!r}; expected 'distance', 'score', 'farthest', or 'mixed'")
+            alloc = "distance"
 
     # NOTE: Default `anchor_base_alloc=distance` keeps `anchored_top2` backward-compatible:
     # base segments are allocated by distance-to-anchor (not by score).
@@ -338,7 +350,7 @@ def _plan_for_baseline(
         num_segments=num_segments,
         anchors=use_anchors,
         scores=use_scores_for_base,
-        base_alloc=str(cfg.anchor_base_alloc),
+        base_alloc=str(alloc),
         low_res=cfg.low_res,
         base_res=cfg.base_res,
         high_res=cfg.high_res,
@@ -549,13 +561,14 @@ def run_p0_from_caches(
                     raise ValueError(f"unsupported eventness_method: {eventness_method}")
 
     debug_eval = None
-    if audio_dir is not None and scores_by_clip is not None and "anchored_top2" in baselines:
-        by_clip: dict[str, dict] = {}
-        for cid in sorted(set(clip_ids_eval)):
-            scores = scores_by_clip.get(cid)
-            if scores is None:
-                continue
-            anchors = anchors_from_scores(
+    anchors_by_clip: dict[str, list[int]] | None = None
+    anchor_debug_by_clip: dict[str, dict] | None = None
+    if scores_by_clip is not None:
+        anchors_by_clip = {}
+        anchor_debug_by_clip = {}
+        for cid in all_ids:
+            scores = scores_by_clip[cid]
+            sel = anchors_from_scores_with_debug(
                 scores,
                 k=cfg.k,
                 num_segments=num_segments,
@@ -564,7 +577,30 @@ def run_p0_from_caches(
                 select=cfg.anchor_select,
                 nms_radius=cfg.anchor_nms_radius,
                 nms_strong_gap=cfg.anchor_nms_strong_gap,
+                anchor_window=cfg.anchor_window,
+                smooth_window=cfg.anchor_smooth_window,
+                smooth_mode=cfg.anchor_smooth_mode,
+                conf_metric=cfg.anchor_conf_metric,
+                conf_threshold=cfg.anchor_conf_threshold,
             )
+            anchors_by_clip[cid] = [int(x) for x in sel.anchors]
+            anchor_debug_by_clip[cid] = {
+                "fallback_used": bool(sel.fallback_used),
+                "fallback_reason": sel.fallback_reason,
+                "conf_metric": str(sel.conf_metric),
+                "conf_value": float(sel.conf_value),
+                "conf_threshold": float(sel.conf_threshold),
+            }
+
+    if audio_dir is not None and scores_by_clip is not None and "anchored_top2" in baselines:
+        by_clip: dict[str, dict] = {}
+        for cid in sorted(set(clip_ids_eval)):
+            scores = scores_by_clip.get(cid)
+            if scores is None:
+                continue
+            if anchors_by_clip is None or anchor_debug_by_clip is None:
+                raise ValueError("internal error: anchors_by_clip should be precomputed")
+            anchors = anchors_by_clip.get(cid) or []
             max_high_anchors = _max_high_anchors_for_clip(cfg=cfg, anchors=anchors, scores=scores)
             alloc = str(cfg.anchor_base_alloc)
             if alloc == "distance":
@@ -591,6 +627,7 @@ def run_p0_from_caches(
             by_clip[str(cid)] = {
                 "scores": [float(x) for x in scores],
                 "anchors": [int(x) for x in anchors],
+                **(anchor_debug_by_clip.get(cid) or {}),
                 "max_high_anchors": max_high_anchors,
                 "plan_resolutions": plan.resolutions,
             }
@@ -613,22 +650,6 @@ def run_p0_from_caches(
     y_eval_t = torch.from_numpy(y_eval_np).long()
 
     oracle_segments_by_clip = {cid: _segments_from_labels(labels_by_clip[cid]) for cid in all_ids}
-
-    anchors_by_clip: dict[str, list[int]] | None = None
-    if scores_by_clip is not None:
-        anchors_by_clip = {}
-        for cid in all_ids:
-            scores = scores_by_clip[cid]
-            anchors_by_clip[cid] = anchors_from_scores(
-                scores,
-                k=cfg.k,
-                num_segments=num_segments,
-                shift=cfg.anchor_shift,
-                std_threshold=cfg.anchor_std_threshold,
-                select=cfg.anchor_select,
-                nms_radius=cfg.anchor_nms_radius,
-                nms_strong_gap=cfg.anchor_nms_strong_gap,
-            )
 
     fixed_data: dict[str, dict[str, torch.Tensor]] = {}
     token_budget_by_baseline: dict[str, int] = {}
@@ -782,69 +803,77 @@ def run_p0_from_caches(
     paired_ttest = None
     if len(seeds) > 1:
         try:
-            from scipy.stats import ttest_rel
+            # Avoid optional scipy dependency: compute paired t-test via StudentT CDF from torch.
+            def _ttest_rel(x: np.ndarray, y: np.ndarray) -> dict[str, float]:
+                # t-test on (y - x)
+                dx = torch.as_tensor(y - x, dtype=torch.float64)
+                n = int(dx.numel())
+                if n < 2:
+                    return {"t": float("nan"), "p": float("nan")}
+                mean = float(dx.mean().item())
+                std = float(dx.std(unbiased=True).item())
+                if std <= 0.0:
+                    if mean == 0.0:
+                        return {"t": 0.0, "p": 1.0}
+                    return {"t": float("inf") if mean > 0.0 else float("-inf"), "p": 0.0}
+                t = mean / (std / math.sqrt(float(n)))
+                dist = torch.distributions.StudentT(df=float(n - 1))
+                p = float(2.0 * (1.0 - float(dist.cdf(torch.tensor(abs(t), dtype=torch.float64)).item())))
+                return {"t": float(t), "p": float(max(0.0, min(1.0, p)))}
 
-            anchored = np.asarray([r["baselines"]["anchored_top2"]["val_acc"] for r in results_by_seed], dtype=np.float64)
-            uniform = np.asarray([r["baselines"]["uniform"]["val_acc"] for r in results_by_seed], dtype=np.float64)
-            random_top2 = np.asarray([r["baselines"]["random_top2"]["val_acc"] for r in results_by_seed], dtype=np.float64)
-            audio_concat = (
-                np.asarray([r["baselines"]["audio_concat_uniform"]["val_acc"] for r in results_by_seed], dtype=np.float64)
-                if "audio_concat_uniform" in baselines
-                else None
-            )
-            audio_concat_anchored = (
-                np.asarray([r["baselines"]["audio_concat_anchored_top2"]["val_acc"] for r in results_by_seed], dtype=np.float64)
-                if "audio_concat_anchored_top2" in baselines
-                else None
-            )
-            audio_feat_concat = (
-                np.asarray([r["baselines"]["audio_feat_concat_uniform"]["val_acc"] for r in results_by_seed], dtype=np.float64)
-                if "audio_feat_concat_uniform" in baselines
-                else None
-            )
-            audio_feat_concat_anchored = (
-                np.asarray([r["baselines"]["audio_feat_concat_anchored_top2"]["val_acc"] for r in results_by_seed], dtype=np.float64)
-                if "audio_feat_concat_anchored_top2" in baselines
-                else None
-            )
+            paired_ttest = {}
 
-            paired_ttest = {
-                "anchored_vs_uniform": {"t": float(ttest_rel(anchored, uniform).statistic), "p": float(ttest_rel(anchored, uniform).pvalue)},
-                "anchored_vs_random": {
-                    "t": float(ttest_rel(anchored, random_top2).statistic),
-                    "p": float(ttest_rel(anchored, random_top2).pvalue),
-                },
-            }
-            if audio_concat is not None:
-                paired_ttest["anchored_vs_audio_concat_uniform"] = {
-                    "t": float(ttest_rel(anchored, audio_concat).statistic),
-                    "p": float(ttest_rel(anchored, audio_concat).pvalue),
-                }
-            if audio_concat_anchored is not None:
-                paired_ttest["audio_concat_anchored_vs_anchored"] = {
-                    "t": float(ttest_rel(audio_concat_anchored, anchored).statistic),
-                    "p": float(ttest_rel(audio_concat_anchored, anchored).pvalue),
-                }
-                if audio_concat is not None:
-                    paired_ttest["audio_concat_anchored_vs_audio_concat_uniform"] = {
-                        "t": float(ttest_rel(audio_concat_anchored, audio_concat).statistic),
-                        "p": float(ttest_rel(audio_concat_anchored, audio_concat).pvalue),
-                    }
-            if audio_feat_concat is not None:
-                paired_ttest["anchored_vs_audio_feat_concat_uniform"] = {
-                    "t": float(ttest_rel(anchored, audio_feat_concat).statistic),
-                    "p": float(ttest_rel(anchored, audio_feat_concat).pvalue),
-                }
-            if audio_feat_concat_anchored is not None:
-                paired_ttest["audio_feat_concat_anchored_vs_anchored"] = {
-                    "t": float(ttest_rel(audio_feat_concat_anchored, anchored).statistic),
-                    "p": float(ttest_rel(audio_feat_concat_anchored, anchored).pvalue),
-                }
-                if audio_feat_concat is not None:
-                    paired_ttest["audio_feat_concat_anchored_vs_audio_feat_concat_uniform"] = {
-                        "t": float(ttest_rel(audio_feat_concat_anchored, audio_feat_concat).statistic),
-                        "p": float(ttest_rel(audio_feat_concat_anchored, audio_feat_concat).pvalue),
-                    }
+            if "anchored_top2" in baselines and "uniform" in baselines:
+                anchored = np.asarray([r["baselines"]["anchored_top2"]["val_acc"] for r in results_by_seed], dtype=np.float64)
+                uniform = np.asarray([r["baselines"]["uniform"]["val_acc"] for r in results_by_seed], dtype=np.float64)
+                paired_ttest["anchored_vs_uniform"] = _ttest_rel(uniform, anchored)
+
+                if "random_top2" in baselines:
+                    random_top2 = np.asarray([r["baselines"]["random_top2"]["val_acc"] for r in results_by_seed], dtype=np.float64)
+                    paired_ttest["anchored_vs_random"] = _ttest_rel(random_top2, anchored)
+
+                if "audio_concat_uniform" in baselines:
+                    audio_concat = np.asarray(
+                        [r["baselines"]["audio_concat_uniform"]["val_acc"] for r in results_by_seed], dtype=np.float64
+                    )
+                    paired_ttest["anchored_vs_audio_concat_uniform"] = _ttest_rel(audio_concat, anchored)
+
+                if "audio_feat_concat_uniform" in baselines:
+                    audio_feat_concat = np.asarray(
+                        [r["baselines"]["audio_feat_concat_uniform"]["val_acc"] for r in results_by_seed], dtype=np.float64
+                    )
+                    paired_ttest["anchored_vs_audio_feat_concat_uniform"] = _ttest_rel(audio_feat_concat, anchored)
+
+            if "oracle_top2" in baselines and "uniform" in baselines:
+                oracle = np.asarray([r["baselines"]["oracle_top2"]["val_acc"] for r in results_by_seed], dtype=np.float64)
+                uniform = np.asarray([r["baselines"]["uniform"]["val_acc"] for r in results_by_seed], dtype=np.float64)
+                paired_ttest["oracle_vs_uniform"] = _ttest_rel(uniform, oracle)
+
+            if "audio_concat_anchored_top2" in baselines and "audio_concat_uniform" in baselines:
+                audio_concat_anchored = np.asarray(
+                    [r["baselines"]["audio_concat_anchored_top2"]["val_acc"] for r in results_by_seed], dtype=np.float64
+                )
+                audio_concat = np.asarray(
+                    [r["baselines"]["audio_concat_uniform"]["val_acc"] for r in results_by_seed], dtype=np.float64
+                )
+                paired_ttest["audio_concat_anchored_vs_audio_concat_uniform"] = _ttest_rel(audio_concat, audio_concat_anchored)
+                if "anchored_top2" in baselines:
+                    anchored = np.asarray([r["baselines"]["anchored_top2"]["val_acc"] for r in results_by_seed], dtype=np.float64)
+                    paired_ttest["audio_concat_anchored_vs_anchored"] = _ttest_rel(anchored, audio_concat_anchored)
+
+            if "audio_feat_concat_anchored_top2" in baselines and "audio_feat_concat_uniform" in baselines:
+                audio_feat_concat_anchored = np.asarray(
+                    [r["baselines"]["audio_feat_concat_anchored_top2"]["val_acc"] for r in results_by_seed], dtype=np.float64
+                )
+                audio_feat_concat = np.asarray(
+                    [r["baselines"]["audio_feat_concat_uniform"]["val_acc"] for r in results_by_seed], dtype=np.float64
+                )
+                paired_ttest["audio_feat_concat_anchored_vs_audio_feat_concat_uniform"] = _ttest_rel(
+                    audio_feat_concat, audio_feat_concat_anchored
+                )
+                if "anchored_top2" in baselines:
+                    anchored = np.asarray([r["baselines"]["anchored_top2"]["val_acc"] for r in results_by_seed], dtype=np.float64)
+                    paired_ttest["audio_feat_concat_anchored_vs_anchored"] = _ttest_rel(anchored, audio_feat_concat_anchored)
         except Exception:
             paired_ttest = None
 
@@ -909,8 +938,27 @@ def build_parser() -> argparse.ArgumentParser:
         "--anchor-select",
         type=str,
         default="topk",
-        choices=["topk", "nms", "nms_strong"],
+        choices=["topk", "nms", "nms_strong", "window_topk"],
         help="Anchor selection strategy on per-second eventness scores.",
+    )
+    p.add_argument(
+        "--anchor-window",
+        type=int,
+        default=3,
+        help="For --anchor-select window_topk: window size for score aggregation (odd; e.g., 3 or 5).",
+    )
+    p.add_argument(
+        "--anchor-smooth-window",
+        type=int,
+        default=0,
+        help="Optional score smoothing window (odd). Applied before anchor selection. 0 disables.",
+    )
+    p.add_argument(
+        "--anchor-smooth-mode",
+        type=str,
+        default="mean",
+        choices=["mean", "sum"],
+        help="For --anchor-smooth-window: how to aggregate scores inside the smoothing window.",
     )
     p.add_argument(
         "--anchor-nms-radius",
@@ -923,6 +971,19 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=0.6,
         help="For --anchor-select nms_strong: accept a far anchor only if (top1_score - best_far_score) <= gap.",
+    )
+    p.add_argument(
+        "--anchor-conf-metric",
+        type=str,
+        default=None,
+        choices=["std", "top1_med", "top12_gap", "gini"],
+        help="Anchor confidence metric. If set, uses --anchor-conf-threshold to decide fallback to uniform (replaces std-only fallback).",
+    )
+    p.add_argument(
+        "--anchor-conf-threshold",
+        type=float,
+        default=None,
+        help="For --anchor-conf-metric: if confidence < threshold, fall back to uniform (return empty anchors).",
     )
     p.add_argument(
         "--anchor-base-alloc",
@@ -1022,6 +1083,11 @@ def main(argv: list[str] | None = None) -> int:
             anchor_select=str(args.anchor_select),
             anchor_nms_radius=int(args.anchor_nms_radius),
             anchor_nms_strong_gap=float(args.anchor_nms_strong_gap),
+            anchor_window=int(args.anchor_window),
+            anchor_smooth_window=int(args.anchor_smooth_window),
+            anchor_smooth_mode=str(args.anchor_smooth_mode),
+            anchor_conf_metric=str(args.anchor_conf_metric) if args.anchor_conf_metric is not None else None,
+            anchor_conf_threshold=float(args.anchor_conf_threshold) if args.anchor_conf_threshold is not None else None,
             anchor_base_alloc=str(args.anchor_base_alloc),
             anchor_high_policy=str(args.anchor_high_policy),
             anchor_high_adjacent_dist=int(args.anchor_high_adjacent_dist),

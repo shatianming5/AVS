@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import shutil
 from pathlib import Path
 
 
@@ -129,6 +130,19 @@ def extract_middle_frames(
         str(tmp_pattern),
     ]
     subprocess.run(cmd, check=True)  # noqa: S603,S607 - controlled args
+
+    # Some videos have slightly-shorter video streams than their container duration, which can
+    # result in <num_frames> outputs. Pad missing tail frames by repeating the last available.
+    for i in range(1, int(num_frames) + 1):
+        src = out_dir / f"frame_{i:02d}.jpg"
+        if src.exists():
+            continue
+        if i == 1:
+            raise FileNotFoundError(f"expected frame not found: {src}")
+        prev = out_dir / f"frame_{i-1:02d}.jpg"
+        if not prev.exists():
+            raise FileNotFoundError(f"expected frame not found: {src} (and cannot pad; missing {prev})")
+        shutil.copy2(prev, src)
 
     frames: list[Path] = []
     for i in range(num_frames):

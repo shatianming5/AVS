@@ -199,6 +199,9 @@ def main(argv: list[str] | None = None) -> int:
     high_count_by_clip: dict[str, int] = {}
     gap_by_clip: dict[str, float] = {}
     dist_by_clip: dict[str, int] = {}
+    fallback_used_by_clip: dict[str, bool] = {}
+    fallback_reason_by_clip: dict[str, str | None] = {}
+    conf_value_by_clip: dict[str, float] = {}
 
     for cid in common:
         info = dbg.get(cid) or {}
@@ -207,6 +210,12 @@ def main(argv: list[str] | None = None) -> int:
         plan_res = [int(x) for x in info.get("plan_resolutions") or []]
 
         anchors_len_by_clip[cid] = int(len(anchors))
+        fallback_used_by_clip[cid] = bool(info.get("fallback_used", len(anchors) == 0))
+        fallback_reason_by_clip[cid] = info.get("fallback_reason")
+        try:
+            conf_value_by_clip[cid] = float(info.get("conf_value"))
+        except Exception:
+            conf_value_by_clip[cid] = float("nan")
 
         uniq = sorted(set(plan_res))
         if len(uniq) <= 1:
@@ -227,6 +236,9 @@ def main(argv: list[str] | None = None) -> int:
     anchors_len_hist = Counter(anchors_len_by_clip.values())
     high_count_hist = Counter(high_count_by_clip.values())
     dist_hist = Counter(dist_by_clip.values())
+    fallback_reason_hist = Counter(
+        str(fallback_reason_by_clip.get(c) or "unknown") for c in common if bool(fallback_used_by_clip.get(c, False))
+    )
 
     def _mean(xs: list[float]) -> float:
         return float(np.asarray(xs, dtype=np.float64).mean()) if xs else float("nan")
@@ -245,6 +257,10 @@ def main(argv: list[str] | None = None) -> int:
     }
 
     gap_arr = np.asarray([gap_by_clip[c] for c in common], dtype=np.float32)
+    conf_arr = np.asarray([conf_value_by_clip[c] for c in common], dtype=np.float32)
+    conf_fallback_arr = np.asarray(
+        [conf_value_by_clip[c] for c in common if bool(fallback_used_by_clip.get(c, False))], dtype=np.float32
+    )
 
     payload = {
         "in_metrics": str(args.in_metrics),
@@ -264,9 +280,13 @@ def main(argv: list[str] | None = None) -> int:
         "anchor_plan_stats": {
             "anchors_len_hist": {str(k): int(v) for k, v in sorted(anchors_len_hist.items())},
             "anchors_len_fallback_frac": float(anchors_len_hist.get(0, 0) / max(1, len(common))),
+            "fallback_used_frac": float(sum(1 for c in common if bool(fallback_used_by_clip.get(c, False))) / max(1, len(common))),
+            "fallback_reason_hist": {str(k): int(v) for k, v in sorted(fallback_reason_hist.items())},
             "high_count_hist": {str(k): int(v) for k, v in sorted(high_count_hist.items())},
             "anchor_dist_hist": {str(k): int(v) for k, v in sorted(dist_hist.items())},
             "gap_summary": {**_percentiles(gap_arr, [10, 50, 90]), "mean": float(np.nanmean(gap_arr))},
+            "conf_summary": {**_percentiles(conf_arr, [10, 50, 90]), "mean": float(np.nanmean(conf_arr))},
+            "conf_fallback_summary": {**_percentiles(conf_fallback_arr, [10, 50, 90]), "mean": float(np.nanmean(conf_fallback_arr))},
             "delta_by_anchor_len": delta_by_anchor_len,
             "delta_by_high_count": delta_by_high_count,
             "delta_by_anchor_dist": delta_by_anchor_dist,

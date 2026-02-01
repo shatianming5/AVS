@@ -1,6 +1,6 @@
 # Plan
 
-This repo currently only contains the free-form draft in `plan.md`. This document is the **canonical, actionable plan** (machine-friendly) derived from that draft.
+This repo contains the free-form draft in `plan.md`. This document is the **canonical, actionable plan** (machine-friendly) derived from that draft.
 
 ## Items
 - [x] P0001: Bootstrap AVS codebase scaffold
@@ -306,6 +306,57 @@ This repo currently only contains the free-form draft in `plan.md`. This documen
   - Outputs: `runs/<run_id>/epic_long_pack_out/` (manifest, plans, selected_frames, caches)
   - Evidence: `python -m avs.smoke epic_sounds_long_pack` → ok (`runs/smoke_20260131-142810/smoke.json`)
 
+- [ ] P0038: Add AVE oracle ceiling sweep (is +2% achievable?)
+  - Summary: Add a reproducible oracle-only sweep to estimate the achievable upper bound of “anchored sampling” under equal token budget on official AVE val/test.
+  - Rationale: Before chasing +2% on `test402`, confirm the backbone/head has enough headroom (Oracle-TopK vs Uniform). If oracle gains are <2%, anchor tuning alone cannot reach the target.
+  - Scope: `avs/experiments/ave_p0_oracle_sweep.py` (new), `scripts/e0010_ave_oracle_ceiling_official.sh` (new)
+  - Acceptance: Produces `oracle_ceiling.json` summarizing ≥6 configs with `uniform` vs `oracle_top2` mean/std and paired p-values, plus pointers to raw `metrics.json`.
+  - Verification: `bash scripts/e0010_ave_oracle_ceiling_official.sh` (requires official AVE installed)
+  - Outputs: `runs/E0010_*/oracle_ceiling.json`
+
+- [x] P0039: Add windowed anchors + score smoothing (robust anchor selection)
+  - Summary: Add `anchor_select=window_topk` that selects anchors using window-aggregated scores + NMS, and optional score smoothing before selection.
+  - Rationale: Plain Top-K often selects adjacent seconds on long-ish events; window aggregation + NMS yields more diverse anchors and better tolerance to A/V misalignment.
+  - Scope: `avs/audio/eventness.py`, plumbing in `avs/experiments/ave_p0.py`, `avs/pipeline/ave_p0_end2end.py`, `avs/experiments/ave_anchor_eval.py`, smoke checks.
+  - Acceptance: New selector is deterministic and avoids adjacent anchors under synthetic multi-peak sequences; CLI supports `--anchor-select window_topk --anchor-window 3/5`.
+  - Verification: `python -m avs.smoke anchor_window_select`
+  - Outputs: `runs/<run_id>/anchor_window_select.json`
+  - Evidence: `python -m avs.smoke anchor_window_select` → ok (`runs/smoke_20260202-035940/smoke.json`)
+
+- [x] P0040: Add anchor confidence gating (replace std-only fallback)
+  - Summary: Add configurable confidence metrics (std / top1-median / top1-top2 gap / gini) to decide when to fall back to uniform, and record `fallback_reason` per clip in debug.
+  - Rationale: Many clips have flat/noisy scores where anchors are unreliable; a stronger gating signal reduces harmful anchored plans and improves stability on `test402`.
+  - Scope: `avs/audio/eventness.py`, `avs/experiments/ave_p0.py`, `avs/pipeline/ave_p0_end2end.py`, `avs/experiments/ave_p0_diagnose.py`, smoke checks.
+  - Acceptance: `metrics.json` includes `debug_eval.anchored_top2.<clip_id>.fallback_used/fallback_reason/conf_value` for eval clips.
+  - Verification: `python -m avs.smoke anchor_confidence_gate`
+  - Outputs: `runs/<run_id>/anchor_confidence_gate.json`
+  - Evidence: `python -m avs.smoke anchor_confidence_gate` → ok (`runs/smoke_20260202-040007/smoke.json`)
+
+- [ ] P0041: Add AVE config sweep + best-to-test reproduction (aim +2% on test402)
+  - Summary: Add a fixed-space sweep runner (val402 selection → test402 reproduction) with a machine-readable summary of configs and outcomes.
+  - Rationale: Avoid ad-hoc hand tuning; enforce a reproducible process to search configs and re-run the best config on `test402` with `SEEDS=0..9`.
+  - Scope: `avs/experiments/ave_p0_sweep.py` (new), `scripts/e0011_ave_p0_sweep_official.sh` (new), `scripts/e0012_ave_p0_best_to_test_official.sh` (new)
+  - Acceptance: `sweep_summary.json` lists configs with `anchored_top2 - uniform`, p-values, and paths to each run’s `metrics.json`; best config can be reproduced on test split.
+  - Verification: `bash scripts/e0011_ave_p0_sweep_official.sh && bash scripts/e0012_ave_p0_best_to_test_official.sh` (requires official AVE installed)
+  - Outputs: `runs/E0011_*/sweep_summary.json`, `runs/E0012_*/metrics.json`
+
+- [ ] P0042: Confirm fusion adds on top of sampling (audio_concat_* baselines)
+  - Summary: Add a dedicated script to confirm `audio_concat_anchored_top2` improves over `audio_concat_uniform` under the best sampling config (and record results).
+  - Rationale: Target requires both sampling-only and fusion+sampling to be strong; this isolates whether fusion is benefiting from better sampling or simply dominates.
+  - Scope: `scripts/e0013_ave_fusion_confirm_official.sh` (new), minor plumbing in `avs/experiments/ave_p0.py` if needed
+  - Acceptance: On official `test402`, `audio_concat_anchored_top2.mean - audio_concat_uniform.mean >= +1.0%` and paired p<0.05 with `SEEDS=0..9`.
+  - Verification: `bash scripts/e0013_ave_fusion_confirm_official.sh` (requires official AVE installed)
+  - Outputs: `runs/E0013_*/metrics.json`
+
+- [x] P0043: Add EPIC-SOUNDS downstream proxy: video-level multi-label sound event recognition
+  - Summary: Add a reproducible downstream task on EPIC-SOUNDS: video-level multi-label classification using selected seconds’ visual features, comparing `uniform` vs `audio_anchored` selection under a fixed token budget.
+  - Rationale: Provides a “long video” story with a measurable downstream metric (mAP/macro-F1), beyond anchor Recall@K.
+  - Scope: `avs/experiments/epic_sounds_video_cls.py` (new), `avs/models/video_multilabel_head.py` (new), smoke checks, `scripts/e0100_epic_video_cls_local.sh` (new)
+  - Acceptance: Synthetic smoke runs end-to-end and writes `metrics.json` with mAP and budget fields; local run works once EPIC mp4s exist under `data/EPIC_SOUNDS/raw/videos/`.
+  - Verification: `python -m avs.smoke epic_sounds_video_cls_synth`
+  - Outputs: `runs/<run_id>/epic_sounds_video_cls_synth.json`, `runs/<run_id>/epic_sounds_video_cls_synth_metrics.json`
+  - Evidence: `python -m avs.smoke epic_sounds_video_cls_synth` → ok (`runs/smoke_20260202-035910/smoke.json`)
+
 ## Conclusions
 - [x] C0001: On AVE, under a strictly equal ViT token budget, Audio-anchored sampling (with a lightweight temporal head) improves segment-level accuracy vs Uniform sampling and Random anchors.
   - Evidence required: `metrics.json` with `acc_mean±std` over ≥3 seeds for Uniform-224, Random-TopK, Audio-TopK; plus a statement that token budgets are equal. Must hold on a non-trivial subset (e.g., ≥100 eval clips).
@@ -331,3 +382,15 @@ This repo currently only contains the free-form draft in `plan.md`. This documen
   - Experiments: E0002
   - Artifacts: `runs/anchors/*/anchors_metrics.json`
   - Evidence: `runs/E0002_anchors_real_20260131-045200/anchor_eval/anchors_metrics.json` (energy; k=2; n=89; Δ=0: ours=0.207 > random=0.194). Also: `runs/REAL_AVE_20260131-211548/anchors_val165_energy/anchors_metrics.json` (k=2; n=165; Δ=0: ours=0.208 > random=0.202) and `runs/REAL_AVE_20260131-211548/anchors_test113_energy/anchors_metrics.json` (k=2; n=113; Δ=0: ours=0.221 > random=0.181). Official full split: val `runs/REAL_AVE_OFFICIAL_20260201-124535/E0002_anchors_official_val/anchor_eval/anchors_metrics.json` (n=401; Δ=0 ours=0.231 > random=0.211) and test `runs/REAL_AVE_OFFICIAL_20260201-124535/E0002_anchors_official_test/anchor_eval/anchors_metrics.json` (n=402; Δ=0 ours=0.231 > random=0.204). Note: for dilated windows (Δ1/Δ2), random > ours on both val/test.
+
+- [ ] C0003: On official AVE test402, sampling-only anchored_top2 improves >= +2.0% with p<0.05 (SEEDS=0..9).
+  - Evidence required: `metrics.json` from the best config selected on val402 and reproduced on test402, with strict equal token budget and paired t-test.
+  - Experiments: E0012
+
+- [ ] C0004: On official AVE test402, audio_concat_anchored_top2 improves over audio_concat_uniform (>= +1.0%, p<0.05; SEEDS=0..9).
+  - Evidence required: `metrics.json` under the best sampling config, showing fusion gains beyond uniform fusion baseline.
+  - Experiments: E0013
+
+- [ ] C0005: On EPIC-SOUNDS video-level multi-label recognition, audio-anchored selection improves mAP on val (SEEDS>=3).
+  - Evidence required: `metrics.json` with mAP/macro-F1 and a clear fixed budget definition (`max_steps × base_res`), plus baselines.
+  - Experiments: E0100

@@ -36,8 +36,13 @@ def evaluate_anchor_quality(
     anchor_shift: int = 0,
     anchor_std_threshold: float = 0.0,
     anchor_select: str = "topk",
+    anchor_window: int = 3,
+    anchor_smooth_window: int = 0,
+    anchor_smooth_mode: str = "mean",
     anchor_nms_radius: int = 1,
     anchor_nms_strong_gap: float = 0.6,
+    anchor_conf_metric: str | None = None,
+    anchor_conf_threshold: float | None = None,
     audio_device: str = "cpu",
     ast_pretrained: bool = False,
     panns_random: bool = False,
@@ -100,8 +105,13 @@ def evaluate_anchor_quality(
             shift=int(anchor_shift),
             std_threshold=float(anchor_std_threshold),
             select=str(anchor_select),
+            anchor_window=int(anchor_window),
+            smooth_window=int(anchor_smooth_window),
+            smooth_mode=str(anchor_smooth_mode),
             nms_radius=int(anchor_nms_radius),
             nms_strong_gap=float(anchor_nms_strong_gap),
+            conf_metric=str(anchor_conf_metric) if anchor_conf_metric is not None else None,
+            conf_threshold=float(anchor_conf_threshold) if anchor_conf_threshold is not None else None,
         )
         rand_anchors_by_clip[clip.clip_id] = rng.sample(range(10), k=min(k, 10))
 
@@ -178,8 +188,27 @@ def build_parser() -> argparse.ArgumentParser:
         "--anchor-select",
         type=str,
         default="topk",
-        choices=["topk", "nms", "nms_strong"],
+        choices=["topk", "nms", "nms_strong", "window_topk"],
         help="Anchor selection strategy on per-second eventness scores.",
+    )
+    p.add_argument(
+        "--anchor-window",
+        type=int,
+        default=3,
+        help="For --anchor-select window_topk: window size for score aggregation (odd; e.g., 3 or 5).",
+    )
+    p.add_argument(
+        "--anchor-smooth-window",
+        type=int,
+        default=0,
+        help="Optional score smoothing window (odd). Applied before anchor selection. 0 disables.",
+    )
+    p.add_argument(
+        "--anchor-smooth-mode",
+        type=str,
+        default="mean",
+        choices=["mean", "sum"],
+        help="For --anchor-smooth-window: how to aggregate scores inside the smoothing window.",
     )
     p.add_argument(
         "--anchor-nms-radius",
@@ -192,6 +221,19 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=0.6,
         help="For --anchor-select nms_strong: accept a far anchor only if (top1_score - best_far_score) <= gap.",
+    )
+    p.add_argument(
+        "--anchor-conf-metric",
+        type=str,
+        default=None,
+        choices=["std", "top1_med", "top12_gap", "gini"],
+        help="Anchor confidence metric. If set, uses --anchor-conf-threshold to decide fallback to uniform.",
+    )
+    p.add_argument(
+        "--anchor-conf-threshold",
+        type=float,
+        default=None,
+        help="For --anchor-conf-metric: if confidence < threshold, fall back to uniform (return empty anchors).",
     )
     p.add_argument("--out-dir", type=Path, default=Path("runs") / f"anchors_{time.strftime('%Y%m%d-%H%M%S')}")
 
@@ -235,8 +277,13 @@ def main(argv: list[str] | None = None) -> int:
         anchor_shift=int(args.anchor_shift),
         anchor_std_threshold=float(args.anchor_std_threshold),
         anchor_select=str(args.anchor_select),
+        anchor_window=int(args.anchor_window),
+        anchor_smooth_window=int(args.anchor_smooth_window),
+        anchor_smooth_mode=str(args.anchor_smooth_mode),
         anchor_nms_radius=int(args.anchor_nms_radius),
         anchor_nms_strong_gap=float(args.anchor_nms_strong_gap),
+        anchor_conf_metric=str(args.anchor_conf_metric) if args.anchor_conf_metric is not None else None,
+        anchor_conf_threshold=float(args.anchor_conf_threshold) if args.anchor_conf_threshold is not None else None,
         audio_device=str(args.audio_device),
         ast_pretrained=bool(args.ast_pretrained),
         panns_random=bool(args.panns_random),

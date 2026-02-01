@@ -53,6 +53,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("epic_sounds_audio", help="Smoke: EPIC-SOUNDS untrimmed audio extraction")
     sub.add_parser("epic_sounds_frames", help="Smoke: EPIC-SOUNDS untrimmed frame extraction")
     sub.add_parser("epic_sounds_long_pack", help="Smoke: EPIC-SOUNDS long-video pack (audio+frames→plan→manifest/cache)")
+    sub.add_parser("epic_sounds_video_cls_synth", help="Smoke: EPIC-SOUNDS video-level multi-label classification (synthetic)")
     sub.add_parser("ave_download", help="Smoke: AVE raw-video acquisition helper")
     sub.add_parser("preprocess_one", help="Smoke: preprocess one short video")
     sub.add_parser("preprocess_dataset", help="Smoke: preprocess a tiny dataset directory")
@@ -67,6 +68,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("panns_eventness", help="Smoke: PANNs-based audio eventness probe (random weights)")
     sub.add_parser("audiomae_eventness", help="Smoke: AudioMAE(-style) audio eventness probe (random weights)")
     sub.add_parser("anchor_knobs", help="Smoke: anchor shift + fallback knobs")
+    sub.add_parser("anchor_window_select", help="Smoke: windowed anchor selection (window_topk)")
+    sub.add_parser("anchor_confidence_gate", help="Smoke: anchor confidence gating (fallback reasons)")
     sub.add_parser("temporal_head", help="Smoke: temporal head option (1D conv)")
     sub.add_parser("feature_cache", help="Smoke: multi-resolution feature cache builder")
     sub.add_parser("vision_encoder", help="Smoke: variable-resolution vision encoder")
@@ -97,6 +100,7 @@ def main(argv: list[str] | None = None) -> int:
             "epic_sounds_audio",
             "epic_sounds_frames",
             "epic_sounds_long_pack",
+            "epic_sounds_video_cls_synth",
             "ave_download",
             "preprocess_one",
             "preprocess_dataset",
@@ -111,6 +115,8 @@ def main(argv: list[str] | None = None) -> int:
             "panns_eventness",
             "audiomae_eventness",
             "anchor_knobs",
+            "anchor_window_select",
+            "anchor_confidence_gate",
             "temporal_head",
             "feature_cache",
             "vision_encoder",

@@ -14,6 +14,16 @@ class AudioEventness:
     sample_rate: int
 
 
+@dataclass(frozen=True)
+class AnchorSelectionResult:
+    anchors: list[int]
+    conf_metric: str
+    conf_value: float
+    conf_threshold: float
+    fallback_used: bool
+    fallback_reason: str | None
+
+
 def load_wav_mono(path: Path) -> tuple[np.ndarray, int]:
     with wave.open(str(path), "rb") as wf:
         num_channels = wf.getnchannels()
@@ -170,6 +180,188 @@ def topk_anchors_nms_strong(
     return out[: min(int(k), len(out))]
 
 
+def smooth_scores(scores: list[float], *, window: int, mode: str = "mean") -> list[float]:
+    """
+    Smooth a 1D score sequence with a centered sliding window.
+
+    - window=0/1: no-op (returns a copy).
+    - window must be odd for symmetric behavior.
+    - mode: "mean" or "sum".
+    """
+    w = int(window)
+    if w <= 1:
+        return [float(x) for x in scores]
+    if w % 2 == 0:
+        raise ValueError(f"window must be odd, got {w}")
+
+    mode = str(mode)
+    if mode not in ("mean", "sum"):
+        raise ValueError(f"unknown mode={mode!r}; expected 'mean' or 'sum'")
+
+    half = w // 2
+    out: list[float] = []
+    for i in range(len(scores)):
+        lo = max(0, i - half)
+        hi = min(len(scores), i + half + 1)
+        vals = scores[lo:hi]
+        if not vals:
+            out.append(float(scores[i]))
+            continue
+        s = float(sum(float(x) for x in vals))
+        if mode == "mean":
+            s /= float(len(vals))
+        out.append(float(s))
+    return out
+
+
+def confidence_std(scores: list[float]) -> float:
+    if not scores:
+        return 0.0
+    s = np.asarray(scores, dtype=np.float32)
+    return float(s.std())
+
+
+def confidence_top1_minus_median(scores: list[float]) -> float:
+    if not scores:
+        return 0.0
+    s = np.asarray(scores, dtype=np.float32)
+    top1 = float(np.max(s))
+    med = float(np.median(s))
+    return float(top1 - med)
+
+
+def confidence_top12_gap(scores: list[float]) -> float:
+    if len(scores) < 2:
+        return 0.0
+    order = sorted(range(len(scores)), key=lambda i: (-float(scores[i]), i))
+    return float(float(scores[order[0]]) - float(scores[order[1]]))
+
+
+def confidence_gini(scores: list[float]) -> float:
+    """
+    Gini coefficient as a simple "peakiness" measure.
+
+    Since scores can be negative (e.g., log-energy), we shift them to be non-negative.
+    """
+    if not scores:
+        return 0.0
+    x = np.asarray(scores, dtype=np.float64)
+    x = x - float(np.min(x))
+    if float(np.sum(x)) <= 0.0:
+        return 0.0
+    x = np.sort(x)
+    n = int(x.size)
+    idx = np.arange(1, n + 1, dtype=np.float64)
+    g = (2.0 * float(np.sum(idx * x)) / (float(n) * float(np.sum(x)))) - (float(n) + 1.0) / float(n)
+    return float(max(0.0, min(1.0, g)))
+
+
+def _confidence(scores: list[float], metric: str) -> float:
+    metric = str(metric)
+    if metric == "std":
+        return confidence_std(scores)
+    if metric == "top1_med":
+        return confidence_top1_minus_median(scores)
+    if metric == "top12_gap":
+        return confidence_top12_gap(scores)
+    if metric == "gini":
+        return confidence_gini(scores)
+    raise ValueError(f"unknown conf_metric={metric!r}; expected 'std', 'top1_med', 'top12_gap', or 'gini'")
+
+
+def window_topk_anchors(scores: list[float], k: int, *, window: int = 3, nms_radius: int = 1) -> list[int]:
+    """
+    Select anchors by applying window aggregation then Top-K with NMS.
+
+    This helps avoid selecting adjacent seconds when a single event spans multiple seconds.
+    """
+    agg = smooth_scores(scores, window=int(window), mode="mean")
+    return topk_anchors_nms(agg, k=int(k), radius=int(nms_radius))
+
+
+def anchors_from_scores_with_debug(
+    scores: list[float],
+    *,
+    k: int,
+    num_segments: int | None = None,
+    shift: int = 0,
+    std_threshold: float = 0.0,
+    select: str = "topk",
+    nms_radius: int = 1,
+    nms_strong_gap: float = 0.0,
+    anchor_window: int = 3,
+    smooth_window: int = 0,
+    smooth_mode: str = "mean",
+    conf_metric: str | None = None,
+    conf_threshold: float | None = None,
+) -> AnchorSelectionResult:
+    if num_segments is None:
+        num_segments = len(scores)
+    num_segments = int(num_segments)
+    if num_segments <= 0:
+        return AnchorSelectionResult(
+            anchors=[],
+            conf_metric=str(conf_metric or "std"),
+            conf_value=0.0,
+            conf_threshold=float(conf_threshold if conf_threshold is not None else std_threshold),
+            fallback_used=True,
+            fallback_reason="empty_scores",
+        )
+
+    # Clip scores to evaluated range for stability.
+    scores = [float(x) for x in scores[:num_segments]]
+
+    # Backward-compatible defaults: std_threshold == conf_threshold when conf_* is unset.
+    if conf_metric is None:
+        conf_metric = "std"
+    if conf_threshold is None:
+        conf_threshold = float(std_threshold)
+
+    conf_value = _confidence(scores, str(conf_metric))
+    if float(conf_threshold) > 0.0 and float(conf_value) < float(conf_threshold):
+        return AnchorSelectionResult(
+            anchors=[],
+            conf_metric=str(conf_metric),
+            conf_value=float(conf_value),
+            conf_threshold=float(conf_threshold),
+            fallback_used=True,
+            fallback_reason="conf_below_threshold",
+        )
+
+    select = str(select)
+    scores_sel = scores
+    if int(smooth_window) > 1:
+        scores_sel = smooth_scores(scores_sel, window=int(smooth_window), mode=str(smooth_mode))
+
+    if select == "topk":
+        anchors = topk_anchors(scores_sel, k=k)
+    elif select == "nms":
+        anchors = topk_anchors_nms(scores_sel, k=k, radius=int(nms_radius))
+    elif select == "nms_strong":
+        anchors = topk_anchors_nms_strong(scores_sel, k=k, radius=int(nms_radius), max_gap=float(nms_strong_gap))
+    elif select == "window_topk":
+        anchors = window_topk_anchors(scores_sel, k=k, window=int(anchor_window), nms_radius=int(nms_radius))
+    else:
+        raise ValueError(f"unknown select={select!r}; expected 'topk', 'nms', 'nms_strong', or 'window_topk'")
+
+    if shift:
+        out: list[int] = []
+        for a in anchors:
+            b = int(a) + int(shift)
+            if 0 <= b < int(num_segments) and b not in out:
+                out.append(b)
+        anchors = out
+
+    return AnchorSelectionResult(
+        anchors=[int(x) for x in anchors],
+        conf_metric=str(conf_metric),
+        conf_value=float(conf_value),
+        conf_threshold=float(conf_threshold),
+        fallback_used=False,
+        fallback_reason=None,
+    )
+
+
 def anchors_from_scores(
     scores: list[float],
     *,
@@ -180,41 +372,35 @@ def anchors_from_scores(
     select: str = "topk",
     nms_radius: int = 1,
     nms_strong_gap: float = 0.0,
+    anchor_window: int = 3,
+    smooth_window: int = 0,
+    smooth_mode: str = "mean",
+    conf_metric: str | None = None,
+    conf_threshold: float | None = None,
 ) -> list[int]:
     """
     Select Top-K anchors from scores with optional robustness knobs.
 
     - `shift`: integer offset applied to each selected anchor (models A/V misalignment).
-    - `std_threshold`: if `std(scores) < std_threshold`, return [] (fallback to uniform sampling).
-    - `select`: "topk" (default), "nms" (hard temporal NMS), or "nms_strong" (prefers far anchors only if strong).
+    - `std_threshold`: legacy alias for `conf_threshold` when `conf_*` is not set.
+    - `select`: "topk" (default), "nms" (hard temporal NMS), "nms_strong" (prefers far anchors only if strong),
+      or "window_topk" (window aggregation + NMS).
     - `nms_radius`: only for `select="nms"`, suppression radius in segments.
     - `nms_strong_gap`: only for `select="nms_strong"`, max allowed (top1 - far_candidate) score gap to accept a far anchor.
     """
-    if num_segments is None:
-        num_segments = len(scores)
-    if num_segments <= 0:
-        return []
-
-    if std_threshold > 0.0:
-        s = np.asarray(scores, dtype=np.float32)
-        if float(s.std()) < float(std_threshold):
-            return []
-
-    select = str(select)
-    if select == "topk":
-        anchors = topk_anchors(scores, k=k)
-    elif select == "nms":
-        anchors = topk_anchors_nms(scores, k=k, radius=int(nms_radius))
-    elif select == "nms_strong":
-        anchors = topk_anchors_nms_strong(scores, k=k, radius=int(nms_radius), max_gap=float(nms_strong_gap))
-    else:
-        raise ValueError(f"unknown select={select!r}; expected 'topk', 'nms', or 'nms_strong'")
-
-    if shift:
-        out: list[int] = []
-        for a in anchors:
-            b = int(a) + int(shift)
-            if 0 <= b < int(num_segments) and b not in out:
-                out.append(b)
-        anchors = out
-    return anchors
+    res = anchors_from_scores_with_debug(
+        scores,
+        k=int(k),
+        num_segments=num_segments,
+        shift=int(shift),
+        std_threshold=float(std_threshold),
+        select=str(select),
+        nms_radius=int(nms_radius),
+        nms_strong_gap=float(nms_strong_gap),
+        anchor_window=int(anchor_window),
+        smooth_window=int(smooth_window),
+        smooth_mode=str(smooth_mode),
+        conf_metric=str(conf_metric) if conf_metric is not None else None,
+        conf_threshold=float(conf_threshold) if conf_threshold is not None else None,
+    )
+    return list(res.anchors)

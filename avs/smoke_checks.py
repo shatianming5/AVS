@@ -398,6 +398,22 @@ def check_epic_sounds_long_pack(run_dir: Path) -> SmokeResult:
     )
 
 
+def check_epic_sounds_video_cls_synth(run_dir: Path) -> SmokeResult:
+    from avs.experiments.epic_sounds_video_cls import run_synth_smoke
+
+    out_dir = run_dir / "epic_sounds_video_cls_synth"
+    payload = run_synth_smoke(out_dir=out_dir)
+    ok = bool(payload.get("ok")) and "mAP" in (payload.get("metrics") or {})
+
+    details = {"out_dir": str(out_dir), "metrics_path": str(out_dir / "metrics.json")}
+    _write_json(run_dir, "epic_sounds_video_cls_synth.json", {"details": details, "payload": payload})
+    return SmokeResult(
+        name="epic_sounds_video_cls_synth",
+        ok=ok,
+        details=details if ok else {"error": "synthetic video-cls smoke failed", **details},
+    )
+
+
 def check_ave_download(run_dir: Path) -> SmokeResult:
     import subprocess
     import shutil
@@ -892,6 +908,50 @@ def check_anchor_knobs(run_dir: Path) -> SmokeResult:
     }
     _write_json(run_dir, "anchor_knobs.json", payload)
     return SmokeResult(name="anchor_knobs", ok=ok, details=payload if ok else {"error": "unexpected anchor knob behavior", **payload})
+
+
+def check_anchor_window_select(run_dir: Path) -> SmokeResult:
+    from avs.audio.eventness import anchors_from_scores
+
+    scores = [0.0] * 10
+    scores[5] = 1.0
+    scores[6] = 0.99
+
+    anchors_topk = anchors_from_scores(scores, k=2, num_segments=10, select="topk")
+    anchors_window = anchors_from_scores(scores, k=2, num_segments=10, select="window_topk", anchor_window=3, nms_radius=1)
+
+    ok = len(anchors_topk) == 2 and anchors_topk == [5, 6]
+    ok = ok and len(anchors_window) == 2 and abs(int(anchors_window[0]) - int(anchors_window[1])) > 1
+
+    payload = {"anchors_topk": anchors_topk, "anchors_window_topk": anchors_window, "scores": scores}
+    _write_json(run_dir, "anchor_window_select.json", payload)
+    return SmokeResult(name="anchor_window_select", ok=ok, details=payload if ok else {"error": "window_topk behavior unexpected", **payload})
+
+
+def check_anchor_confidence_gate(run_dir: Path) -> SmokeResult:
+    from avs.audio.eventness import anchors_from_scores_with_debug
+
+    flat = [0.0] * 10
+    sel_flat = anchors_from_scores_with_debug(flat, k=2, num_segments=10, conf_metric="std", conf_threshold=0.1)
+
+    peak = [0.0] * 10
+    peak[6] = 1.0
+    peak[7] = 0.9
+    sel_peak = anchors_from_scores_with_debug(peak, k=2, num_segments=10, conf_metric="std", conf_threshold=0.1)
+
+    ok = sel_flat.fallback_used and sel_flat.fallback_reason == "conf_below_threshold" and sel_flat.anchors == []
+    ok = ok and (not sel_peak.fallback_used) and len(sel_peak.anchors) > 0
+
+    payload = {
+        "flat": sel_flat.__dict__,
+        "peak": sel_peak.__dict__,
+    }
+    _write_json(run_dir, "anchor_confidence_gate.json", payload)
+    return SmokeResult(
+        name="anchor_confidence_gate",
+        ok=ok,
+        details=payload if ok else {"error": "confidence gating unexpected", **payload},
+    )
 
 
 def check_anchors_dataset(run_dir: Path) -> SmokeResult:
@@ -1528,6 +1588,7 @@ handlers = {
     "epic_sounds_audio": check_epic_sounds_audio,
     "epic_sounds_frames": check_epic_sounds_frames,
     "epic_sounds_long_pack": check_epic_sounds_long_pack,
+    "epic_sounds_video_cls_synth": check_epic_sounds_video_cls_synth,
     "ave_download": check_ave_download,
     "preprocess_one": check_preprocess_one,
     "preprocess_dataset": check_preprocess_dataset,
@@ -1542,6 +1603,8 @@ handlers = {
     "panns_eventness": check_panns_eventness,
     "audiomae_eventness": check_audiomae_eventness,
     "anchor_knobs": check_anchor_knobs,
+    "anchor_window_select": check_anchor_window_select,
+    "anchor_confidence_gate": check_anchor_confidence_gate,
     "feature_cache": check_feature_cache,
     "vision_encoder": check_vision_encoder,
     "vision_efficiency": check_vision_efficiency,

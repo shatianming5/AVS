@@ -125,6 +125,24 @@ This runs:
 - E0002-style anchor eval on full val/test
 - E0001-style AVE-P0 train→val and train→test on the full train split
 
+### Targeted official sweeps (aiming for larger `anchored_top2` gains)
+
+These scripts are meant for reproducible “search → reproduce on test” workflows on official AVE:
+
+```bash
+# E0010: oracle ceiling (uniform vs oracle_top2)
+bash scripts/e0010_ave_oracle_ceiling_official.sh
+
+# E0011: fixed candidate sweep on val402 (writes best_config.json)
+bash scripts/e0011_ave_p0_sweep_official.sh
+
+# E0012: reproduce best_config.json on test402
+BEST_CONFIG_JSON=runs/E0011_.../best_config.json bash scripts/e0012_ave_p0_best_to_test_official.sh
+
+# E0013: confirm fusion adds on top (audio_concat_* baselines)
+BEST_CONFIG_JSON=runs/E0011_.../best_config.json bash scripts/e0013_ave_fusion_confirm_official.sh
+```
+
 ### Run AVE-P0 on a smaller subset (single GPU)
 
 Default uses `yt-dlp` to fetch a small subset (best-effort):
@@ -177,9 +195,14 @@ Anchor selection and robustness:
 - `--k`: top-k anchors
 - `--anchor-shift`: shift anchors to model A/V misalignment
 - `--anchor-std-threshold`: if `std(scores)` is too small, fall back to uniform sampling
-- `--anchor-select`: `topk` | `nms` | `nms_strong`
+- `--anchor-select`: `topk` | `nms` | `nms_strong` | `window_topk`
+- `--anchor-window`: for `window_topk` (odd; e.g., 3 or 5)
+- `--anchor-smooth-window`: optional score smoothing window (odd; 0 disables)
+- `--anchor-smooth-mode`: `mean` or `sum` (applies to smoothing and `window_topk` aggregation)
 - `--anchor-nms-radius`: suppression radius for `nms`
 - `--anchor-nms-strong-gap`: for `nms_strong`, accept a far anchor only if it is competitive
+- `--anchor-conf-metric`: `std` | `top1_med` | `top12_gap` | `gini` (if set, uses `--anchor-conf-threshold` instead of std-only fallback)
+- `--anchor-conf-threshold`: confidence threshold for `--anchor-conf-metric`
 
 Equal-budget plan allocation:
 - `--low-res`, `--base-res`, `--high-res`, `--patch-size`
@@ -206,4 +229,3 @@ It records:
   redistribute datasets.
 - **Caches dominate runtime**: full runs are mostly bottlenecked by feature caching; head training is relatively cheap.
 - **Git ignores artifacts**: `data/` and `runs/` are not tracked.
-
