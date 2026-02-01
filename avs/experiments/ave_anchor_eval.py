@@ -1,0 +1,260 @@
+from __future__ import annotations
+
+import argparse
+import json
+import random
+import time
+from dataclasses import dataclass
+from pathlib import Path
+
+from avs.audio.ast_probe import ASTEventnessProbe, ASTProbeConfig
+from avs.audio.eventness import anchors_from_scores, compute_eventness_wav_energy, compute_eventness_wav_energy_delta
+from avs.datasets.ave import AVEIndex, ensure_ave_meta
+from avs.datasets.layout import ave_paths
+from avs.metrics.anchors import recall_at_k
+from avs.utils.paths import data_dir
+
+
+@dataclass(frozen=True)
+class AnchorEvalClip:
+    clip_id: str
+    wav_path: Path
+    gt_segments: list[int]
+
+
+def _gt_segments_from_labels(segment_labels: list[int]) -> list[int]:
+    return [i for i, lab in enumerate(segment_labels) if int(lab) != 0]
+
+
+def evaluate_anchor_quality(
+    clips: list[AnchorEvalClip],
+    *,
+    method: str = "energy",
+    k: int = 2,
+    deltas: list[int] = [0, 1, 2],
+    seed: int = 0,
+    anchor_shift: int = 0,
+    anchor_std_threshold: float = 0.0,
+    anchor_select: str = "topk",
+    anchor_nms_radius: int = 1,
+    anchor_nms_strong_gap: float = 0.6,
+    audio_device: str = "cpu",
+    ast_pretrained: bool = False,
+    panns_random: bool = False,
+    panns_checkpoint: Path | None = None,
+    audiomae_random: bool = False,
+    audiomae_checkpoint: Path | None = None,
+) -> dict:
+    rng = random.Random(seed)
+
+    ast_probe = None
+    if method == "ast":
+        ast_probe = ASTEventnessProbe(ASTProbeConfig(pretrained=ast_pretrained, device=str(audio_device)))
+
+    panns_probe = None
+    if method == "panns":
+        from avs.audio.panns_probe import PANNsEventnessProbe, PANNsProbeConfig
+
+        panns_probe = PANNsEventnessProbe(
+            PANNsProbeConfig(pretrained=not panns_random, checkpoint_path=panns_checkpoint, device=str(audio_device))
+        )
+
+    audiomae_probe = None
+    if method == "audiomae":
+        from avs.audio.audiomae_probe import AudioMAEEventnessProbe, AudioMAEProbeConfig
+
+        audiomae_probe = AudioMAEEventnessProbe(
+            AudioMAEProbeConfig(
+                pretrained=(audiomae_checkpoint is not None) and (not audiomae_random),
+                checkpoint_path=audiomae_checkpoint if (audiomae_checkpoint is not None) and (not audiomae_random) else None,
+                device=str(audio_device),
+            )
+        )
+
+    valid_clips = [c for c in clips if c.gt_segments]
+    ours_anchors_by_clip: dict[str, list[int]] = {}
+    rand_anchors_by_clip: dict[str, list[int]] = {}
+    for clip in valid_clips:
+        if method == "energy":
+            ev = compute_eventness_wav_energy(clip.wav_path, num_segments=10)
+            scores = ev.scores
+        elif method == "energy_delta":
+            ev = compute_eventness_wav_energy_delta(clip.wav_path, num_segments=10)
+            scores = ev.scores
+        elif method == "ast":
+            assert ast_probe is not None
+            scores = ast_probe.eventness_per_second(clip.wav_path, num_segments=10)
+        elif method == "panns":
+            assert panns_probe is not None
+            scores = panns_probe.eventness_per_second(clip.wav_path, num_segments=10)
+        elif method == "audiomae":
+            assert audiomae_probe is not None
+            scores = audiomae_probe.eventness_per_second(clip.wav_path, num_segments=10)
+        else:
+            raise ValueError(f"unknown method: {method}")
+
+        ours_anchors_by_clip[clip.clip_id] = anchors_from_scores(
+            [float(x) for x in scores],
+            k=int(k),
+            num_segments=10,
+            shift=int(anchor_shift),
+            std_threshold=float(anchor_std_threshold),
+            select=str(anchor_select),
+            nms_radius=int(anchor_nms_radius),
+            nms_strong_gap=float(anchor_nms_strong_gap),
+        )
+        rand_anchors_by_clip[clip.clip_id] = rng.sample(range(10), k=min(k, 10))
+
+    per_delta: dict[int, dict[str, float]] = {}
+    for delta in deltas:
+        ours_recalls: list[float] = []
+        rand_recalls: list[float] = []
+
+        for clip in valid_clips:
+            ours = recall_at_k(clip.gt_segments, ours_anchors_by_clip[clip.clip_id], num_segments=10, delta=delta).recall
+            ours_recalls.append(float(ours))
+
+            rand = recall_at_k(clip.gt_segments, rand_anchors_by_clip[clip.clip_id], num_segments=10, delta=delta).recall
+            rand_recalls.append(float(rand))
+
+        per_delta[int(delta)] = {
+            "ours_mean_recall": float(sum(ours_recalls) / max(1, len(ours_recalls))),
+            "random_mean_recall": float(sum(rand_recalls) / max(1, len(rand_recalls))),
+            "num_clips": int(len(ours_recalls)),
+        }
+
+    return {"method": method, "k": int(k), "deltas": deltas, "by_delta": per_delta}
+
+
+def _load_custom_clips(jsonl_path: Path) -> list[AnchorEvalClip]:
+    clips: list[AnchorEvalClip] = []
+    for line in jsonl_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        obj = json.loads(line)
+        clips.append(
+            AnchorEvalClip(
+                clip_id=str(obj["clip_id"]),
+                wav_path=Path(obj["wav_path"]),
+                gt_segments=[int(x) for x in obj["gt_segments"]],
+            )
+        )
+    return clips
+
+
+def _build_ave_clips(meta_dir: Path, processed_dir: Path, split: str, limit: int | None) -> list[AnchorEvalClip]:
+    ensure_ave_meta(meta_dir)
+    index = AVEIndex.from_meta_dir(meta_dir)
+    ids = index.splits[split]
+    if limit is not None:
+        ids = ids[:limit]
+
+    clips: list[AnchorEvalClip] = []
+    for idx in ids:
+        clip = index.clips[int(idx)]
+        wav_path = processed_dir / clip.video_id / "audio.wav"
+        if not wav_path.exists():
+            continue
+        seg_labels = index.segment_labels(clip)
+        gt = _gt_segments_from_labels(seg_labels)
+        clips.append(AnchorEvalClip(clip_id=clip.video_id, wav_path=wav_path, gt_segments=gt))
+    return clips
+
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(description="Evaluate anchor quality (Recall@K / Recall@K,Δ).")
+    p.add_argument("--method", type=str, default="energy", choices=["energy", "energy_delta", "ast", "panns", "audiomae"])
+    p.add_argument("--k", type=int, default=2)
+    p.add_argument("--deltas", type=str, default="0,1,2")
+    p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--anchor-shift", type=int, default=0, help="Shift anchor indices by this many segments (A/V misalignment).")
+    p.add_argument(
+        "--anchor-std-threshold",
+        type=float,
+        default=0.0,
+        help="If std(scores) < threshold, return [] (fallback). 0 disables.",
+    )
+    p.add_argument(
+        "--anchor-select",
+        type=str,
+        default="topk",
+        choices=["topk", "nms", "nms_strong"],
+        help="Anchor selection strategy on per-second eventness scores.",
+    )
+    p.add_argument(
+        "--anchor-nms-radius",
+        type=int,
+        default=1,
+        help="For --anchor-select nms: suppress anchors within ±radius segments of a selected anchor.",
+    )
+    p.add_argument(
+        "--anchor-nms-strong-gap",
+        type=float,
+        default=0.6,
+        help="For --anchor-select nms_strong: accept a far anchor only if (top1_score - best_far_score) <= gap.",
+    )
+    p.add_argument("--out-dir", type=Path, default=Path("runs") / f"anchors_{time.strftime('%Y%m%d-%H%M%S')}")
+
+    src = p.add_mutually_exclusive_group(required=False)
+    src.add_argument("--clips-jsonl", type=Path, help="Custom clips JSONL with clip_id,wav_path,gt_segments")
+    src.add_argument("--ave", action="store_true", help="Use AVE metadata + processed dir")
+
+    p.add_argument("--split", type=str, default="val", choices=["train", "val", "test"])
+    p.add_argument("--limit", type=int, default=None)
+    p.add_argument("--meta-dir", type=Path, default=ave_paths().meta_dir)
+    p.add_argument("--processed-dir", type=Path, default=ave_paths().processed_dir)
+    p.add_argument("--audio-device", type=str, default="cpu", help="Device for audio probe inference (e.g., cuda:0).")
+    p.add_argument("--ast-pretrained", action="store_true", help="Use pretrained AST weights (downloads from HF)")
+    p.add_argument("--panns-checkpoint", type=Path, default=None, help="Path to PANNs Cnn14 checkpoint (.pth)")
+    p.add_argument("--panns-random", action="store_true", help="Use random PANNs weights (no checkpoint; smoke/debug only)")
+    p.add_argument("--audiomae-checkpoint", type=Path, default=None, help="Path to AudioMAE(-style) checkpoint (optional)")
+    p.add_argument("--audiomae-random", action="store_true", help="Use random AudioMAE(-style) weights (no checkpoint; smoke/debug only)")
+    return p
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    out_dir: Path = args.out_dir
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    deltas = [int(x) for x in str(args.deltas).split(",") if str(x).strip()]
+
+    if args.clips_jsonl:
+        clips = _load_custom_clips(args.clips_jsonl)
+    elif args.ave:
+        clips = _build_ave_clips(args.meta_dir, args.processed_dir, args.split, args.limit)
+    else:
+        raise SystemExit("must pass --clips-jsonl or --ave")
+
+    metrics = evaluate_anchor_quality(
+        clips,
+        method=args.method,
+        k=args.k,
+        deltas=deltas,
+        seed=args.seed,
+        anchor_shift=int(args.anchor_shift),
+        anchor_std_threshold=float(args.anchor_std_threshold),
+        anchor_select=str(args.anchor_select),
+        anchor_nms_radius=int(args.anchor_nms_radius),
+        anchor_nms_strong_gap=float(args.anchor_nms_strong_gap),
+        audio_device=str(args.audio_device),
+        ast_pretrained=bool(args.ast_pretrained),
+        panns_random=bool(args.panns_random),
+        panns_checkpoint=args.panns_checkpoint,
+        audiomae_random=bool(args.audiomae_random),
+        audiomae_checkpoint=args.audiomae_checkpoint,
+    )
+
+    payload = {
+        "data_dir": str(data_dir()),
+        "num_input_clips": len(clips),
+        "metrics": metrics,
+    }
+    out_path = out_dir / "anchors_metrics.json"
+    out_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    print(out_path)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
