@@ -1,0 +1,186 @@
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji",
+    "Segoe UI Emoji";
+  margin: 0;
+  background: #0b1020;
+  color: #e6e8ef;
+}
+
+.container {
+  max-width: 980px;
+  margin: 40px auto;
+  padding: 0 16px;
+}
+
+h1 {
+  margin: 0 0 8px 0;
+}
+
+.subtle {
+  color: #a9b0c3;
+}
+
+.card {
+  background: #121a33;
+  border: 1px solid #223059;
+  border-radius: 12px;
+  padding: 16px;
+  margin: 12px 0;
+}
+
+.row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.grow {
+  flex: 1;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.btn {
+  display: inline-block;
+  padding: 10px 14px;
+  border: 1px solid #2a3b6f;
+  border-radius: 10px;
+  background: #1f2d59;
+  color: #e6e8ef;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: #26366b;
+}
+
+.share {
+  margin-top: 10px;
+  color: #c9d1ff;
+  word-break: break-all;
+}
+
+label {
+  display: block;
+  margin: 10px 0;
+}
+
+input[type="text"],
+input[type="file"] {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #2a3b6f;
+  background: #0d1430;
+  color: #e6e8ef;
+}
+
+button {
+  padding: 10px 14px;
+  border: 1px solid #2a3b6f;
+  border-radius: 10px;
+  background: #1f2d59;
+  color: #e6e8ef;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #26366b;
+}
+
+.status {
+  margin-top: 10px;
+  color: #c9d1ff;
+}
+
+.progress-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.progress {
+  flex: 1;
+  height: 12px;
+  border-radius: 999px;
+  background: #0d1430;
+  border: 1px solid #2a3b6f;
+  overflow: hidden;
+}
+
+.bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #5b8cff, #b38cff);
+}
+
+.pct {
+  width: 54px;
+  text-align: right;
+  color: #a9b0c3;
+}
+
+.pre {
+  background: #0d1430;
+  border: 1px solid #2a3b6f;
+  border-radius: 10px;
+  padding: 12px;
+  overflow: auto;
+}
+
+.section {
+  margin-top: 18px;
+}
+
+.rule {
+  background: #10183a;
+  border: 1px solid #223059;
+  border-radius: 12px;
+  padding: 12px;
+  margin: 12px 0;
+}
+
+.rule-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.rule-body {
+  color: #d3d7e5;
+}
+
+.ev-list {
+  margin: 8px 0 0 18px;
+}
+
+.evidence {
+  color: #8fb3ff;
+  text-decoration: none;
+}
+
+.evidence:hover {
+  text-decoration: underline;
+}
+
+.excerpt {
+  margin-top: 4px;
+  color: #cfd6ff;
+  font-size: 0.92rem;
+}
+
+.link {
+  color: #8fb3ff;
+  text-decoration: none;
+}
+
+.link:hover {
+  text-decoration: underline;
+}

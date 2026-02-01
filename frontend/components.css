@@ -1,0 +1,147 @@
+.hidden {
+  display: none;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 9999;
+  max-width: 520px;
+  padding: 12px 12px;
+  border-radius: 12px;
+  border: 1px solid #2a3b6f;
+  background: rgba(13, 20, 48, 0.97);
+  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.55);
+  color: #e6e8ef;
+  font-size: 0.92rem;
+  line-height: 1.35;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+}
+
+.tooltip.interactive {
+  pointer-events: auto;
+}
+
+.tooltip h3 {
+  margin: 0 0 8px 0;
+  font-size: 0.98rem;
+}
+
+.tt-muted {
+  color: #a9b0c3;
+}
+
+.tt-kv {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 6px 10px;
+  margin: 8px 0;
+}
+
+.tt-k {
+  color: #a9b0c3;
+}
+
+.tt-v {
+  color: #e6e8ef;
+  word-break: break-word;
+}
+
+.tt-usedby {
+  margin: 6px 0 10px 0;
+}
+
+.tt-usedby ul {
+  margin: 6px 0 0 18px;
+}
+
+.tt-link {
+  color: #8fb3ff;
+  text-decoration: none;
+}
+
+.tt-link:hover {
+  text-decoration: underline;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #2a3b6f;
+  background: #0d1430;
+  color: #cfd6ff;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.ev-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.ev-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid #2a3b6f;
+  background: rgba(15, 22, 52, 0.9);
+  color: #8fb3ff;
+  text-decoration: none;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.ev-chip:hover {
+  background: rgba(31, 45, 89, 0.9);
+  border-color: #3b54a2;
+}
+
+.item {
+  background: #10183a;
+  border: 1px solid #223059;
+  border-radius: 14px;
+  padding: 14px;
+  margin: 12px 0;
+}
+
+.item-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.item-title {
+  font-weight: 650;
+  margin: 0;
+}
+
+.item-desc {
+  color: #d3d7e5;
+  margin-top: 8px;
+  white-space: pre-wrap;
+}
+
+.item-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.subtle {
+  color: #a9b0c3;
+}
+
+.row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}

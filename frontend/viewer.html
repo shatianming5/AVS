@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Viewer</title>
+    <link rel="stylesheet" href="/static/viewer.css" />
+    <link rel="stylesheet" href="/static/components.css" />
+  </head>
+  <body>
+    <div class="topbar">
+      <a class="link" href="javascript:history.back()">← Back</a>
+      <div class="spacer"></div>
+      <button id="zoom_out" title="Zoom out">−</button>
+      <button id="zoom_reset" title="Reset zoom">100%</button>
+      <button id="zoom_in" title="Zoom in">+</button>
+      <div class="spacer"></div>
+      <button id="prev">Prev</button>
+      <input id="page_input" type="number" min="1" class="page-input" />
+      <div id="page_total" class="meta"></div>
+      <button id="next">Next</button>
+      <button id="annotate_toggle" title="Create annotations">Annotate</button>
+    </div>
+    <div class="layout">
+      <div class="page">
+        <div id="wrap" class="wrap">
+          <canvas id="canvas"></canvas>
+          <div id="overlay" class="overlay"></div>
+        </div>
+      </div>
+      <div class="side">
+        <h2>Evidence</h2>
+        <div id="meta" class="meta"></div>
+        <div id="usedby" class="meta"></div>
+        <details>
+          <summary class="link">raw evidence</summary>
+          <pre id="ev" class="pre"></pre>
+        </details>
+        <h3 style="margin-top: 18px">Annotations</h3>
+        <div id="ann_hint" class="meta"></div>
+        <div id="ann_list" class="pre"></div>
+        <a id="download" class="link" target="_blank">Download PDF</a>
+      </div>
+    </div>
+
+    <dialog id="ann_dialog">
+      <form method="dialog" id="ann_form" class="ann-form">
+        <h3 style="margin: 0 0 10px 0">New annotation</h3>
+        <label class="subtle">Skill</label>
+        <select id="ann_skill"></select>
+        <label class="subtle" style="margin-top: 10px">Note</label>
+        <textarea id="ann_note" rows="4" placeholder="Why is this important?"></textarea>
+        <div class="row" style="margin-top: 12px; justify-content: flex-end">
+          <button id="ann_cancel" value="cancel" type="button">Cancel</button>
+          <button id="ann_save" value="ok" type="submit">Save</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="tooltip" class="tooltip interactive hidden"></div>
+    <script src="/static/vendor/pdfjs/pdf.min.js"></script>
+    <script src="/static/viewer.js"></script>
+  </body>
+</html>

@@ -1,0 +1,7 @@
+{"topic":"writing","title":"Gap connector","text":"When transitioning from prior work to limitations, start with a contrastive connector (However/Nevertheless/Yet) and state the gap explicitly.","tags":["however","nevertheless","yet","gap"],"source":"demo"}
+{"topic":"writing","title":"Problem statement","text":"Define the task in one sentence with a measurable objective; avoid vague phrasing like 'is important' without specifying why.","tags":["problem","objective"],"source":"demo"}
+{"topic":"writing","title":"Approach preview","text":"Use 'In this paper, we propose/present' to preview the key idea at a high level before details.","tags":["in this paper","we propose","approach"],"source":"demo"}
+{"topic":"writing","title":"Contributions list","text":"State contributions as a short enumerated list; keep each item parallel in grammar and scope.","tags":["contribution","threefold","we contribute"],"source":"demo"}
+{"topic":"writing","title":"Roadmap sentence","text":"Include a short roadmap sentence that mentions Section 2/3/4 to guide the reader.","tags":["organized as follows","section"],"source":"demo"}
+{"topic":"writing","title":"Hedging broad claims","text":"Use may/might/likely for broad claims; avoid always/never unless strictly proven.","tags":["may","might","likely","hedging"],"source":"demo"}
+{"topic":"writing","title":"Evidence-first rule","text":"Any style rule should cite an example paragraph or caption from the mentor papers; otherwise downgrade it as a suggestion.","tags":["evidence","traceability"],"source":"demo"}

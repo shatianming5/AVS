@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SkillPack</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="stylesheet" href="/static/components.css" />
+  </head>
+  <body>
+    <div class="container">
+      <h1>SkillPack report</h1>
+      <div id="header" class="card">
+        <div class="row">
+          <div class="grow">
+            <div id="title"></div>
+            <div id="meta" class="subtle"></div>
+          </div>
+          <div class="actions">
+            <a id="download_json" class="btn" target="_blank">Download JSON</a>
+            <a id="download_yaml" class="btn" target="_blank">Download YAML</a>
+            <button id="share_btn" type="button">Share</button>
+            <button id="unshare_btn" type="button">Unshare</button>
+          </div>
+        </div>
+        <div id="share_box" class="share"></div>
+      </div>
+      <div id="content"></div>
+      <a href="/" class="link">← Build another</a>
+    </div>
+    <div id="tooltip" class="tooltip hidden"></div>
+    <script src="/static/pack.js"></script>
+  </body>
+</html>

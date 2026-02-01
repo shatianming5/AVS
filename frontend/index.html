@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>paper_skill</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <div class="row">
+        <div class="grow">
+          <h1>paper_skill</h1>
+        </div>
+        <div class="actions">
+          <a class="btn" href="/jobs">Jobs</a>
+        </div>
+      </div>
+      <p class="subtle">Upload 3 PDFs → build Intro Blueprint + Templates + Storyboard with evidence.</p>
+
+      <form id="build-form" class="card">
+        <label>
+          Pack name
+          <input id="pack_name" type="text" placeholder="Prof.X Intro Style 2026Q1" required />
+        </label>
+
+        <label>
+          Field hint (optional)
+          <input id="field_hint" type="text" placeholder="CV / NLP / Systems ..." />
+        </label>
+
+        <label>
+          Target venue hint (optional)
+          <input id="target_venue_hint" type="text" placeholder="NeurIPS / ICML / Nature ..." />
+        </label>
+
+        <label>
+          Select exactly 3 PDFs
+          <input id="pdfs" type="file" accept="application/pdf" multiple required />
+        </label>
+
+        <button type="submit">Build SkillPack</button>
+      </form>
+
+      <div id="status" class="status"></div>
+    </div>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

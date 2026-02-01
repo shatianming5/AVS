@@ -1,0 +1,23 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+.venv/
+venv/
+env/
+
+data/
+data_tmp_debug*/
+data_live/
+
+node_modules/
+dist/
+
+.DS_Store
+
+.env
+
+# Local logs / artifacts
+run_logs/
