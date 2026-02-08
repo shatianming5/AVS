@@ -493,10 +493,10 @@ Follow-ups (train3339→test402; same token budget=1960):
 | Smoke cmd | `python -m avs.smoke epic_sounds_video_cls_synth` |
 | Full cmd | `bash scripts/e0100_epic_video_cls_local.sh` (requires EPIC videos installed under `data/EPIC_SOUNDS/raw/videos/`) |
 | Smoke | [x] |
-| Full | [ ] |
-| Logs | `runs/E0100_*` |
-| Artifacts | `runs/E0100_*/metrics.json` |
-| Results |  |
+| Full | [x] |
+| Logs | `runs/E0100_*`, `artifacts/experiments/E0100/run.log` |
+| Artifacts | `runs/E0100_epic_video_cls_local_audio_anchored_full_ms120_s64_20260209-045119/metrics.json`, `runs/E0100_epic_video_cls_local_uniform_full_ms120_s64_20260209-045119/metrics.json`, `runs/E0100_epic_video_cls_local_random_full_ms120_s64_20260209-045119/metrics.json` |
+| Results | Real local EPIC run (subset; `limit_train_videos=64`, `limit_val_videos=64`, `max_seconds=120`, `max_steps=120`, `SEEDS=0,1,2`; budget=`max_steps × base_res`): audio_anchored `runs/E0100_epic_video_cls_local_audio_anchored_full_ms120_s64_20260209-045119/metrics.json` (mAP=`0.4356±0.0090`, macro_f1@0.5=`0.4041±0.0120`) vs uniform `runs/E0100_epic_video_cls_local_uniform_full_ms120_s64_20260209-045119/metrics.json` (mAP=`0.3826±0.0074`, macro_f1@0.5=`0.3512±0.0207`), ΔmAP=`+0.0530`, Δmacro_f1=`+0.0528`. random matches uniform on this setting: `runs/E0100_epic_video_cls_local_random_full_ms120_s64_20260209-045119/metrics.json`. |
 
 
 ### E0201: Oracle vs Predicted gap report (Listen-then-Look MDE-2)
@@ -4775,10 +4775,10 @@ Follow-ups (train3339→test402; same token budget=1960):
 | Smoke cmd | `python -m avs.smoke dataset_integrity_audit` |
 | Full cmd | `DECODE_CHECK=sampled DECODE_LIMIT=64 bash scripts/e0501_dataset_integrity_audit.sh` |
 | Smoke | [x] |
-| Full | [ ] |
+| Full | [x] |
 | Logs | `runs/smoke_20260207-151400/*`, `runs/E0501_dataset_integrity_*/*` |
-| Artifacts | `runs/smoke_20260207-151400/dataset_integrity_audit/dataset_integrity_audit.json`, `runs/E0501_dataset_integrity_20260207-151719/index.json` |
-| Results | Smoke correctly flags a corrupted sample (`corrupted_files=1`). Local probe-only audit (`LIMIT=8`) reports both AVE and EPIC samples are probe-readable (`probe_ok=8/8`) with no corruption under `decode_check=none`. |
+| Artifacts | `runs/E0501_dataset_integrity_20260209-042215/index.json`, `runs/E0501_dataset_integrity_20260209-042215/ave/dataset_integrity_audit.json`, `runs/E0501_dataset_integrity_20260209-042215/epic/dataset_integrity_audit.json`, `artifacts/experiments/E0501/run.log` |
+| Results | Full sampled-decode audit completed: AVE `probe_ok=4097/4097`, `decode_checked=64`, `corrupted_files=0`; EPIC `probe_ok=632/632`, `decode_checked=64`, `corrupted_files=0`. |
 
 
 ### E0502: Root-cause aggregation report (unproven-claim diagnosis)

@@ -2374,13 +2374,12 @@ For the “冲 oral / paper-ready” minimum-decisive checklist, see: `docs/oral
   - Evidence (full; energy_v2 config regresses fusion): `runs/E0020_ave_fusion_confirm_official_test_energy_v2_20260203-190804/metrics.json` (audio_concat_anchored=0.7195 vs audio_concat_uniform=0.7214, Δ=-0.0020, p=0.598).
   - Evidence (full; dense-stride promoted config also fails): `runs/E0410_fusion_confirm_energy_stride_max_top1med_thr0p5_20260206-180945/metrics.json` (`audio_concat_anchored_top2≈0.70978` vs `audio_concat_uniform≈0.71231`, `Δ≈-0.00254`, `paired_ttest.audio_concat_anchored_vs_audio_concat_uniform.p≈0.36759`).
 
-- [ ] C0005: On EPIC-SOUNDS video-level multi-label recognition, audio-anchored selection improves mAP on val (SEEDS>=3).
+- [x] C0005: On EPIC-SOUNDS video-level multi-label recognition, audio-anchored selection improves mAP on val (SEEDS>=3).
   - Evidence required: `metrics.json` with mAP/macro-F1 and a clear fixed budget definition (`max_steps × base_res`), plus baselines.
-  - Experiments: E0100,E0413
-  - Artifacts: `runs/E0100_*/metrics.json`
-  - Evidence (code-path smoke only): `runs/smoke_20260206-184253/epic_sounds_video_cls_synth/metrics.json` (synthetic sanity check, not valid for C0005).
-  - Evidence (real local EPIC run; available subset with strict equal-budget settings): `runs/E0413_epic_video_cls_local_audio_anchored_full_ms120_20260207-171637/metrics.json`, `runs/E0413_epic_video_cls_local_uniform_full_ms120_20260207-172545/metrics.json`, `runs/E0413_epic_video_cls_local_random_full_ms120_20260207-173208/metrics.json` (`num_train_videos=17`, `num_val_videos=16`, `max_steps=120`, `max_seconds=120`; anchored vs uniform: `mAP≈-0.0221`, `macro_f1≈-0.0118`).
-  - Note: C0005 remains unproven; current local EPIC coverage is partial (`mp4_count=33`) and this pipeline currently reports single-run metrics (no multi-seed variance summary).
+  - Experiments: E0100
+  - Artifacts: `runs/E0100_epic_video_cls_local_*_full_ms120_s64_20260209-045119/metrics.json`
+  - Evidence (real local EPIC run; strict equal-budget; SEEDS=0,1,2; `limit_train_videos=64`, `limit_val_videos=64`, `max_steps=120`, `max_seconds=120`): audio_anchored `runs/E0100_epic_video_cls_local_audio_anchored_full_ms120_s64_20260209-045119/metrics.json` (mAP=`0.4356±0.0090`, macro_f1@0.5=`0.4041±0.0120`) vs uniform `runs/E0100_epic_video_cls_local_uniform_full_ms120_s64_20260209-045119/metrics.json` (mAP=`0.3826±0.0074`, macro_f1@0.5=`0.3512±0.0207`), ΔmAP=`+0.0530`, Δmacro_f1=`+0.0528`. random matches uniform on this setting: `runs/E0100_epic_video_cls_local_random_full_ms120_s64_20260209-045119/metrics.json`.
+  - Note: A prior partial-coverage local EPIC run regressed (see E0413 in `docs/experiment.md`); keep it as a reminder that coverage matters.
 
 - [x] C0006: Oracle anchors provide an upper bound that shows stable Acc–Tok Pareto improvements across a pre-registered budget grid on AVE.
   - Evidence required: `oracle_ceiling.json` + Pareto plot (with CI) showing Oracle dominates Uniform/Random at ≥1 budget point (and is non-worse elsewhere).
