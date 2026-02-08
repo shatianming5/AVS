@@ -2121,7 +2121,7 @@ For the “冲 oral / paper-ready” minimum-decisive checklist, see: `docs/oral
     - `python -m avs.smoke q_l2l_relevance`
     - `python -m avs.smoke qa_plan_generation`
   - Outputs: `runs/<run_id>/q_l2l_relevance.json`, `runs/<run_id>/qa_plan_generation.json`
-  - Evidence: `runs/smoke_20260209-034655/smoke.json`
+  - Evidence: `runs/smoke_20260209-040215/smoke.json`
 
 - [x] P0138: Add EgoSchema/IntentQA dataset IO scaffolds + fps=1 preprocessing helper
   - Summary: Add minimal dataset loaders + on-disk layout helpers for long-video MCQ (IntentQA, EgoSchema), plus a deterministic "fps=1 frames + audio.wav" extractor that gracefully handles missing audio streams.
@@ -2135,7 +2135,7 @@ For the “冲 oral / paper-ready” minimum-decisive checklist, see: `docs/oral
     - `python -m avs.smoke intentqa_io`
     - `python -m avs.smoke egoschema_io`
   - Outputs: `runs/<run_id>/intentqa_io.json`, `runs/<run_id>/egoschema_io.json`
-  - Evidence: `runs/smoke_20260209-034655/smoke.json`
+  - Evidence: `runs/smoke_20260209-040215/smoke.json`
 
 - [x] P0139: Add VLM interface (Qwen2-VL) + long-video QA eval scripts (E0600/E0601/E0602)
   - Summary: Provide a minimal VLM wrapper for multiple-choice QA over frame sequences and runnable experiment scripts for (1) IntentQA budgeted evaluation, (2) IntentQA delete-and-predict faithfulness proxy, and (3) EgoSchema prediction generation.
@@ -2151,7 +2151,9 @@ For the “冲 oral / paper-ready” minimum-decisive checklist, see: `docs/oral
   - Verification:
     - `python -m py_compile avs/vlm/qwen_vl.py avs/experiments/intentqa_vlm_eval.py avs/experiments/intentqa_faithfulness.py avs/experiments/egoschema_vlm_eval.py`
   - Outputs: `runs/E0600_*/*`, `runs/E0601_*/*`, `runs/E0602_*/*` (when executed on real data)
-  - Evidence: `python -m avs.smoke all` → ok (`runs/smoke_20260209-034655/smoke.json`)
+  - Evidence:
+    - `python -m avs.smoke all` → ok (`runs/smoke_20260209-040215/smoke.json`)
+    - Synthetic-run artifacts: `runs/E0600_intentqa_vlm_eval_20260209-035602/metrics.json`, `runs/E0601_intentqa_faithfulness_20260209-035635/faithfulness.json`
 
 - [x] P0140: Add Stage-2 multiple-choice knapsack allocator + solver ablation script (E0603)
   - Summary: Add a deterministic Lagrangian-relaxation solver for the Stage-2 "pick one config per window" multiple-choice knapsack and provide a runnable solver ablation comparing greedy vs knapsack.
@@ -2164,7 +2166,7 @@ For the “冲 oral / paper-ready” minimum-decisive checklist, see: `docs/oral
     - `python -m avs.smoke ltl_budget_allocator_knapsack`
     - `bash scripts/e0603_allocator_ablation.sh`
   - Outputs: `runs/<run_id>/ltl_budget_allocator_knapsack.json`, `runs/E0603_allocator_ablation_*/allocator_ablation.json`
-  - Evidence: `runs/smoke_20260209-034655/smoke.json`, `runs/E0603_allocator_ablation_20260209-035300/allocator_ablation.json`
+  - Evidence: `runs/smoke_20260209-040215/smoke.json`, `runs/E0603_allocator_ablation_20260209-035300/allocator_ablation.json`
 
 - [x] P0141: Add local evidence matrix generator for plan conclusions (artifact presence)
   - Summary: Provide a tool that scans `docs/plan.md` conclusions for referenced `runs/...` artifacts and generates a local evidence matrix report.

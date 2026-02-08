@@ -4882,6 +4882,8 @@ Follow-ups (train3339→test402; same token budget=1960):
 | Smoke cmd | `python -m avs.experiments.intentqa_vlm_eval --help` |
 | Full cmd | `OUT_DIR=runs/E0600_intentqa_vlm_eval_$(date +%Y%m%d-%H%M%S) SPLIT=val LIMIT=256 B_FRAMES=16 MAX_SECONDS=120 DEVICE=cuda:0 QL2L_CLAP_DEVICE=cuda:0 QL2L_ASR_DEVICE=cuda:0 bash scripts/e0600_intentqa_vlm_eval.sh` |
 | Outputs | `runs/E0600_intentqa_vlm_eval_*/metrics.json`, `runs/E0600_intentqa_vlm_eval_*/predictions.jsonl` |
+| Artifacts | `runs/E0600_intentqa_vlm_eval_20260209-035602/metrics.json`, `runs/E0600_intentqa_vlm_eval_20260209-035602/predictions.jsonl` |
+| Results | Synthetic smoke run completed (n=1; `AVS_DATA_DIR=runs/smoke_20260209-034707/data`, `SPLIT=train`, `METHODS=uniform,ql2l_asr_bm25`, `B_FRAMES=4`, `MAX_SECONDS=8`, `STRATEGY=generate`), validating end-to-end preprocessing → Q-L2L (ASR+BM25) → VLM inference and cache writes. |
 | Notes | Q-L2L backends cache artifacts under each processed video dir (e.g. `processed/<vid>/q_l2l/*`) to keep reruns deterministic. |
 
 ### E0601: IntentQA faithfulness proxy (delete-and-predict)
@@ -4896,6 +4898,8 @@ Follow-ups (train3339→test402; same token budget=1960):
 | Smoke cmd | `python -m avs.experiments.intentqa_faithfulness --help` |
 | Full cmd | `OUT_DIR=runs/E0601_intentqa_faithfulness_$(date +%Y%m%d-%H%M%S) SPLIT=val LIMIT=256 METHOD=ql2l_clap B_FRAMES=16 MAX_SECONDS=120 DEVICE=cuda:0 QL2L_CLAP_DEVICE=cuda:0 QL2L_ASR_DEVICE=cuda:0 bash scripts/e0601_intentqa_faithfulness.sh` |
 | Outputs | `runs/E0601_intentqa_faithfulness_*/faithfulness.json`, `runs/E0601_intentqa_faithfulness_*/rows.jsonl` |
+| Artifacts | `runs/E0601_intentqa_faithfulness_20260209-035635/faithfulness.json`, `runs/E0601_intentqa_faithfulness_20260209-035635/rows.jsonl` |
+| Results | Synthetic smoke run completed (n=1; `AVS_DATA_DIR=runs/smoke_20260209-034707/data`, `SPLIT=train`, `METHOD=ql2l_asr_bm25`, `B_FRAMES=4`, `MAX_SECONDS=8`, `STRATEGY=generate`). |
 
 ### E0602: EgoSchema prediction generation under budgeted frame selection
 | Field | Value |
@@ -4920,3 +4924,5 @@ Follow-ups (train3339→test402; same token budget=1960):
 | Metrics (must save) | `allocator_ablation.json` (utilities, costs, deltas, per-window allocations). |
 | Smoke cmd | `OUT_DIR=runs/E0603_allocator_ablation_smoke_$(date +%Y%m%d-%H%M%S) NUM_WINDOWS=6 BUDGET=8000 SEED=0 bash scripts/e0603_allocator_ablation.sh` |
 | Outputs | `runs/E0603_allocator_ablation_*/allocator_ablation.json` |
+| Artifacts | `runs/E0603_allocator_ablation_20260209-035300/allocator_ablation.json` |
+| Results | Lagrangian knapsack achieves slightly higher utility than greedy at similar/better budget usage (`delta.utility≈+0.0195`, `delta.cost≈+204.6` under `budget=20000`, `num_windows=12`, `seed=0`). |
