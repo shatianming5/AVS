@@ -55,7 +55,12 @@ def run_epic_sounds_long_pack(
     selected_frames_root.mkdir(parents=True, exist_ok=True)
     caches_dir.mkdir(parents=True, exist_ok=True)
 
-    done_audio = extract_epic_sounds_audio(videos_dir=videos_dir, out_audio_dir=audio_dir, video_ids=video_ids)
+    done_audio = extract_epic_sounds_audio(
+        videos_dir=videos_dir,
+        out_audio_dir=audio_dir,
+        video_ids=video_ids,
+        max_seconds=int(max_seconds) if max_seconds is not None else None,
+    )
     counts_frames = extract_epic_sounds_frames(
         videos_dir=videos_dir,
         out_frames_dir=frames_root,
@@ -83,10 +88,20 @@ def run_epic_sounds_long_pack(
         wav_path = audio_dir / f"{vid}.wav"
         frames_dir = frames_root / vid / "frames"
 
+        frames_count = int(counts_frames.get(str(vid), 0))
+        effective_max_seconds: int | None
+        if frames_count > 0:
+            effective_max_seconds = int(frames_count)
+            if max_seconds is not None:
+                effective_max_seconds = min(int(effective_max_seconds), int(max_seconds))
+        else:
+            effective_max_seconds = int(max_seconds) if max_seconds is not None else None
+
         record = long_plan_from_wav_hybrid(
             clip_id=str(vid),
             wav_path=wav_path,
-            max_seconds=int(max_seconds) if max_seconds is not None else None,
+            # Clamp to extracted fps=1 frame count so selected seconds always exist on disk.
+            max_seconds=effective_max_seconds,
             eventness_method=str(method),
             k=int(k),
             anchor_radius=int(anchor_radius),
@@ -137,6 +152,7 @@ def run_epic_sounds_long_pack(
             "duration_seconds": int(record.duration_seconds),
             "num_selected": int(len(record.selected_seconds)),
             "num_frames_extracted": int(counts_frames.get(vid, 0)),
+            "effective_max_seconds": int(effective_max_seconds) if effective_max_seconds is not None else None,
         }
 
     write_frame_manifest_jsonl(manifest_path, manifest)
@@ -235,4 +251,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import re
 import time
@@ -107,10 +108,22 @@ def _write_markdown(*, out_md: Path, plan_rel: str, rows: list[dict]) -> None:
             lines.append("")
         else:
             lines.append("### Missing")
-            lines.append(_fmt_paths(r["missing_paths"], missing=True))
+            for t in r["missing_tokens"]:
+                if t["is_glob"]:
+                    lines.append(f"- `{t['token']}` (missing; glob, 0 matches)")
+                else:
+                    lines.append(f"- `{t['token']}` (missing)")
             lines.append("")
+
             lines.append("### Present")
-            lines.append(_fmt_paths(r["present_paths"], missing=False))
+            for t in r["present_tokens"]:
+                if t["is_glob"]:
+                    lines.append(f"- `{t['token']}` (present; glob, {t['match_count']} matches)")
+                    examples = (t.get("matches") or [])[:5]
+                    if examples:
+                        lines.append("  examples: " + ", ".join(f"`{p}`" for p in examples))
+                else:
+                    lines.append(f"- `{t['token']}` (present)")
             lines.append("")
 
     out_md.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -136,23 +149,44 @@ def main(argv: list[str] | None = None) -> int:
     rows: list[dict] = []
     for b in blocks:
         ev = b.evidence_paths()
-        present: list[str] = []
-        missing: list[str] = []
-        for p in ev:
-            if Path(p).exists():
-                present.append(p)
+
+        present_tokens: list[dict] = []
+        missing_tokens: list[dict] = []
+
+        for token in ev:
+            token = str(token)
+            is_glob = bool(glob.has_magic(token))
+            matches: list[str] = []
+            ok = False
+
+            if is_glob:
+                matches = sorted(str(p) for p in glob.glob(token))
+                ok = len(matches) > 0
             else:
-                missing.append(p)
+                ok = Path(token).exists()
+
+            rec = {
+                "token": token,
+                "is_glob": bool(is_glob),
+                "match_count": int(len(matches)) if is_glob else (1 if ok else 0),
+                # Keep a short list of examples for markdown; full list can be huge for wide globs.
+                "matches": matches[:20] if is_glob else ([token] if ok else []),
+            }
+
+            if ok:
+                present_tokens.append(rec)
+            else:
+                missing_tokens.append(rec)
         rows.append(
             {
                 "cid": b.cid,
                 "checked": bool(b.checked),
                 "title": b.title,
                 "evidence_count": int(len(ev)),
-                "present_count": int(len(present)),
-                "missing_count": int(len(missing)),
-                "present_paths": present,
-                "missing_paths": missing,
+                "present_count": int(len(present_tokens)),
+                "missing_count": int(len(missing_tokens)),
+                "present_tokens": present_tokens,
+                "missing_tokens": missing_tokens,
             }
         )
 

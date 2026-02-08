@@ -5,6 +5,7 @@ __pycache__/
 
 data/
 runs/
+artifacts/
 .rd_queue*/
 
 .venv/

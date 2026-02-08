@@ -192,8 +192,13 @@ def pack_one_video(
     (out_dir / "caches").mkdir(parents=True, exist_ok=True)
 
     # 1) Extract audio + frames (deterministic).
-    extract_epic_sounds_audio(videos_dir=videos_dir, out_audio_dir=out_dir / "audio", video_ids=[video_id])
-    extract_epic_sounds_frames(
+    extract_epic_sounds_audio(
+        videos_dir=videos_dir,
+        out_audio_dir=out_dir / "audio",
+        video_ids=[video_id],
+        max_seconds=int(max_seconds) if max_seconds is not None else None,
+    )
+    counts_frames = extract_epic_sounds_frames(
         videos_dir=videos_dir,
         out_frames_dir=out_dir / "frames",
         video_ids=[video_id],
@@ -203,7 +208,15 @@ def pack_one_video(
     )
 
     wav_path = out_dir / "audio" / f"{video_id}.wav"
-    duration = infer_num_segments_from_wav(wav_path)
+    duration_audio = infer_num_segments_from_wav(wav_path)
+    duration_frames = int(counts_frames.get(str(video_id), 0))
+
+    # Some clips have longer audio than video (or slightly-shorter video streams than container duration),
+    # which can yield fewer extracted fps=1 frames than inferred audio seconds. Clamp selection to the
+    # extracted frame count so downstream caching never requests missing frames.
+    duration = int(duration_audio)
+    if duration_frames > 0:
+        duration = min(int(duration), int(duration_frames))
     if max_seconds is not None:
         duration = min(int(duration), int(max_seconds))
 
@@ -224,7 +237,8 @@ def pack_one_video(
         rec = long_plan_from_wav_hybrid(
             clip_id=str(video_id),
             wav_path=wav_path,
-            max_seconds=int(max_seconds) if max_seconds is not None else None,
+            # Clamp by extracted frame count so selected seconds always exist on disk.
+            max_seconds=int(duration),
             eventness_method=str(eventness_method),
             k=int(k),
             anchor_radius=int(anchor_radius),
@@ -264,10 +278,16 @@ def pack_one_video(
                 )
             )
         frames_dir = out_dir / "frames" / video_id / "frames"
+        allowed_res = {int(r) for r in cache_resolutions}
+        needed_res = sorted({int(r) for r in plan.resolutions})
+        missing_res = [int(r) for r in needed_res if int(r) not in allowed_res]
+        if missing_res:
+            raise ValueError(f"plan requires resolutions not in --cache-resolutions: missing={missing_res} allowed={sorted(allowed_res)}")
         cache = build_clip_feature_cache_from_seconds(
             frames_dir=frames_dir,
             seconds=selected_seconds,
-            resolutions=[int(r) for r in cache_resolutions],
+            # Only encode resolutions needed by the plan (saves significant time for uniform/random).
+            resolutions=[int(r) for r in needed_res],
             encoder=encoder,
         )
         cache_path = out_dir / "caches" / f"{video_id}.{selection}.npz"

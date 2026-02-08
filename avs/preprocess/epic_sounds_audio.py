@@ -6,7 +6,13 @@ from pathlib import Path
 from avs.preprocess.ave_extract import extract_wav
 
 
-def extract_epic_sounds_audio(*, videos_dir: Path, out_audio_dir: Path, video_ids: list[str]) -> list[str]:
+def extract_epic_sounds_audio(
+    *,
+    videos_dir: Path,
+    out_audio_dir: Path,
+    video_ids: list[str],
+    max_seconds: int | None = None,
+) -> list[str]:
     """
     Extract untrimmed audio wavs for EPIC-SOUNDS-style processing.
 
@@ -15,6 +21,10 @@ def extract_epic_sounds_audio(*, videos_dir: Path, out_audio_dir: Path, video_id
 
     Output:
       <out_audio_dir>/<video_id>.wav  (mono, 16kHz)
+
+    Notes:
+      - Unlike AVE-style preprocessing, EPIC-SOUNDS clips may be long/untrimmed.
+      - If max_seconds is provided, we cap the extracted audio to that many seconds.
     """
     out_audio_dir.mkdir(parents=True, exist_ok=True)
     done: list[str] = []
@@ -23,7 +33,13 @@ def extract_epic_sounds_audio(*, videos_dir: Path, out_audio_dir: Path, video_id
         if not in_path.exists():
             raise FileNotFoundError(f"missing video: {in_path}")
         out_path = out_audio_dir / f"{vid}.wav"
-        extract_wav(in_path, out_path, sample_rate=16000)
+        extract_wav(
+            in_path,
+            out_path,
+            sample_rate=16000,
+            # EPIC-SOUNDS uses untrimmed clips; default to full duration.
+            duration_sec=float(max_seconds) if max_seconds is not None else None,
+        )
         done.append(vid)
     return done
 
@@ -33,6 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--videos-dir", type=Path, required=True, help="Dir containing <video_id>.mp4")
     p.add_argument("--out-audio-dir", type=Path, required=True, help="Output dir for <video_id>.wav")
     p.add_argument("--video-id", action="append", default=[], help="Video id (repeatable)")
+    p.add_argument("--max-seconds", type=int, default=None, help="Optionally cap extracted duration (seconds).")
     return p
 
 
@@ -40,10 +57,14 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if not args.video_id:
         raise SystemExit("at least one --video-id is required")
-    extract_epic_sounds_audio(videos_dir=args.videos_dir, out_audio_dir=args.out_audio_dir, video_ids=args.video_id)
+    extract_epic_sounds_audio(
+        videos_dir=args.videos_dir,
+        out_audio_dir=args.out_audio_dir,
+        video_ids=args.video_id,
+        max_seconds=args.max_seconds,
+    )
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
