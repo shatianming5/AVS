@@ -41,6 +41,8 @@ ALLOW_MISSING_VIDEOS="${ALLOW_MISSING_VIDEOS:-0}"
 MIN_TRAIN_VIDEOS="${MIN_TRAIN_VIDEOS:-16}"
 MIN_VAL_VIDEOS="${MIN_VAL_VIDEOS:-16}"
 
+SEEDS="${SEEDS:-0}"
+
 EPOCHS="${EPOCHS:-10}"
 BATCH_SIZE="${BATCH_SIZE:-16}"
 LR="${LR:-2e-3}"
@@ -80,6 +82,7 @@ args=(
   --cache-resolutions "${CACHE_RESOLUTIONS}"
   --clip-device "${CLIP_DEVICE}"
   --train-device "${TRAIN_DEVICE}"
+  --seeds "${SEEDS}"
   --limit-train-videos "${LIMIT_TRAIN_VIDEOS}"
   --limit-val-videos "${LIMIT_VAL_VIDEOS}"
   --epochs "${EPOCHS}"

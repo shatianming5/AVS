@@ -2109,6 +2109,72 @@ For the “冲 oral / paper-ready” minimum-decisive checklist, see: `docs/oral
     - Efficiency calibration (E0408): `runs/E0408_vision_efficiency_20260206-161610/vision_efficiency.json` (tokens/FLOPs/latency-by-resolution artifact for oral efficiency table construction).
     - Decision: Dense-stride does not meet promotion target on official test402; keep as negative/diagnostic evidence and continue improving Stage-1 reliability.
 
+- [x] P0137: Add query-aware QA plan generation (Q-L2L) + reliability-gated α for long-video QA
+  - Summary: Implement a long-video QA "frame selection plan" generator that builds per-second scores from cheap signals and then selects seconds under a fixed frame budget using an α-mixture (background uniform + anchor-focused), where α is derived from a scale-invariant reliability metric.
+  - Rationale: Root `plan.md` adds query-aware anchor weighting and reliability gating; we need a deterministic, auditable implementation that can be plugged into VLM long-video QA experiments (IntentQA/EgoSchema) without changing the existing AVE/EPIC pipelines.
+  - Scope: `avs/qa/reliability.py`, `avs/qa/query_relevance.py`, `avs/pipeline/qa_plan_generation.py`, smoke checks.
+  - Acceptance:
+    - Supports `method∈{uniform,random,audio,cheap_visual,fused,ql2l_clap,ql2l_asr_bm25,ql2l_asr_tfidf}`.
+    - Reliability metric `top3_bottom3_gap_norm` produces α in `[alpha_min, alpha_max]` and is stable under score scaling.
+    - Selection is deterministic given `seed` and budget.
+  - Verification:
+    - `python -m avs.smoke q_l2l_relevance`
+    - `python -m avs.smoke qa_plan_generation`
+  - Outputs: `runs/<run_id>/q_l2l_relevance.json`, `runs/<run_id>/qa_plan_generation.json`
+  - Evidence: `runs/smoke_20260209-034655/smoke.json`
+
+- [x] P0138: Add EgoSchema/IntentQA dataset IO scaffolds + fps=1 preprocessing helper
+  - Summary: Add minimal dataset loaders + on-disk layout helpers for long-video MCQ (IntentQA, EgoSchema), plus a deterministic "fps=1 frames + audio.wav" extractor that gracefully handles missing audio streams.
+  - Rationale: Long-video QA benchmarks require stable item indexing and reproducible preprocessing before any VLM evaluation is meaningful.
+  - Scope: `avs/datasets/intentqa.py`, `avs/datasets/egoschema.py`, `avs/datasets/layout.py`, `avs/preprocess/video_extract.py`, smoke checks.
+  - Acceptance:
+    - IntentQA CSV parsing validates option schema + answer indices.
+    - EgoSchema metadata loads from a local HF dataset clone (`data/hf_repos/egoschema/`).
+    - `ensure_processed_fps1()` produces `{out_dir}/audio.wav` and `{out_dir}/frames/{0..T-1}.jpg` deterministically.
+  - Verification:
+    - `python -m avs.smoke intentqa_io`
+    - `python -m avs.smoke egoschema_io`
+  - Outputs: `runs/<run_id>/intentqa_io.json`, `runs/<run_id>/egoschema_io.json`
+  - Evidence: `runs/smoke_20260209-034655/smoke.json`
+
+- [x] P0139: Add VLM interface (Qwen2-VL) + long-video QA eval scripts (E0600/E0601/E0602)
+  - Summary: Provide a minimal VLM wrapper for multiple-choice QA over frame sequences and runnable experiment scripts for (1) IntentQA budgeted evaluation, (2) IntentQA delete-and-predict faithfulness proxy, and (3) EgoSchema prediction generation.
+  - Rationale: Root `plan.md` adds long-video QA as a final validation target; these scripts make the long-video selection policy testable end-to-end.
+  - Scope:
+    - `avs/vlm/qwen_vl.py`
+    - `avs/experiments/intentqa_vlm_eval.py` + `scripts/e0600_intentqa_vlm_eval.sh`
+    - `avs/experiments/intentqa_faithfulness.py` + `scripts/e0601_intentqa_faithfulness.sh`
+    - `avs/experiments/egoschema_vlm_eval.py` + `scripts/e0602_egoschema_predict.sh`
+  - Acceptance:
+    - Qwen wrapper supports `strategy∈{ppl,generate}` and parses single-letter answers robustly.
+    - E0600/E0601/E0602 CLIs run (`--help`) without requiring model downloads.
+  - Verification:
+    - `python -m py_compile avs/vlm/qwen_vl.py avs/experiments/intentqa_vlm_eval.py avs/experiments/intentqa_faithfulness.py avs/experiments/egoschema_vlm_eval.py`
+  - Outputs: `runs/E0600_*/*`, `runs/E0601_*/*`, `runs/E0602_*/*` (when executed on real data)
+  - Evidence: `python -m avs.smoke all` → ok (`runs/smoke_20260209-034655/smoke.json`)
+
+- [x] P0140: Add Stage-2 multiple-choice knapsack allocator + solver ablation script (E0603)
+  - Summary: Add a deterministic Lagrangian-relaxation solver for the Stage-2 "pick one config per window" multiple-choice knapsack and provide a runnable solver ablation comparing greedy vs knapsack.
+  - Rationale: Root `plan.md` asks Stage-2 to be stated as a standard optimization problem with a reproducible solver (not just a heuristic).
+  - Scope: `avs/sampling/allocator.py`, `avs/experiments/allocator_solver_ablation.py`, `scripts/e0603_allocator_ablation.sh`, smoke checks.
+  - Acceptance:
+    - Both solvers return `total_cost<=budget` with deterministic tie-breaks.
+    - Ablation writes a single JSON artifact with utilities and delta.
+  - Verification:
+    - `python -m avs.smoke ltl_budget_allocator_knapsack`
+    - `bash scripts/e0603_allocator_ablation.sh`
+  - Outputs: `runs/<run_id>/ltl_budget_allocator_knapsack.json`, `runs/E0603_allocator_ablation_*/allocator_ablation.json`
+  - Evidence: `runs/smoke_20260209-034655/smoke.json`, `runs/E0603_allocator_ablation_20260209-035300/allocator_ablation.json`
+
+- [x] P0141: Add local evidence matrix generator for plan conclusions (artifact presence)
+  - Summary: Provide a tool that scans `docs/plan.md` conclusions for referenced `runs/...` artifacts and generates a local evidence matrix report.
+  - Rationale: Users requested an "official full verification flow"; this prevents silent drift where a conclusion references non-existent local artifacts.
+  - Scope: `scripts/plan_evidence_matrix.py`, `docs/evidence_matrix.md`
+  - Acceptance: Script writes `{out_dir}/evidence_matrix.{json,md}` and (optionally) refreshes `docs/evidence_matrix.md`.
+  - Verification: `python scripts/plan_evidence_matrix.py --write-docs-md`
+  - Outputs: `runs/evidence_matrix_*/evidence_matrix.{json,md}`
+  - Evidence: `runs/evidence_matrix_20260209-023146/evidence_matrix.md`
+
 ## Conclusions
 - [x] C0001: On AVE, under a strictly equal ViT token budget, Audio-anchored sampling (with a lightweight temporal head) improves segment-level accuracy vs Uniform sampling and Random anchors.
   - Evidence required: `metrics.json` with `acc_mean±std` over ≥3 seeds for Uniform-224, Random-TopK, Audio-TopK; plus a statement that token budgets are equal. Must hold on a non-trivial subset (e.g., ≥100 eval clips).

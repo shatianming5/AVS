@@ -105,3 +105,77 @@ class VGGSoundPaths:
 
 def vggsound_paths() -> VGGSoundPaths:
     return VGGSoundPaths(root=data_dir() / "VGGSound")
+
+
+@dataclass(frozen=True)
+class IntentQAPaths:
+    """
+    Default IntentQA layout.
+
+    We support both:
+      - data/IntentQA/IntentQA/... (preferred canonical path), and
+      - data/hf_repos/IntentQA/IntentQA/... (common when cloned from HF).
+    """
+
+    root: Path
+
+    @property
+    def intentqa_dir(self) -> Path:
+        return self.root / "IntentQA"
+
+    @property
+    def videos_dir(self) -> Path:
+        return self.intentqa_dir / "videos"
+
+    @property
+    def processed_dir(self) -> Path:
+        return self.root / "processed"
+
+    def split_csv_path(self, split: str) -> Path:
+        return self.intentqa_dir / f"{str(split)}.csv"
+
+    def raw_video_path(self, video_id: str) -> Path:
+        return self.videos_dir / f"{str(video_id)}.mp4"
+
+    def processed_video_dir(self, video_id: str) -> Path:
+        return self.processed_dir / str(video_id)
+
+
+def intentqa_paths() -> IntentQAPaths:
+    d = data_dir() / "IntentQA"
+    if (d / "IntentQA").exists():
+        return IntentQAPaths(root=d)
+    # Common local clone location (gitignored).
+    alt = data_dir() / "hf_repos" / "IntentQA"
+    return IntentQAPaths(root=alt)
+
+
+@dataclass(frozen=True)
+class EgoSchemaPaths:
+    """
+    Default EgoSchema layout.
+
+    - HF repo clone (parquet metadata + zip shards): data/hf_repos/egoschema/
+    - Extracted videos: data/EgoSchema/videos/*.mp4
+    """
+
+    hf_repo_dir: Path
+    root: Path
+
+    @property
+    def videos_dir(self) -> Path:
+        return self.root / "videos"
+
+    @property
+    def processed_dir(self) -> Path:
+        return self.root / "processed"
+
+    def processed_video_dir(self, video_idx: str) -> Path:
+        return self.processed_dir / str(video_idx)
+
+    def video_path(self, video_idx: str) -> Path:
+        return self.videos_dir / f"{str(video_idx)}.mp4"
+
+
+def egoschema_paths() -> EgoSchemaPaths:
+    return EgoSchemaPaths(hf_repo_dir=data_dir() / "hf_repos" / "egoschema", root=data_dir() / "EgoSchema")

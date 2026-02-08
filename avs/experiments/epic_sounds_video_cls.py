@@ -349,6 +349,7 @@ def train_and_eval_multilabel(
     y_val: np.ndarray,
     num_classes: int,
     device: str,
+    seed: int = 0,
     epochs: int = 10,
     batch_size: int = 16,
     lr: float = 2e-3,
@@ -360,6 +361,13 @@ def train_and_eval_multilabel(
         raise ValueError("empty train/val data")
     if y_train.shape[1] != num_classes or y_val.shape[1] != num_classes:
         raise ValueError("label shape mismatch")
+
+    seed = int(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
     in_dim = int(x_train[0].shape[1])
     model = VideoMultiLabelHead(in_dim=in_dim, num_classes=int(num_classes), hidden_dim=int(hidden_dim), dropout=float(dropout)).to(
@@ -376,7 +384,7 @@ def train_and_eval_multilabel(
     loss_fn = torch.nn.BCEWithLogitsLoss(pos_weight=torch.from_numpy(pos_weight).to(torch.device(device)))
     opt = torch.optim.AdamW(model.parameters(), lr=float(lr), weight_decay=float(weight_decay))
 
-    rng = np.random.default_rng(0)
+    rng = np.random.default_rng(seed)
     n = len(x_train)
     steps = max(1, int(math.ceil(n / float(batch_size))))
 
@@ -520,6 +528,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--hidden-dim", type=int, default=256)
     p.add_argument("--dropout", type=float, default=0.1)
     p.add_argument("--train-device", type=str, default="cpu")
+    p.add_argument("--seeds", type=str, default="0", help="Comma-separated training seeds (e.g., 0,1,2).")
 
     p.add_argument("--ast-pretrained", action="store_true")
     p.add_argument("--panns-checkpoint", type=Path, default=None)
@@ -654,20 +663,39 @@ def main(argv: list[str] | None = None) -> int:
     y_train = np.stack(y_train_rows, axis=0).astype(np.float32)
     y_val = np.stack(y_val_rows, axis=0).astype(np.float32)
 
-    train_out = train_and_eval_multilabel(
-        x_train=x_train,
-        y_train=y_train,
-        x_val=x_val,
-        y_val=y_val,
-        num_classes=num_classes,
-        device=str(args.train_device),
-        epochs=int(args.epochs),
-        batch_size=int(args.batch_size),
-        lr=float(args.lr),
-        weight_decay=float(args.weight_decay),
-        hidden_dim=int(args.hidden_dim),
-        dropout=float(args.dropout),
-    )
+    seeds = [int(s) for s in str(args.seeds).split(",") if str(s).strip()]
+    if not seeds:
+        raise SystemExit("empty --seeds")
+
+    results_by_seed: list[dict] = []
+    for seed in seeds:
+        train_out = train_and_eval_multilabel(
+            x_train=x_train,
+            y_train=y_train,
+            x_val=x_val,
+            y_val=y_val,
+            num_classes=num_classes,
+            device=str(args.train_device),
+            seed=int(seed),
+            epochs=int(args.epochs),
+            batch_size=int(args.batch_size),
+            lr=float(args.lr),
+            weight_decay=float(args.weight_decay),
+            hidden_dim=int(args.hidden_dim),
+            dropout=float(args.dropout),
+        )
+        results_by_seed.append({"seed": int(seed), "train": train_out})
+
+    # Aggregate mean/std across seeds for key metrics.
+    def _agg(key: str) -> dict[str, float]:
+        vals = [float(r["train"]["metrics"][key]) for r in results_by_seed]
+        arr = np.asarray(vals, dtype=np.float64)
+        return {"mean": float(arr.mean()), "std": float(arr.std(ddof=1)) if arr.size > 1 else 0.0}
+
+    summary = {
+        "mAP": _agg("mAP"),
+        "macro_f1@0.5": _agg("macro_f1@0.5"),
+    }
 
     payload = {
         "ok": True,
@@ -689,7 +717,11 @@ def main(argv: list[str] | None = None) -> int:
         "allow_missing_videos": bool(args.allow_missing_videos),
         "requested_limit_train_videos": int(args.limit_train_videos),
         "requested_limit_val_videos": int(args.limit_val_videos),
-        "train": train_out,
+        "seeds": [int(x) for x in seeds],
+        "results_by_seed": results_by_seed,
+        "summary": summary,
+        # Backward-compat: keep the single-run field, pointing to seed[0].
+        "train": results_by_seed[0]["train"],
     }
     (out_dir / "metrics.json").write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(out_dir / "metrics.json")

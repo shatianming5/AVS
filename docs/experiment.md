@@ -4745,13 +4745,13 @@ Follow-ups (train3339→test402; same token budget=1960):
 | Model | `avs.experiments.epic_sounds_video_cls` via `scripts/e0100_epic_video_cls_local.sh` |
 | Weights | Local CLIP encoder + lightweight multi-label head. |
 | Code path | `scripts/e0100_epic_video_cls_local.sh`, `avs/experiments/epic_sounds_video_cls.py` |
-| Params | `SELECTION in {audio_anchored,uniform,random}`, `EVENTNESS=energy`, `ALLOW_MISSING_VIDEOS=1`, `MAX_SECONDS=120` (with fixed `max_steps=120` budget). |
-| Metrics (must save) | `metrics.json` with `mAP`/`macro_f1` and baseline deltas. |
+| Params | `SELECTION in {audio_anchored,uniform,random}`, `EVENTNESS=energy`, `SEEDS>=3` (e.g., `0,1,2`), `ALLOW_MISSING_VIDEOS=1`, `MAX_SECONDS=120` (with fixed `max_steps=120` budget). |
+| Metrics (must save) | `metrics.json` with per-seed `results_by_seed`, `summary` (`mean/std`) for `mAP`/`macro_f1@0.5`, and baseline deltas (computed across selections). |
 | Checks | Must run on real EPIC-SOUNDS val videos (not synthetic smoke). |
-| Single-GPU script | `SELECTION=audio_anchored EVENTNESS=energy MAX_SECONDS=120 ALLOW_MISSING_VIDEOS=1 LIMIT_TRAIN_VIDEOS=495 LIMIT_VAL_VIDEOS=137 MIN_TRAIN_VIDEOS=16 MIN_VAL_VIDEOS=16 TRAIN_DEVICE=cuda:0 CLIP_DEVICE=cuda:0 OUT_DIR=runs/E0413_epic_video_cls_local_audio_anchored_full_ms120_<ts> bash scripts/e0100_epic_video_cls_local.sh` |
+| Single-GPU script | `SELECTION=audio_anchored EVENTNESS=energy SEEDS=0,1,2 MAX_SECONDS=120 ALLOW_MISSING_VIDEOS=1 LIMIT_TRAIN_VIDEOS=495 LIMIT_VAL_VIDEOS=137 MIN_TRAIN_VIDEOS=16 MIN_VAL_VIDEOS=16 TRAIN_DEVICE=cuda:0 CLIP_DEVICE=cuda:0 OUT_DIR=runs/E0413_epic_video_cls_local_audio_anchored_full_ms120_<ts> bash scripts/e0100_epic_video_cls_local.sh` |
 | Multi-GPU script | N/A |
 | Smoke cmd | `python -m avs.smoke epic_sounds_video_cls_synth` |
-| Full cmd | `SELECTION in {audio_anchored,uniform,random} EVENTNESS=energy MAX_SECONDS=120 ALLOW_MISSING_VIDEOS=1 LIMIT_TRAIN_VIDEOS=495 LIMIT_VAL_VIDEOS=137 MIN_TRAIN_VIDEOS=16 MIN_VAL_VIDEOS=16 bash scripts/e0100_epic_video_cls_local.sh` |
+| Full cmd | `SELECTION in {audio_anchored,uniform,random} EVENTNESS=energy SEEDS=0,1,2 MAX_SECONDS=120 ALLOW_MISSING_VIDEOS=1 LIMIT_TRAIN_VIDEOS=495 LIMIT_VAL_VIDEOS=137 MIN_TRAIN_VIDEOS=16 MIN_VAL_VIDEOS=16 bash scripts/e0100_epic_video_cls_local.sh` |
 | Smoke | [x] |
 | Full | [x] |
 | Logs | `runs/smoke_20260206-184253/smoke.json`, `runs/E0413_epic_video_cls_local_*_full_ms120_*/metrics.json` |
@@ -4867,3 +4867,56 @@ Follow-ups (train3339→test402; same token budget=1960):
 | Logs | `runs/E0505_degradation_accuracy_dense_stride_*/*` |
 | Artifacts | `runs/E0505_degradation_accuracy_dense_stride_smoke_20260207-151846/degradation_accuracy.json`, `runs/E0505_degradation_accuracy_dense_stride_full_20260207-161213/degradation_accuracy.json`, `runs/E0505_degradation_accuracy_dense_stride_full_20260207-161213/degradation_plots/*.png` |
 | Results | Full perturbation grid completed (`rows=54`, `shift∈{-0.5,0,0.5}`, `snr∈{20,10,0}`, `silence∈{0,0.5}`, `alpha∈{0,0.5,1}`). `alpha_floor_checks`: `num_fail=0`, `min_margin≈+0.01766` (rule `anchored_top2_mean >= alpha * uniform_mean`). Mean `anchored-uniform` by alpha: `α=0:≈+0.00766`, `α=0.5:≈+0.01300`, `α=1:≈+0.01766`. |
+
+---
+
+### E0600: IntentQA VLM evaluation under budgeted frame selection
+| Field | Value |
+| --- | --- |
+| Objective | Evaluate long-video QA (MCQ) accuracy under a fixed frame budget, comparing `{uniform,random,audio,cheap_visual,fused,ql2l_*}` selection methods. |
+| Dataset | IntentQA (CSV + videos). |
+| Model | VLM: Qwen2-VL (default) or compatible model name via `--model-name`. |
+| Code path | `avs/experiments/intentqa_vlm_eval.py`, `scripts/e0600_intentqa_vlm_eval.sh` |
+| Params | `SPLIT`, `LIMIT`, `METHODS`, `B_FRAMES`, `MAX_SECONDS`, `SEED`, `STRATEGY`, `MODEL_NAME`, `DEVICE`, `DTYPE`, `QL2L_CLAP_DEVICE`, `QL2L_ASR_DEVICE` |
+| Metrics (must save) | `metrics.json` (per-method acc/invalid + bootstrap CI deltas vs uniform), `predictions.jsonl` (per-item rows). |
+| Smoke cmd | `python -m avs.experiments.intentqa_vlm_eval --help` |
+| Full cmd | `OUT_DIR=runs/E0600_intentqa_vlm_eval_$(date +%Y%m%d-%H%M%S) SPLIT=val LIMIT=256 B_FRAMES=16 MAX_SECONDS=120 DEVICE=cuda:0 QL2L_CLAP_DEVICE=cuda:0 QL2L_ASR_DEVICE=cuda:0 bash scripts/e0600_intentqa_vlm_eval.sh` |
+| Outputs | `runs/E0600_intentqa_vlm_eval_*/metrics.json`, `runs/E0600_intentqa_vlm_eval_*/predictions.jsonl` |
+| Notes | Q-L2L backends cache artifacts under each processed video dir (e.g. `processed/<vid>/q_l2l/*`) to keep reruns deterministic. |
+
+### E0601: IntentQA faithfulness proxy (delete-and-predict)
+| Field | Value |
+| --- | --- |
+| Objective | Measure a delete-and-predict proxy: remove the anchor-selected seconds and replace with a budget-matched uniform schedule, then measure accuracy drop and prediction change rate. |
+| Dataset | IntentQA (CSV + videos). |
+| Model | VLM: Qwen2-VL (default). |
+| Code path | `avs/experiments/intentqa_faithfulness.py`, `scripts/e0601_intentqa_faithfulness.sh` |
+| Params | `SPLIT`, `LIMIT`, `METHOD`, `B_FRAMES`, `MAX_SECONDS`, `SEED`, `STRATEGY`, model/QL2L device knobs |
+| Metrics (must save) | `faithfulness.json` (acc, acc_deleted, acc_drop, pred_change_rate), `rows.jsonl` (per-item). |
+| Smoke cmd | `python -m avs.experiments.intentqa_faithfulness --help` |
+| Full cmd | `OUT_DIR=runs/E0601_intentqa_faithfulness_$(date +%Y%m%d-%H%M%S) SPLIT=val LIMIT=256 METHOD=ql2l_clap B_FRAMES=16 MAX_SECONDS=120 DEVICE=cuda:0 QL2L_CLAP_DEVICE=cuda:0 QL2L_ASR_DEVICE=cuda:0 bash scripts/e0601_intentqa_faithfulness.sh` |
+| Outputs | `runs/E0601_intentqa_faithfulness_*/faithfulness.json`, `runs/E0601_intentqa_faithfulness_*/rows.jsonl` |
+
+### E0602: EgoSchema prediction generation under budgeted frame selection
+| Field | Value |
+| --- | --- |
+| Objective | Generate EgoSchema predictions under a fixed frame budget to compare selection methods and/or upload predictions for external evaluation (depending on dataset split/labels available). |
+| Dataset | EgoSchema (HF metadata + extracted videos). |
+| Model | VLM: Qwen2-VL (default). |
+| Code path | `avs/experiments/egoschema_vlm_eval.py`, `scripts/e0602_egoschema_predict.sh` |
+| Params | `CONFIG`, `SPLIT`, `LIMIT`, `METHODS`, `B_FRAMES`, `MAX_SECONDS`, `SEED`, `STRATEGY`, model/QL2L device knobs |
+| Metrics (must save) | `metrics.json`, `predictions.jsonl`, `preprocess_meta.json` |
+| Smoke cmd | `python -m avs.experiments.egoschema_vlm_eval --help` |
+| Full cmd | `OUT_DIR=runs/E0602_egoschema_predict_$(date +%Y%m%d-%H%M%S) CONFIG=MC SPLIT=test LIMIT=256 B_FRAMES=16 MAX_SECONDS=120 DEVICE=cuda:0 QL2L_CLAP_DEVICE=cuda:0 QL2L_ASR_DEVICE=cuda:0 bash scripts/e0602_egoschema_predict.sh` |
+| Outputs | `runs/E0602_egoschema_predict_*/metrics.json`, `runs/E0602_egoschema_predict_*/predictions.jsonl` |
+| Notes | Requires extracted videos: `bash scripts/datasets/egoschema_extract_videos.sh` (from `data/hf_repos/egoschema/videos_chunked_*.zip`). |
+
+### E0603: Stage-2 solver ablation (greedy vs Lagrangian knapsack)
+| Field | Value |
+| --- | --- |
+| Objective | Compare the baseline greedy Stage-2 allocator vs a Lagrangian-relaxation multiple-choice knapsack solver on synthetic window sets. |
+| Code path | `avs/experiments/allocator_solver_ablation.py`, `scripts/e0603_allocator_ablation.sh` |
+| Params | `SEED`, `NUM_WINDOWS`, `BUDGET` |
+| Metrics (must save) | `allocator_ablation.json` (utilities, costs, deltas, per-window allocations). |
+| Smoke cmd | `OUT_DIR=runs/E0603_allocator_ablation_smoke_$(date +%Y%m%d-%H%M%S) NUM_WINDOWS=6 BUDGET=8000 SEED=0 bash scripts/e0603_allocator_ablation.sh` |
+| Outputs | `runs/E0603_allocator_ablation_*/allocator_ablation.json` |

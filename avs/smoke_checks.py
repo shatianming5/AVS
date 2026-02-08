@@ -2062,6 +2062,175 @@ def check_root_cause_report(run_dir: Path) -> SmokeResult:
     )
 
 
+def check_intentqa_io(run_dir: Path) -> SmokeResult:
+    import os
+    import subprocess
+
+    from avs.datasets.intentqa import load_intentqa_split, intentqa_video_path
+
+    # Create a minimal IntentQA layout under run_dir and point AVS_DATA_DIR to it.
+    root = run_dir / "data"
+    intent_dir = root / "IntentQA" / "IntentQA"
+    videos_dir = intent_dir / "videos"
+    videos_dir.mkdir(parents=True, exist_ok=True)
+
+    # Synthetic video.
+    vid = "10000000000"
+    mp4 = videos_dir / f"{vid}.mp4"
+    cmd = [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc=size=160x120:rate=25:duration=2",
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=frequency=440:sample_rate=44100:duration=2",
+        "-shortest",
+        str(mp4),
+    ]
+    subprocess.run(cmd, check=True)  # noqa: S603,S607 - controlled args
+
+    # Minimal CSV (train only).
+    (intent_dir / "train.csv").write_text(
+        "\n".join(
+            [
+                "video_id,frame_count,width,height,question,answer,qid,type,a0,a1,a2,a3,a4",
+                f"{vid},50,160,120,why is the man smiling,1,0,CW,because he is happy,because he is sad,because he is tired,because he is angry,because he is scared",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    old = os.environ.get("AVS_DATA_DIR")
+    os.environ["AVS_DATA_DIR"] = str(root)
+    try:
+        items = load_intentqa_split("train")
+        ok = len(items) == 1 and items[0].video_id == vid and items[0].answer_idx == 1
+        vpath = intentqa_video_path(vid)
+        ok = ok and vpath.exists()
+        payload = {"root": str(root), "num_items": len(items), "video_path": str(vpath)}
+    finally:
+        if old is None:
+            os.environ.pop("AVS_DATA_DIR", None)
+        else:
+            os.environ["AVS_DATA_DIR"] = old
+
+    _write_json(run_dir, "intentqa_io.json", payload)
+    return SmokeResult(name="intentqa_io", ok=ok, details=payload if ok else {"error": "IntentQA IO smoke failed", **payload})
+
+
+def check_q_l2l_relevance(run_dir: Path) -> SmokeResult:
+    from avs.qa.query_relevance import normalize_relevance, relevance_from_bm25, relevance_from_tfidf
+    from avs.qa.reliability import reliability_and_alpha
+
+    per_sec = ["a dog barking", "", "a man is talking", "silence", "dog and man"]
+    q = "why is the dog barking"
+    bm25 = normalize_relevance(relevance_from_bm25(per_sec, q))
+    tfidf = normalize_relevance(relevance_from_tfidf(per_sec, q))
+    rep = reliability_and_alpha([0.0, 0.0, 1.0, 0.1, 0.2])
+
+    ok = len(bm25) == len(per_sec) and len(tfidf) == len(per_sec) and 0.0 <= rep.alpha <= 1.0
+    payload = {"bm25": bm25, "tfidf": tfidf, "reliability": rep.__dict__}
+    _write_json(run_dir, "q_l2l_relevance.json", payload)
+    return SmokeResult(name="q_l2l_relevance", ok=ok, details=payload if ok else {"error": "q_l2l_relevance smoke failed", **payload})
+
+
+def check_qa_plan_generation(run_dir: Path) -> SmokeResult:
+    import subprocess
+
+    from avs.pipeline.qa_plan_generation import build_scores, select_seconds_alpha_mixture
+    from avs.preprocess.video_extract import ensure_processed_fps1
+
+    # Synthetic video -> processed_dir -> build scores -> select seconds.
+    video = run_dir / "qa_plan_video.mp4"
+    cmd = [
+        "ffmpeg",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc=size=160x120:rate=25:duration=6",
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=frequency=440:sample_rate=44100:duration=6",
+        "-shortest",
+        str(video),
+    ]
+    subprocess.run(cmd, check=True)  # noqa: S603,S607 - controlled args
+
+    processed = run_dir / "qa_processed"
+    ensure_processed_fps1(video_path=video, out_dir=processed, max_seconds=6, force=True)
+
+    scores = build_scores(processed_dir=processed, query="what is happening", num_segments=6, method="fused", seed=0)
+    sel = select_seconds_alpha_mixture(scores=scores["scores"], budget_frames=4, seed=0)
+    ok = len(sel.selected_seconds) == 4 and all(0 <= t < 6 for t in sel.selected_seconds)
+
+    payload = {"scores_details": scores["details"], "selection": sel.to_jsonable()}
+    _write_json(run_dir, "qa_plan_generation.json", payload)
+    return SmokeResult(name="qa_plan_generation", ok=ok, details=payload if ok else {"error": "qa_plan_generation smoke failed", **payload})
+
+
+def check_ltl_budget_allocator_knapsack(run_dir: Path) -> SmokeResult:
+    from avs.budget.vis_budget import VisualConfig
+    from avs.metrics.time_windows import TimeWindow
+    from avs.sampling.allocator import allocate_budgeted_windows, allocate_budgeted_windows_knapsack_lagrangian
+
+    windows = [TimeWindow(0.0, 1.0), TimeWindow(1.0, 2.5), TimeWindow(2.5, 3.0)]
+    weights = [0.2, 0.9, 0.5]
+    cfgs = [
+        VisualConfig(name="c0", fps=0.5, resolution=224, r_keep=1.0),
+        VisualConfig(name="c1", fps=1.0, resolution=224, r_keep=1.0),
+        VisualConfig(name="c2", fps=1.0, resolution=336, r_keep=1.0),
+    ]
+    budget = 2000.0
+    rep_g = allocate_budgeted_windows(windows=windows, weights=weights, configs=cfgs, budget=budget, patch_size=16, drop_if_needed=True)
+    rep_k = allocate_budgeted_windows_knapsack_lagrangian(windows=windows, weights=weights, configs=cfgs, budget=budget, patch_size=16, include_drop=True)
+
+    ok = rep_g.ok and rep_k.ok and rep_g.total_cost <= budget + 1e-6 and rep_k.total_cost <= budget + 1e-6
+    payload = {"budget": budget, "greedy": rep_g.to_jsonable(), "knapsack": rep_k.to_jsonable()}
+    _write_json(run_dir, "ltl_budget_allocator_knapsack.json", payload)
+    return SmokeResult(
+        name="ltl_budget_allocator_knapsack",
+        ok=ok,
+        details=payload if ok else {"error": "knapsack allocator over budget or failed", **payload},
+    )
+
+
+def check_egoschema_io(run_dir: Path) -> SmokeResult:
+    """
+    Best-effort: if EgoSchema HF repo isn't present, skip.
+    """
+    from avs.datasets.egoschema import load_egoschema_split
+    from avs.datasets.layout import egoschema_paths
+
+    p = egoschema_paths()
+    if not p.hf_repo_dir.exists():
+        payload = {"skipped": True, "reason": "missing data/hf_repos/egoschema"}
+        _write_json(run_dir, "egoschema_io.json", payload)
+        return SmokeResult(name="egoschema_io", ok=True, details=payload)
+
+    try:
+        items = load_egoschema_split(config="Subset", split="test", limit=2)
+        ok = len(items) == 2 and all(it.question for it in items)
+        payload = {"skipped": False, "num_items": len(items), "sample": items[0].__dict__}
+    except Exception as e:  # noqa: BLE001
+        ok = False
+        payload = {"skipped": False, "error": repr(e)}
+
+    _write_json(run_dir, "egoschema_io.json", payload)
+    return SmokeResult(name="egoschema_io", ok=ok, details=payload if ok else {"error": "EgoSchema IO smoke failed", **payload})
+
 handlers = {
     "ave_meta": check_ave_meta,
     "epic_sounds_meta": check_epic_sounds_meta,
@@ -2108,4 +2277,9 @@ handlers = {
     "ltl_degradation_suite_toy": check_ltl_degradation_suite_toy,
     "dataset_integrity_audit": check_dataset_integrity_audit,
     "root_cause_report": check_root_cause_report,
+    "intentqa_io": check_intentqa_io,
+    "egoschema_io": check_egoschema_io,
+    "q_l2l_relevance": check_q_l2l_relevance,
+    "qa_plan_generation": check_qa_plan_generation,
+    "ltl_budget_allocator_knapsack": check_ltl_budget_allocator_knapsack,
 }

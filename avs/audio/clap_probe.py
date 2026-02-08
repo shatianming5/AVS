@@ -71,7 +71,7 @@ class ClapProbe:
         return y.squeeze(0).detach().cpu().numpy().astype(np.float32, copy=False)
 
     @torch.no_grad()
-    def audio_embeddings_per_second(self, wav_path: Path, *, num_segments: int = 10) -> np.ndarray:
+    def audio_embeddings_per_second(self, wav_path: Path, *, num_segments: int = 10, batch_size: int | None = None) -> np.ndarray:
         """
         Return per-second CLAP audio embeddings (shape: [T, D]) in the CLAP joint embedding space.
         """
@@ -88,11 +88,27 @@ class ClapProbe:
             audio = audio[:target_len]
 
         segments = [audio[t * seg_len : (t + 1) * seg_len] for t in range(int(num_segments))]
-        inputs = self.processor(audios=segments, sampling_rate=int(self.target_sample_rate), return_tensors="pt")
-        inputs = {k: v.to(device=self.device, dtype=self.dtype) for k, v in inputs.items()}
-        emb = self.model.get_audio_features(**inputs)
-        emb = _l2_normalize(emb)
-        return emb.detach().cpu().numpy().astype(np.float32, copy=False)
+        bs = None if batch_size is None else max(1, int(batch_size))
+        if bs is None or bs >= int(num_segments):
+            # transformers >=4.44 deprecated `audios=` in favor of `audio=`.
+            inputs = self.processor(audio=segments, sampling_rate=int(self.target_sample_rate), return_tensors="pt")
+            inputs = {k: (v.to(device=self.device, dtype=self.dtype) if v.is_floating_point() else v.to(device=self.device)) for k, v in inputs.items()}
+            out = self.model.get_audio_features(**inputs)
+            # transformers returns BaseModelOutputWithPooling; pooler_output is projected + normalized.
+            emb = getattr(out, "pooler_output", out)
+            emb = _l2_normalize(emb)
+            return emb.detach().cpu().numpy().astype(np.float32, copy=False)
+
+        outs: list[np.ndarray] = []
+        for start in range(0, int(num_segments), int(bs)):
+            segs = segments[start : start + int(bs)]
+            inputs = self.processor(audio=segs, sampling_rate=int(self.target_sample_rate), return_tensors="pt")
+            inputs = {k: (v.to(device=self.device, dtype=self.dtype) if v.is_floating_point() else v.to(device=self.device)) for k, v in inputs.items()}
+            out = self.model.get_audio_features(**inputs)
+            emb = getattr(out, "pooler_output", out)
+            emb = _l2_normalize(emb).detach().cpu().numpy().astype(np.float32, copy=False)
+            outs.append(emb)
+        return np.concatenate(outs, axis=0).astype(np.float32, copy=False)
 
     @torch.no_grad()
     def text_embeddings(self, texts: list[str]) -> np.ndarray:
@@ -101,7 +117,7 @@ class ClapProbe:
         """
         inputs = self.processor(text=[str(x) for x in texts], return_tensors="pt", padding=True, truncation=True)
         inputs = {k: v.to(device=self.device) for k, v in inputs.items()}
-        emb = self.model.get_text_features(**inputs)
+        out = self.model.get_text_features(**inputs)
+        emb = getattr(out, "pooler_output", out)
         emb = _l2_normalize(emb)
         return emb.detach().cpu().numpy().astype(np.float32, copy=False)
-
