@@ -22,6 +22,13 @@ class AVEClip:
 
 def ensure_ave_meta(meta_dir: Path) -> None:
     meta_dir.mkdir(parents=True, exist_ok=True)
+    # If the official dataset split files are present, prefer them and avoid overwriting.
+    # They are installed by `scripts/ave_install_official.sh` and are more consistent with
+    # the official zip than the GitHub `*_order.h5` lists.
+    has_official_splits = all((meta_dir / f"{s}Set.txt").exists() for s in ("train", "val", "test"))
+    if has_official_splits and (meta_dir / "Annotations.txt").exists():
+        return
+
     download_url(f"{AVE_META_BASE_URL}/Annotations.txt", meta_dir / "Annotations.txt")
     for split in ("train", "val", "test"):
         download_url(f"{AVE_META_BASE_URL}/{split}_order.h5", meta_dir / f"{split}_order.h5")
@@ -44,16 +51,45 @@ def _parse_annotations(path: Path) -> list[AVEClip]:
         if len(parts) != 5:
             raise ValueError(f"unexpected annotation line format: {line!r}")
         label, video_id, quality, start, end = parts
+        try:
+            start_f = float(start)
+            end_f = float(end)
+        except Exception:
+            # Official AVE zip includes a header row; skip any non-numeric start/end lines.
+            continue
         clips.append(
             AVEClip(
                 label=label.strip(),
                 video_id=video_id.strip(),
                 quality=quality.strip(),
-                start_sec=float(start),
-                end_sec=float(end),
+                start_sec=float(start_f),
+                end_sec=float(end_f),
             )
         )
     return clips
+
+
+def _read_split_txt(path: Path) -> list[str]:
+    """
+    Read `<split>Set.txt` from the official AVE zip.
+
+    File format: one `video_id` per line.
+    """
+    ids: list[str] = []
+    for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+        s = str(line).strip()
+        if not s:
+            continue
+        ids.append(s)
+    # Stable unique: some environments may have accidental duplicates after manual edits.
+    out: list[str] = []
+    seen: set[str] = set()
+    for x in ids:
+        if x in seen:
+            continue
+        seen.add(x)
+        out.append(x)
+    return out
 
 
 class AVEIndex:
@@ -82,8 +118,24 @@ class AVEIndex:
 
     @classmethod
     def from_meta_dir(cls, meta_dir: Path) -> "AVEIndex":
+        # Preferred official format: trainSet/valSet/testSet contain per-split annotation rows
+        # (same `label&video_id&quality&start&end` format as Annotations.txt).
+        has_official_splits = all((meta_dir / f"{s}Set.txt").exists() for s in ("train", "val", "test"))
+        if has_official_splits:
+            train = _parse_annotations(meta_dir / "trainSet.txt")
+            val = _parse_annotations(meta_dir / "valSet.txt")
+            test = _parse_annotations(meta_dir / "testSet.txt")
+
+            clips = train + val + test
+            splits = {
+                "train": list(range(0, len(train))),
+                "val": list(range(len(train), len(train) + len(val))),
+                "test": list(range(len(train) + len(val), len(train) + len(val) + len(test))),
+            }
+            return cls(clips=clips, splits=splits)
+
+        # Backward-compatible GitHub meta format: Annotations.txt + *_order.h5 indices into raw annotation rows.
         annotations_path = meta_dir / "Annotations.txt"
         clips = _parse_annotations(annotations_path)
         splits = {split: _load_order_h5(meta_dir / f"{split}_order.h5") for split in ("train", "val", "test")}
         return cls(clips=clips, splits=splits)
-

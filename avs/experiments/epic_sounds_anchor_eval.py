@@ -13,6 +13,7 @@ from avs.audio.eventness import eventness_energy_delta_per_second, eventness_ene
 from avs.datasets.epic_sounds import EpicSoundsIndex
 from avs.datasets.layout import epic_sounds_paths
 from avs.metrics.anchors import recall_at_k
+from avs.vision.cheap_eventness import frame_diff_eventness, list_frames
 
 
 @dataclass(frozen=True)
@@ -20,6 +21,7 @@ class EpicSoundsAnchorEvalClip:
     clip_id: str
     wav_path: Path
     gt_segments: list[int]
+    frames_dir: Path | None = None
     num_segments: int | None = None
 
 
@@ -106,6 +108,16 @@ def evaluate_anchor_quality(
             audio, sr = load_wav_mono(clip.wav_path)
             audio = audio[: int(sr) * num_segments]
             scores = eventness_energy_delta_per_second(audio, sr, num_segments=num_segments)
+        elif method == "cheap_visual":
+            if clip.frames_dir is None:
+                continue
+            frames = list_frames(clip.frames_dir)
+            if max_seconds is not None:
+                frames = frames[: int(max_seconds)]
+            if not frames:
+                continue
+            scores = frame_diff_eventness(frames)
+            num_segments = min(num_segments, len(scores))
         elif method == "ast":
             assert ast_probe is not None
             scores = ast_probe.eventness_per_second(clip.wav_path, num_segments=num_segments)
@@ -160,6 +172,7 @@ def _load_custom_clips(jsonl_path: Path) -> list[EpicSoundsAnchorEvalClip]:
             EpicSoundsAnchorEvalClip(
                 clip_id=str(obj["clip_id"]),
                 wav_path=Path(obj["wav_path"]),
+                frames_dir=Path(obj["frames_dir"]) if "frames_dir" in obj and obj["frames_dir"] is not None else None,
                 gt_segments=[int(x) for x in obj["gt_segments"]],
                 num_segments=int(obj["num_segments"]) if "num_segments" in obj and obj["num_segments"] is not None else None,
             )
@@ -171,6 +184,7 @@ def _build_epic_sounds_clips(
     meta_dir: Path,
     *,
     audio_dir: Path,
+    frames_dir: Path,
     split: str,
     limit_videos: int | None,
     include_not_categorised: bool,
@@ -204,16 +218,17 @@ def _build_epic_sounds_clips(
         wav_path = audio_dir / f"{vid}.wav"
         if not wav_path.exists():
             continue
+        frames_video_dir = Path(frames_dir) / vid / "frames"
         gt = sorted(by_video.get(vid, set()))
         if max_seconds is not None:
             gt = [t for t in gt if t < int(max_seconds)]
-        clips.append(EpicSoundsAnchorEvalClip(clip_id=vid, wav_path=wav_path, gt_segments=gt))
+        clips.append(EpicSoundsAnchorEvalClip(clip_id=vid, wav_path=wav_path, frames_dir=frames_video_dir, gt_segments=gt))
     return clips
 
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="EPIC-SOUNDS anchor quality eval (Recall@K / Recall@K,Δ).")
-    p.add_argument("--method", type=str, default="energy", choices=["energy", "energy_delta", "ast", "panns", "audiomae"])
+    p.add_argument("--method", type=str, default="energy", choices=["energy", "energy_delta", "cheap_visual", "ast", "panns", "audiomae"])
     p.add_argument("--k", type=int, default=5)
     p.add_argument("--deltas", type=str, default="0,1,2")
     p.add_argument("--seed", type=int, default=0)
@@ -226,6 +241,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p.add_argument("--meta-dir", type=Path, default=epic_sounds_paths().meta_dir)
     p.add_argument("--audio-dir", type=Path, default=epic_sounds_paths().root / "audio", help="Dir containing <video_id>.wav")
+    p.add_argument("--frames-dir", type=Path, default=epic_sounds_paths().frames_dir, help="Dir containing per-video frames folders")
     p.add_argument("--split", type=str, default="val", choices=["train", "val", "test"])
     p.add_argument("--limit-videos", type=int, default=None)
     p.add_argument("--include-not-categorised", action="store_true")
@@ -252,6 +268,7 @@ def main(argv: list[str] | None = None) -> int:
         clips = _build_epic_sounds_clips(
             args.meta_dir,
             audio_dir=args.audio_dir,
+            frames_dir=args.frames_dir,
             split=str(args.split),
             limit_videos=args.limit_videos,
             include_not_categorised=bool(args.include_not_categorised),

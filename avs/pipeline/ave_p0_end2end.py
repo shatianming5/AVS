@@ -27,10 +27,14 @@ def _select_split_ids(meta_dir: Path, split: str, limit: int | None) -> list[str
 
 def _read_ids_file(path: Path, limit: int | None) -> list[str]:
     ids: list[str] = []
+    seen: set[str] = set()
     for line in path.read_text(encoding="utf-8").splitlines():
         s = str(line).strip()
         if not s:
             continue
+        if s in seen:
+            continue
+        seen.add(s)
         ids.append(s)
         if limit is not None and len(ids) >= int(limit):
             break
@@ -157,7 +161,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--anchor-select",
         type=str,
         default="topk",
-        choices=["topk", "nms", "nms_strong", "window_topk"],
+        choices=["topk", "nms", "nms_strong", "adjacent_top2", "window_topk"],
         help="Anchor selection strategy on per-second eventness scores.",
     )
     p.add_argument(
@@ -183,19 +187,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--anchor-nms-radius",
         type=int,
         default=1,
-        help="For --anchor-select nms: suppress anchors within ±radius segments of a selected anchor.",
+        help="For --anchor-select nms: suppress anchors within ±radius segments of a selected anchor. For adjacent_top2: adjacent search radius.",
     )
     p.add_argument(
         "--anchor-nms-strong-gap",
         type=float,
         default=0.6,
-        help="For --anchor-select nms_strong: accept a far anchor only if (top1_score - best_far_score) <= gap.",
+        help="For --anchor-select nms_strong: accept a far anchor only if (top1_score - best_far_score) <= gap. For adjacent_top2: pick an adjacent 2nd anchor only if (top1_score - best_adj_score) <= gap.",
     )
     p.add_argument(
         "--anchor-conf-metric",
         type=str,
         default=None,
-        choices=["std", "top1_med", "top12_gap", "gini"],
+        choices=["std", "std_norm", "top1_med", "top1_med_norm", "top12_gap", "top12_gap_norm", "gini"],
         help="Anchor confidence metric. If set, uses --anchor-conf-threshold to decide fallback to uniform (replaces std-only fallback).",
     )
     p.add_argument(
@@ -215,8 +219,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--anchor-high-policy",
         type=str,
         default="fixed",
-        choices=["fixed", "adaptive_v1"],
-        help="How many anchors get high-res allocation: fixed uses --max-high-anchors; adaptive_v1 demotes the 2nd high anchor when anchors are adjacent or the 2nd peak is weak.",
+        choices=["fixed", "adaptive_v1", "adaptive_v2", "adaptive_v3"],
+        help="How many anchors get high-res allocation: fixed uses --max-high-anchors; adaptive_v1 demotes the 2nd high anchor when anchors are adjacent (and optionally when top2 gap is large); adaptive_v2 adds confidence-based demotion for medium-confidence clips; adaptive_v3 only allows 2-high when anchors are adjacent (and demotes far anchors to preserve context).",
     )
     p.add_argument(
         "--anchor-high-adjacent-dist",
@@ -237,12 +241,59 @@ def build_parser() -> argparse.ArgumentParser:
         choices=[
             "energy",
             "energy_delta",
+            "energy_stride_max",
+            "asr_vad",
+            "energy_nonspeech_ast",
+            "energy_autoshift_clipdiff",
+            "energy_autoshift_clipdiff_pos",
+            "av_clap_clip_agree",
+            "clap_evt",
+            "clap_lr",
+            "clap_mlp_cls",
+            "clap_mlp_cls_target",
+            "av_fused",
+            "av_fused_prod",
+            "av_fused_clipdiff",
+            "av_fused_clipdiff_prod",
+            "moe_energy_clipdiff",
+            "av_basic_lr",
+            "av_basic_mlp",
+            "av_clipdiff_lr",
+            "av_clipdiff_mlp",
+            "av_clipdiff_accflip_mlp",
+            "av_clipdiff_speech_mlp",
+            "av_clipdiff_framediff_mlp",
+            "av_clipdiff_fbank_mlp",
+            "av_ast_clipdiff_mlp",
+            "av_ast_clipdiff_mil_mlp",
+            "av_ast_clipdiff_tcn",
+            "av_ast_clipalign_nce",
+            "av_ast_clipalign_bce",
+            "av_clipdiff_vec_mlp",
+            "av_clipdiff_mlp_cls",
+            "av_clipdiff_mlp_cls_target",
+            "av_clip_mlp_cls",
+            "av_clip_mlp_cls_target",
+            "av_clipdiff_tcn",
+            "vision_clipdiff",
+            "vision_binary_lr",
+            "vision_binary_mlp",
+            "vision_mlp_cls",
+            "vision_mlp_cls_target",
             "ast",
+            "ast_nonspeech_max",
+            "ast_lr",
+            "ast_emb_lr",
+            "ast_evt_mlp",
+            "ast_mlp_cls",
+            "ast_mlp_cls_target",
             "panns",
             "audiomae",
             "audio_basic_lr",
             "audio_basic_mlp",
+            "audio_basic_tcn",
             "audio_fbank_mlp",
+            "audio_fbank_tcn",
             "audio_basic_mlp_cls",
             "audio_basic_mlp_cls_target",
         ],
@@ -262,6 +313,17 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         help="Optional cap on how many anchors get high-res allocation (budget-aware). Default: use as many as budget allows.",
+    )
+
+    p.add_argument("--triad-policy", type=str, default="fixed", choices=["fixed", "top1med_tiered_v1"])
+    p.add_argument("--triad-alt-conf-threshold", type=float, default=0.0, help="0 disables tiered triad.")
+    p.add_argument("--triad-alt-low-res", type=int, default=112)
+    p.add_argument("--triad-alt-high-res", type=int, default=448)
+    p.add_argument(
+        "--triad-alt-max-high-anchors",
+        type=int,
+        default=1,
+        help="Cap high-res anchors under the alt triad. Use -1 for no extra cap.",
     )
 
     p.add_argument("--head", type=str, default="mlp", choices=["mlp", "temporal_conv"])
@@ -581,6 +643,13 @@ def main(argv: list[str] | None = None) -> int:
             high_res=int(args.high_res),
             patch_size=int(args.patch_size),
             max_high_anchors=args.max_high_anchors,
+            triad_policy=str(args.triad_policy),
+            triad_alt_conf_threshold=float(args.triad_alt_conf_threshold),
+            triad_alt_low_res=int(args.triad_alt_low_res),
+            triad_alt_high_res=int(args.triad_alt_high_res),
+            triad_alt_max_high_anchors=(
+                None if int(args.triad_alt_max_high_anchors) < 0 else int(args.triad_alt_max_high_anchors)
+            ),
             anchor_shift=int(args.anchor_shift),
             anchor_std_threshold=float(args.anchor_std_threshold),
             anchor_select=str(args.anchor_select),
@@ -604,6 +673,7 @@ def main(argv: list[str] | None = None) -> int:
         seeds=seeds,
         train_cfg=TrainConfig(epochs=5, batch_size=16, lr=2e-3),
         num_classes=index.num_classes,
+        class_names=[str(index.idx_to_label[i]) for i in range(int(index.num_classes))],
         num_segments=10,
         eventness_method=str(args.eventness_method),
         audio_device=str(args.audio_device) if args.audio_device is not None else str(args.device),

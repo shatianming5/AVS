@@ -495,6 +495,23 @@ def build_parser() -> argparse.ArgumentParser:
 
     p.add_argument("--limit-train-videos", type=int, default=64)
     p.add_argument("--limit-val-videos", type=int, default=64)
+    p.add_argument(
+        "--allow-missing-videos",
+        action="store_true",
+        help="If set, select up to limit videos from available mp4s instead of failing on missing fixed IDs.",
+    )
+    p.add_argument(
+        "--min-train-videos",
+        type=int,
+        default=16,
+        help="Minimum available train videos required when --allow-missing-videos is enabled.",
+    )
+    p.add_argument(
+        "--min-val-videos",
+        type=int,
+        default=16,
+        help="Minimum available val videos required when --allow-missing-videos is enabled.",
+    )
 
     p.add_argument("--epochs", type=int, default=10)
     p.add_argument("--batch-size", type=int, default=16)
@@ -534,13 +551,29 @@ def main(argv: list[str] | None = None) -> int:
     if num_classes <= 0:
         raise SystemExit("no labeled classes found in EPIC-SOUNDS meta (train/val)")
 
-    train_videos = sorted(by_video_train.keys())[: int(args.limit_train_videos)]
-    val_videos = sorted(by_video_val.keys())[: int(args.limit_val_videos)]
-
     videos_dir = Path(args.videos_dir)
-    missing = [v for v in (train_videos + val_videos) if not (videos_dir / f"{v}.mp4").exists()]
-    if missing:
-        raise SystemExit(f"missing mp4s under {videos_dir}: {missing[:5]}{' ...' if len(missing) > 5 else ''}")
+    all_train_videos = sorted(by_video_train.keys())
+    all_val_videos = sorted(by_video_val.keys())
+
+    if bool(args.allow_missing_videos):
+        available_train = [v for v in all_train_videos if (videos_dir / f"{v}.mp4").exists()]
+        available_val = [v for v in all_val_videos if (videos_dir / f"{v}.mp4").exists()]
+        train_videos = available_train[: int(args.limit_train_videos)]
+        val_videos = available_val[: int(args.limit_val_videos)]
+
+        min_train = int(args.min_train_videos)
+        min_val = int(args.min_val_videos)
+        if len(train_videos) < min_train or len(val_videos) < min_val:
+            raise SystemExit(
+                "insufficient available videos under "
+                f"{videos_dir}: train={len(train_videos)}(<{min_train}) val={len(val_videos)}(<{min_val})"
+            )
+    else:
+        train_videos = all_train_videos[: int(args.limit_train_videos)]
+        val_videos = all_val_videos[: int(args.limit_val_videos)]
+        missing = [v for v in (train_videos + val_videos) if not (videos_dir / f"{v}.mp4").exists()]
+        if missing:
+            raise SystemExit(f"missing mp4s under {videos_dir}: {missing[:5]}{' ...' if len(missing) > 5 else ''}")
 
     cache_resolutions = [int(x) for x in str(args.cache_resolutions).split(",") if str(x).strip()]
     if not cache_resolutions:
@@ -653,6 +686,9 @@ def main(argv: list[str] | None = None) -> int:
         "num_classes": int(num_classes),
         "num_train_videos": int(len(packs_train)),
         "num_val_videos": int(len(packs_val)),
+        "allow_missing_videos": bool(args.allow_missing_videos),
+        "requested_limit_train_videos": int(args.limit_train_videos),
+        "requested_limit_val_videos": int(args.limit_val_videos),
         "train": train_out,
     }
     (out_dir / "metrics.json").write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")

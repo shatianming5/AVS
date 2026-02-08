@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# E0375: Stage-1 sweep on official AVE val402 for a strong cheap-visual control:
+# supervised per-second binary visual eventness on frozen CLIP low-res features
+# (`EVENTNESS=vision_binary_mlp`) under the scale-invariant top1-med gate
+# (`candidate_set=ltl_top1med_norm_v1`).
+#
+# This is a thin wrapper around `scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh` that:
+#   - defaults EVENTNESS to vision_binary_mlp
+#   - defaults CANDIDATE_SET to ltl_top1med_norm_v1
+#   - writes outputs under runs/E0375_*
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "${REPO_ROOT}"
+
+EVENTNESS="${EVENTNESS:-vision_binary_mlp}"
+CANDIDATE_SET="${CANDIDATE_SET:-ltl_top1med_norm_v1}"
+
+OUT_DIR="${OUT_DIR:-runs/E0375_ave_p0_sweep_official_val_${EVENTNESS}_${CANDIDATE_SET}_$(date +%Y%m%d-%H%M%S)}"
+
+export EVENTNESS
+export CANDIDATE_SET
+export OUT_DIR
+
+bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh
+

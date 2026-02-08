@@ -14,10 +14,14 @@ from avs.train.train_loop import TrainConfig
 
 def _read_ids_file(path: Path, limit: int | None) -> list[str]:
     ids: list[str] = []
+    seen: set[str] = set()
     for line in path.read_text(encoding="utf-8").splitlines():
         s = str(line).strip()
         if not s:
             continue
+        if s in seen:
+            continue
+        seen.add(s)
         ids.append(s)
         if limit is not None and len(ids) >= int(limit):
             break
@@ -233,4 +237,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

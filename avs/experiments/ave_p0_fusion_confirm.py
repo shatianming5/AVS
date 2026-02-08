@@ -11,12 +11,33 @@ from avs.experiments.ave_p0 import P0Config, run_p0_from_caches
 from avs.train.train_loop import TrainConfig
 
 
+def _load_scores_json(path: Path) -> dict[str, list[float]]:
+    obj = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(obj, dict) and "scores" in obj and isinstance(obj["scores"], dict):
+        scores_obj = obj["scores"]
+    elif isinstance(obj, dict):
+        scores_obj = obj
+    else:
+        raise ValueError("scores-json must be a JSON object")
+
+    out: dict[str, list[float]] = {}
+    for k, v in scores_obj.items():
+        if not isinstance(v, list):
+            raise ValueError(f"scores[{k!r}] must be a list, got {type(v)}")
+        out[str(k)] = [float(x) for x in v]
+    return out
+
+
 def _read_ids_file(path: Path, limit: int | None) -> list[str]:
     ids: list[str] = []
+    seen: set[str] = set()
     for line in path.read_text(encoding="utf-8").splitlines():
         s = str(line).strip()
         if not s:
             continue
+        if s in seen:
+            continue
+        seen.add(s)
         ids.append(s)
         if limit is not None and len(ids) >= int(limit):
             break
@@ -81,6 +102,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--panns-random", action="store_true")
     p.add_argument("--audiomae-checkpoint", type=Path, default=None)
     p.add_argument("--audiomae-random", action="store_true")
+    p.add_argument(
+        "--scores-json",
+        type=Path,
+        default=None,
+        help="Optional JSON cache of per-second eventness scores keyed by clip_id (from E0014). "
+        "If provided, skips recomputing scores for expensive audio backends.",
+    )
 
     p.add_argument("--out-dir", type=Path, default=Path("runs") / f"E0013_ave_fusion_confirm_{time.strftime('%Y%m%d-%H%M%S')}")
     return p
@@ -123,11 +151,12 @@ def main(argv: list[str] | None = None) -> int:
     cfg_obj = _load_config_json(args.config_json)
 
     cfg = P0Config(
-        k=2,
+        k=int(cfg_obj.get("k", 2)),
         low_res=int(cfg_obj["low_res"]),
         base_res=int(cfg_obj["base_res"]),
         high_res=int(cfg_obj["high_res"]),
         patch_size=16,
+        max_high_anchors=int(cfg_obj.get("max_high_anchors")) if cfg_obj.get("max_high_anchors") is not None else None,
         anchor_shift=int(cfg_obj.get("anchor_shift", 0)),
         anchor_std_threshold=float(cfg_obj.get("anchor_std_threshold", 0.0)),
         anchor_select=str(cfg_obj.get("anchor_select", "topk")),
@@ -139,6 +168,9 @@ def main(argv: list[str] | None = None) -> int:
         anchor_base_alloc=str(cfg_obj.get("anchor_base_alloc", "distance")),
         anchor_conf_metric=str(cfg_obj.get("anchor_conf_metric")) if cfg_obj.get("anchor_conf_metric") is not None else None,
         anchor_conf_threshold=float(cfg_obj.get("anchor_conf_threshold")) if cfg_obj.get("anchor_conf_threshold") is not None else None,
+        anchor_high_policy=str(cfg_obj.get("anchor_high_policy", "fixed")),
+        anchor_high_adjacent_dist=int(cfg_obj.get("anchor_high_adjacent_dist", 1)),
+        anchor_high_gap_threshold=float(cfg_obj.get("anchor_high_gap_threshold", 0.0)),
         head=str(cfg_obj.get("head", "temporal_conv")),
         temporal_kernel_size=int(cfg_obj.get("temporal_kernel_size", 3)),
     )
@@ -154,6 +186,16 @@ def main(argv: list[str] | None = None) -> int:
         weight_decay=float(args.weight_decay),
     )
 
+    scores_by_clip_override = None
+    if args.scores_json is not None:
+        if not args.scores_json.exists():
+            raise SystemExit(f"--scores-json not found: {args.scores_json}")
+        scores_by_clip_override = _load_scores_json(args.scores_json)
+        all_ids = sorted(set(train_ids + eval_ids))
+        missing = [cid for cid in all_ids if cid not in scores_by_clip_override]
+        if missing:
+            raise SystemExit(f"scores-json missing {len(missing)} clip_ids (e.g. {missing[:3]})")
+
     baselines = ["uniform", "anchored_top2", "audio_concat_uniform", "audio_concat_anchored_top2"]
     metrics = run_p0_from_caches(
         clip_ids_train=train_ids,
@@ -167,6 +209,7 @@ def main(argv: list[str] | None = None) -> int:
         train_cfg=train_cfg,
         train_device=str(args.train_device),
         num_classes=index.num_classes,
+        class_names=[str(index.idx_to_label[i]) for i in range(int(index.num_classes))],
         num_segments=10,
         eventness_method=str(args.eventness_method),
         audio_device=str(args.audio_device),
@@ -175,6 +218,7 @@ def main(argv: list[str] | None = None) -> int:
         panns_checkpoint=args.panns_checkpoint,
         audiomae_random=bool(args.audiomae_random),
         audiomae_checkpoint=args.audiomae_checkpoint,
+        scores_by_clip_override=scores_by_clip_override,
     )
 
     out_path = args.out_dir / "metrics.json"
@@ -185,4 +229,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

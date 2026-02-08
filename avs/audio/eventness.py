@@ -7,6 +7,9 @@ from pathlib import Path
 
 import numpy as np
 
+from avs.metrics.time_windows import TimeWindow
+from avs.utils.scores import minmax_01
+
 
 @dataclass(frozen=True)
 class AudioEventness:
@@ -83,6 +86,218 @@ def compute_eventness_wav_energy_delta(path: Path, *, num_segments: int = 10) ->
     audio, sr = load_wav_mono(path)
     scores = eventness_energy_delta_per_second(audio, sr, num_segments=num_segments)
     return AudioEventness(scores=scores, sample_rate=sr)
+
+
+def eventness_energy_stride(
+    audio: np.ndarray,
+    sample_rate: int,
+    *,
+    stride_s: float,
+    win_s: float,
+    pad: bool = True,
+) -> list[float]:
+    """
+    Sliding-window log-energy at a given stride/window size.
+
+    Each score corresponds to the center time:
+      t_i = i * stride_s + win_s / 2
+    """
+    sr = int(sample_rate)
+    if sr <= 0:
+        raise ValueError(f"sample_rate must be > 0, got {sample_rate}")
+
+    stride = int(round(float(stride_s) * float(sr)))
+    win = int(round(float(win_s) * float(sr)))
+    if stride <= 0:
+        raise ValueError(f"stride_s too small: {stride_s}")
+    if win <= 0:
+        raise ValueError(f"win_s too small: {win_s}")
+
+    x = audio.astype(np.float32, copy=False)
+    if x.size < win and pad:
+        x = np.pad(x, (0, win - int(x.size)), mode="constant")
+
+    scores: list[float] = []
+    start = 0
+    while start < int(x.size):
+        end = start + win
+        seg = x[start:end]
+        if seg.size < win:
+            if not pad:
+                break
+            seg = np.pad(seg, (0, win - int(seg.size)), mode="constant")
+        ms = float(np.mean(seg * seg))
+        scores.append(float(math.log(ms + 1e-12)))
+        start += stride
+        if start + 1 > int(x.size) and not pad:
+            break
+    return scores
+
+
+def compute_eventness_wav_energy_stride(
+    path: Path,
+    *,
+    stride_s: float,
+    win_s: float,
+) -> AudioEventness:
+    audio, sr = load_wav_mono(path)
+    scores = eventness_energy_stride(audio, sr, stride_s=float(stride_s), win_s=float(win_s), pad=True)
+    return AudioEventness(scores=scores, sample_rate=sr)
+
+
+def eventness_energy_stride_max_per_second(
+    audio: np.ndarray,
+    sample_rate: int,
+    *,
+    num_segments: int = 10,
+    stride_s: float = 0.2,
+    win_s: float = 0.4,
+) -> list[float]:
+    """
+    Dense stride-based log-energy aggregated into `num_segments` per-second scores by max pooling.
+
+    This is intended as a higher-recall anchor proposal than the vanilla 10×1s energy:
+      - compute sliding-window log-energy at sub-second stride
+      - assign each window score to a second index by its center time
+      - take max within each second
+    """
+    seg_len = int(sample_rate)
+    target_len = seg_len * int(num_segments)
+
+    # Match `eventness_energy_per_second` behavior: pad/trim to fixed-length protocol.
+    n = int(audio.shape[0])
+    if n < target_len:
+        audio = np.pad(audio, (0, target_len - n), mode="constant")
+    elif n > target_len:
+        audio = audio[:target_len]
+
+    dense = eventness_energy_stride(audio, int(sample_rate), stride_s=float(stride_s), win_s=float(win_s), pad=True)
+    out = [float("-inf")] * int(num_segments)
+    for i, s in enumerate(dense):
+        center_s = float(int(i)) * float(stride_s) + float(win_s) / 2.0
+        if not (0.0 <= float(center_s) < float(num_segments)):
+            continue
+        t = int(center_s)
+        out[t] = float(max(float(out[t]), float(s)))
+
+    valid = [x for x in out if float(x) != float("-inf")]
+    fill = float(min(valid)) if valid else 0.0
+    return [float(fill if float(x) == float("-inf") else x) for x in out]
+
+
+def compute_eventness_wav_energy_stride_max(
+    path: Path,
+    *,
+    num_segments: int = 10,
+    stride_s: float = 0.2,
+    win_s: float = 0.4,
+) -> AudioEventness:
+    audio, sr = load_wav_mono(path)
+    scores = eventness_energy_stride_max_per_second(
+        audio,
+        int(sr),
+        num_segments=int(num_segments),
+        stride_s=float(stride_s),
+        win_s=float(win_s),
+    )
+    return AudioEventness(scores=scores, sample_rate=sr)
+
+
+def local_maxima_indices(scores: list[float]) -> list[int]:
+    if not scores:
+        return []
+    out: list[int] = []
+    n = len(scores)
+    for i in range(n):
+        left = scores[i - 1] if i - 1 >= 0 else None
+        right = scores[i + 1] if i + 1 < n else None
+        if left is None and right is None:
+            out.append(int(i))
+            continue
+        if left is None:
+            if float(scores[i]) > float(right):
+                out.append(int(i))
+            continue
+        if right is None:
+            if float(scores[i]) > float(left):
+                out.append(int(i))
+            continue
+        if float(scores[i]) > float(left) and float(scores[i]) >= float(right):
+            out.append(int(i))
+    return out
+
+
+def topk_anchors_localmax_nms(scores: list[float], k: int, *, radius: int = 1) -> list[int]:
+    """
+    Local-maxima Top-K with NMS.
+    """
+    if k <= 0:
+        return []
+    cand = local_maxima_indices(scores)
+    if not cand:
+        return topk_anchors_nms(scores, k=int(k), radius=int(radius))
+
+    order = sorted(cand, key=lambda i: (-float(scores[i]), int(i)))
+    out: list[int] = []
+    for i in order:
+        if any(abs(int(i) - int(j)) <= int(radius) for j in out):
+            continue
+        out.append(int(i))
+        if len(out) >= int(k):
+            break
+    return out
+
+
+@dataclass(frozen=True)
+class AnchorWindows:
+    stride_s: float
+    win_s: float
+    delta_s: float
+    scores: list[float]
+    anchors_idx: list[int]
+    anchors_s: list[float]
+    windows: list[TimeWindow]
+
+    def to_jsonable(self) -> dict:
+        return {
+            "stride_s": float(self.stride_s),
+            "win_s": float(self.win_s),
+            "delta_s": float(self.delta_s),
+            "scores": [float(x) for x in self.scores],
+            "anchors_idx": [int(x) for x in self.anchors_idx],
+            "anchors_s": [float(x) for x in self.anchors_s],
+            "windows": [{"start_s": float(w.start_s), "end_s": float(w.end_s)} for w in self.windows],
+        }
+
+
+def anchor_windows_from_scores(
+    scores: list[float],
+    *,
+    stride_s: float,
+    win_s: float,
+    delta_s: float,
+    k: int,
+    nms_radius: int = 1,
+) -> AnchorWindows:
+    """
+    Convert stride-based score sequence into explicit time windows.
+    """
+    anchors_idx = topk_anchors_localmax_nms(scores, k=int(k), radius=int(nms_radius))
+    anchors_s = [float(int(i) * float(stride_s) + float(win_s) / 2.0) for i in anchors_idx]
+    windows: list[TimeWindow] = []
+    for t in anchors_s:
+        start = max(0.0, float(t) - float(delta_s))
+        end = float(t) + float(delta_s)
+        windows.append(TimeWindow(start_s=float(start), end_s=float(end)))
+    return AnchorWindows(
+        stride_s=float(stride_s),
+        win_s=float(win_s),
+        delta_s=float(delta_s),
+        scores=[float(x) for x in scores],
+        anchors_idx=[int(x) for x in anchors_idx],
+        anchors_s=[float(x) for x in anchors_s],
+        windows=windows,
+    )
 
 
 def topk_anchors(scores: list[float], k: int) -> list[int]:
@@ -180,6 +395,74 @@ def topk_anchors_nms_strong(
     return out[: min(int(k), len(out))]
 
 
+def topk_anchors_adjacent_top2(
+    scores: list[float],
+    k: int,
+    *,
+    radius: int = 1,
+    max_gap: float = 0.0,
+) -> list[int]:
+    """
+    Top-K selection that prefers a near-by 2nd anchor when it is competitive with the top1 anchor.
+
+    This is designed for K>=2:
+      1) Pick the global best anchor `a1`.
+      2) Find the best candidate within ±`radius` of `a1` (excluding `a1`), call it `a_adj`.
+         If `score[a1] - score[a_adj] <= max_gap`, select `a_adj` as the 2nd anchor.
+         Otherwise, select the 2nd-best overall anchor.
+
+    For K>2, remaining anchors are filled with NMS (radius) from the global order.
+    """
+    if k <= 0:
+        return []
+    radius = int(radius)
+    if radius < 1:
+        radius = 1
+    max_gap = float(max_gap)
+    if max_gap < 0.0:
+        raise ValueError(f"max_gap must be >= 0, got {max_gap}")
+
+    order = sorted(range(len(scores)), key=lambda i: (-float(scores[i]), int(i)))
+    if not order:
+        return []
+    if len(order) == 1 or int(k) == 1:
+        return [int(order[0])]
+
+    a1 = int(order[0])
+    a2_default = int(order[1])
+
+    best_adj = None
+    best_adj_score = float("-inf")
+    lo = max(0, int(a1) - int(radius))
+    hi = min(len(scores), int(a1) + int(radius) + 1)
+    for i in range(lo, hi):
+        if int(i) == int(a1):
+            continue
+        s = float(scores[int(i)])
+        if s > best_adj_score + 1e-12 or (abs(s - best_adj_score) <= 1e-12 and (best_adj is None or int(i) < int(best_adj))):
+            best_adj = int(i)
+            best_adj_score = float(s)
+
+    out: list[int] = [a1]
+    if best_adj is not None and float(scores[a1] - float(best_adj_score)) <= float(max_gap):
+        out.append(int(best_adj))
+    else:
+        out.append(int(a2_default))
+
+    # If K>2, fill remaining anchors with standard NMS starting from the selected set.
+    if len(out) < int(k):
+        for i in order[2:]:
+            if any(abs(int(i) - int(j)) <= int(radius) for j in out):
+                continue
+            out.append(int(i))
+            if len(out) >= int(k):
+                break
+
+    # Ensure stable ordering by descending score (then index), matching other selectors.
+    out = sorted(set(out), key=lambda i: (-scores[int(i)], int(i)))
+    return out[: min(int(k), len(out))]
+
+
 def smooth_scores(scores: list[float], *, window: int, mode: str = "mean") -> list[float]:
     """
     Smooth a 1D score sequence with a centered sliding window.
@@ -221,6 +504,11 @@ def confidence_std(scores: list[float]) -> float:
     return float(s.std())
 
 
+def confidence_std_norm(scores: list[float]) -> float:
+    # Scale-invariant variant: compute std after per-clip min-max normalization to [0,1].
+    return confidence_std(minmax_01(scores))
+
+
 def confidence_top1_minus_median(scores: list[float]) -> float:
     if not scores:
         return 0.0
@@ -230,11 +518,41 @@ def confidence_top1_minus_median(scores: list[float]) -> float:
     return float(top1 - med)
 
 
+def confidence_top1_minus_median_norm(scores: list[float]) -> float:
+    # Scale-invariant variant: compute (top1 - median) after per-clip min-max normalization to [0,1].
+    return confidence_top1_minus_median(minmax_01(scores))
+
+
 def confidence_top12_gap(scores: list[float]) -> float:
     if len(scores) < 2:
         return 0.0
     order = sorted(range(len(scores)), key=lambda i: (-float(scores[i]), i))
     return float(float(scores[order[0]]) - float(scores[order[1]]))
+
+
+def confidence_top12_gap_norm(scores: list[float]) -> float:
+    # Scale-invariant variant: compute (top1 - top2) after per-clip min-max normalization to [0,1].
+    return confidence_top12_gap(minmax_01(scores))
+
+
+def confidence_top3_bottom3_gap_norm(scores: list[float]) -> float:
+    """
+    Scale-invariant "separation" confidence:
+
+      conf = mean(top-3(scores_norm)) - mean(bottom-3(scores_norm))
+
+    Unlike peakiness measures (e.g. top1-med), this stays high for broad multi-second events as long as
+    there is a clear separation between high-score and low-score segments.
+    """
+    s01 = minmax_01(scores)
+    if not s01:
+        return 0.0
+    n = len(s01)
+    k = min(3, n)
+    xs = sorted(float(x) for x in s01)
+    bot = float(sum(xs[:k]) / float(k))
+    top = float(sum(xs[-k:]) / float(k))
+    return float(top - bot)
 
 
 def confidence_gini(scores: list[float]) -> float:
@@ -260,13 +578,25 @@ def _confidence(scores: list[float], metric: str) -> float:
     metric = str(metric)
     if metric == "std":
         return confidence_std(scores)
+    if metric == "std_norm":
+        return confidence_std_norm(scores)
     if metric == "top1_med":
         return confidence_top1_minus_median(scores)
+    if metric == "top1_med_norm":
+        return confidence_top1_minus_median_norm(scores)
     if metric == "top12_gap":
         return confidence_top12_gap(scores)
+    if metric == "top12_gap_norm":
+        return confidence_top12_gap_norm(scores)
+    if metric == "top3_bottom3_gap_norm":
+        return confidence_top3_bottom3_gap_norm(scores)
     if metric == "gini":
         return confidence_gini(scores)
-    raise ValueError(f"unknown conf_metric={metric!r}; expected 'std', 'top1_med', 'top12_gap', or 'gini'")
+    raise ValueError(
+        "unknown conf_metric="
+        f"{metric!r}; expected 'std', 'std_norm', 'top1_med', 'top1_med_norm', 'top12_gap', 'top12_gap_norm', "
+        "'top3_bottom3_gap_norm', or 'gini'"
+    )
 
 
 def window_topk_anchors(scores: list[float], k: int, *, window: int = 3, nms_radius: int = 1) -> list[int]:
@@ -339,10 +669,14 @@ def anchors_from_scores_with_debug(
         anchors = topk_anchors_nms(scores_sel, k=k, radius=int(nms_radius))
     elif select == "nms_strong":
         anchors = topk_anchors_nms_strong(scores_sel, k=k, radius=int(nms_radius), max_gap=float(nms_strong_gap))
+    elif select == "adjacent_top2":
+        anchors = topk_anchors_adjacent_top2(scores_sel, k=k, radius=int(nms_radius), max_gap=float(nms_strong_gap))
     elif select == "window_topk":
         anchors = window_topk_anchors(scores_sel, k=k, window=int(anchor_window), nms_radius=int(nms_radius))
     else:
-        raise ValueError(f"unknown select={select!r}; expected 'topk', 'nms', 'nms_strong', or 'window_topk'")
+        raise ValueError(
+            f"unknown select={select!r}; expected 'topk', 'nms', 'nms_strong', 'adjacent_top2', or 'window_topk'"
+        )
 
     if shift:
         out: list[int] = []

@@ -37,6 +37,9 @@ CACHE_RESOLUTIONS="${CACHE_RESOLUTIONS:-${LOW_RES},${BASE_RES},${HIGH_RES}}"
 
 LIMIT_TRAIN_VIDEOS="${LIMIT_TRAIN_VIDEOS:-64}"
 LIMIT_VAL_VIDEOS="${LIMIT_VAL_VIDEOS:-64}"
+ALLOW_MISSING_VIDEOS="${ALLOW_MISSING_VIDEOS:-0}"
+MIN_TRAIN_VIDEOS="${MIN_TRAIN_VIDEOS:-16}"
+MIN_VAL_VIDEOS="${MIN_VAL_VIDEOS:-16}"
 
 EPOCHS="${EPOCHS:-10}"
 BATCH_SIZE="${BATCH_SIZE:-16}"
@@ -87,6 +90,10 @@ args=(
   --dropout "${DROPOUT}"
 )
 
+if [[ "${ALLOW_MISSING_VIDEOS}" = "1" ]]; then
+  args+=(--allow-missing-videos --min-train-videos "${MIN_TRAIN_VIDEOS}" --min-val-videos "${MIN_VAL_VIDEOS}")
+fi
+
 if [[ -n "${MAX_SECONDS}" ]]; then
   args+=(--max-seconds "${MAX_SECONDS}")
 fi
@@ -94,4 +101,3 @@ fi
 python -m avs.experiments.epic_sounds_video_cls "${args[@]}"
 
 echo "OK: ${OUT_DIR}/metrics.json"
-

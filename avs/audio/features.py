@@ -32,14 +32,31 @@ def audio_features_per_second(
       - "basic": log-energy + energy-delta + waveform stats + simple spectral stats + 4 band energies (F=10)
       - "fbank_stats": kaldi-style log-fbank mean+std per second (F=80)
     """
+    audio, sr = load_wav_mono(wav_path)
+    return audio_features_per_second_from_array(audio, int(sr), num_segments=int(num_segments), feature_set=str(feature_set))
+
+
+def audio_features_per_second_from_array(
+    audio: np.ndarray,
+    sample_rate: int,
+    *,
+    num_segments: int = 10,
+    feature_set: str = "basic",
+) -> np.ndarray:
+    """
+    Same as `audio_features_per_second`, but operates on an in-memory waveform.
+    """
     feature_set = str(feature_set)
     if feature_set not in ("basic", "fbank_stats"):
         raise ValueError(f"unsupported feature_set: {feature_set}")
 
-    audio, sr = load_wav_mono(wav_path)
+    sr = int(sample_rate)
+    if sr <= 0:
+        raise ValueError(f"sample_rate must be > 0, got {sample_rate}")
+
     seg_len = int(sr)
     target_len = seg_len * int(num_segments)
-    audio = _pad_or_trim_audio(audio, target_len=target_len)
+    audio = _pad_or_trim_audio(audio.astype(np.float32, copy=False), target_len=target_len)
 
     if feature_set == "fbank_stats":
         import torch
@@ -58,7 +75,7 @@ def audio_features_per_second(
         # [num_frames, 40], with snip_edges=False this is typically divisible by num_segments (AVE: 1000 frames / 10s).
         num_frames = int(fb.shape[0])
         if num_frames <= 0:
-            raise ValueError(f"fbank produced empty features for {wav_path}")
+            raise ValueError("fbank produced empty features for in-memory audio")
         if num_frames % int(num_segments) != 0:
             # Guardrail: pad (or truncate as a last resort) to be safely reshaped.
             frames_per_seg = int(math.ceil(num_frames / float(num_segments)))

@@ -99,9 +99,17 @@ class PANNsEventnessProbe:
         self.model.eval()
 
     @torch.no_grad()
-    def eventness_per_second(self, wav_path: Path, *, num_segments: int = 10) -> list[float]:
-        audio, sr = load_wav_mono(wav_path)
-        audio = _resample_linear(audio, sr, self.cfg.sample_rate)
+    def clipwise_output_from_array(self, audio: np.ndarray, sample_rate: int, *, num_segments: int = 10) -> np.ndarray:
+        """
+        Compute per-second PANNs clipwise outputs (AudioSet class probabilities).
+
+        Returns:
+          np.ndarray[float32] with shape [T=num_segments, C=527].
+
+        This is useful for supervised calibration (`panns_lr`) where we want a train-split-only mapping
+        from PANNs outputs → a single scalar eventness logit.
+        """
+        audio = _resample_linear(audio, int(sample_rate), self.cfg.sample_rate)
 
         seg_len = int(self.cfg.sample_rate)
         target_len = seg_len * int(num_segments)
@@ -119,8 +127,57 @@ class PANNsEventnessProbe:
         x = torch.from_numpy(segments).to(device=self.device, dtype=self.dtype)
         out = self.model(x, None)
         probs = out["clipwise_output"]  # [T, classes]
-        scores = probs.max(dim=-1).values.detach().cpu().numpy().astype(np.float32)
+        return probs.detach().cpu().numpy().astype(np.float32, copy=False)
+
+    @torch.no_grad()
+    def embeddings_from_array(self, audio: np.ndarray, sample_rate: int, *, num_segments: int = 10) -> np.ndarray:
+        """
+        Compute per-second PANNs embeddings.
+
+        Returns:
+          np.ndarray[float32] with shape [T=num_segments, D=2048].
+        """
+        audio = _resample_linear(audio, int(sample_rate), self.cfg.sample_rate)
+
+        seg_len = int(self.cfg.sample_rate)
+        target_len = seg_len * int(num_segments)
+
+        n = int(audio.shape[0])
+        if n < target_len:
+            pad = target_len - n
+            audio = np.pad(audio, (0, pad), mode="constant")
+        elif n > target_len:
+            audio = audio[:target_len]
+
+        segments = np.stack([audio[t * seg_len : (t + 1) * seg_len] for t in range(num_segments)], axis=0)
+        x = torch.from_numpy(segments).to(device=self.device, dtype=self.dtype)
+        out = self.model(x, None)
+        emb = out["embedding"]  # [T, 2048]
+        return emb.detach().cpu().numpy().astype(np.float32, copy=False)
+
+    @torch.no_grad()
+    def eventness_from_array(self, audio: np.ndarray, sample_rate: int, *, num_segments: int = 10) -> list[float]:
+        """
+        Compute per-second eventness from an in-memory waveform (useful for augmentations).
+        """
+        probs = self.clipwise_output_from_array(audio, int(sample_rate), num_segments=int(num_segments))
+        scores = probs.max(axis=-1).astype(np.float32, copy=False)
         return [float(x) for x in scores.tolist()]
+
+    @torch.no_grad()
+    def eventness_per_second(self, wav_path: Path, *, num_segments: int = 10) -> list[float]:
+        audio, sr = load_wav_mono(wav_path)
+        return self.eventness_from_array(audio, int(sr), num_segments=num_segments)
+
+    @torch.no_grad()
+    def clipwise_output_per_second(self, wav_path: Path, *, num_segments: int = 10) -> np.ndarray:
+        audio, sr = load_wav_mono(wav_path)
+        return self.clipwise_output_from_array(audio, int(sr), num_segments=int(num_segments))
+
+    @torch.no_grad()
+    def embeddings_per_second(self, wav_path: Path, *, num_segments: int = 10) -> np.ndarray:
+        audio, sr = load_wav_mono(wav_path)
+        return self.embeddings_from_array(audio, int(sr), num_segments=int(num_segments))
 
 
 def panns_eventness(

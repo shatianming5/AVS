@@ -84,3 +84,4786 @@ Follow-ups (train3339→test402; same token budget=1960):
 - Supervised audio_basic_mlp_cls_target eventness (screening, worse): `runs/TMP_RERUN_audio_basic_mlp_cls_target_thr0.0/metrics.json`.
 - Supervised audio_basic_mlp eventness (screening, not better): with fallback, it recovers to a small +Δ but stays below energy (see `runs/TMP_RERUN_audio_basic_mlp_thr{0.3,0.6,1.0}/metrics.json` vs `runs/TMP_RERUN_energy_thr1p0_s0-2/metrics.json`).
 - Supervised audio_fbank_mlp eventness (not better on smaller real subset): `runs/TMP_RERUN_audio_fbank_mlp_small_thr0.0/metrics.json` vs energy baseline `runs/REAL_AVE_20260131-211548/p0_train195_test113_energy_160_224_352_k2_shift1_std1p0_temporal_s0-4/metrics.json`.
+
+
+### E0010: AVE oracle ceiling sweep (MDE-1 Oracle anchors)
+| Field | Value |
+| --- | --- |
+| Objective | Estimate the mechanism upper bound by comparing `uniform` vs `oracle_top2` under equal token budget on official AVE val402/test402 across a small, pre-registered config set. |
+| Baseline | `uniform` |
+| Model | Cached CLIP ViT-B/16 features + (`avs.models.per_segment_mlp.PerSegmentMLP` or `avs.models.temporal_conv.TemporalConvHead`) |
+| Weights | HF: CLIP (`VISION_PRETRAINED=1`) |
+| Code path | `avs/experiments/ave_p0_oracle_sweep.py`, `scripts/e0010_ave_oracle_ceiling_official.sh` |
+| Params | `SPLIT_EVAL={val,test}`, `LIMIT_TRAIN`, `LIMIT_EVAL`, `SEEDS`, `EPOCHS`, `BATCH_SIZE`, `LR`, `CACHE_RESOLUTIONS`, `CACHES_DIR` |
+| Metrics (must save) | `oracle_ceiling.json` (with per-config `metrics_path`, mean/std, paired p-values) |
+| Checks | `oracle_minus_uniform_mean` is non-trivial for at least one config; report best oracle gain and its p-value. |
+| VRAM | Train: ~1–2GB per seed on GPU; cache build heavy (feature extraction). |
+| Time/epoch | ~seconds to minutes (head only) |
+| Total time | ~tens of minutes (depends on caches) |
+| Single-GPU script | `scripts/e0010_ave_oracle_ceiling_official.sh` |
+| Multi-GPU script | `scripts/e0010_ave_oracle_ceiling_official.sh` (uses all visible GPUs for cache build) |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 BATCH_SIZE=16 bash scripts/e0010_ave_oracle_ceiling_official.sh` |
+| Full cmd | `SPLIT_EVAL=val bash scripts/e0010_ave_oracle_ceiling_official.sh && SPLIT_EVAL=test bash scripts/e0010_ave_oracle_ceiling_official.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0010_*` |
+| Artifacts | `runs/E0010_*/oracle_ceiling.json` and per-config `metrics.json` under the same dir |
+| Results | Full val402: `runs/E0010_oracle_ceiling_official_val_20260203-144421/oracle_ceiling.json` (best oracle config: `160_224_352_temporal_k5`, oracle=0.7931 vs uniform=0.7311, Δ=+0.0620, p=8.9e-05). Full test402: `runs/E0010_oracle_ceiling_official_test_20260203-143455/oracle_ceiling.json` (best oracle config: `160_224_352_temporal_k5`, oracle=0.7663 vs uniform=0.7126, Δ=+0.0536, p=8.9e-06). |
+
+
+### E0011: AVE fixed-space sweep on val402 (select best config)
+| Field | Value |
+| --- | --- |
+| Objective | Run a fixed-space sweep to select the best sampling config on val402, producing a machine-readable `sweep_summary.json` + `best_config.json`. |
+| Baseline | `uniform` |
+| Model | Cached CLIP ViT-B/16 features + temporal head (`temporal_conv` default in candidates) |
+| Weights | HF: CLIP (`VISION_PRETRAINED=1`) |
+| Code path | `avs/experiments/ave_p0_sweep.py`, `scripts/e0011_ave_p0_sweep_official.sh` |
+| Params | `EVENTNESS`, `ANCHOR_STD_THRESHOLD`, `SEEDS`, `P_FILTER`, candidate grid in `avs/experiments/ave_p0_sweep.py` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, and per-config `metrics.json` |
+| Checks | Summary includes `anchored_top2 - uniform` mean deltas and paired p-values; best config is reproducible (stable ordering). |
+| VRAM | Similar to E0010; cache build heavy if missing. |
+| Time/epoch | ~seconds to minutes |
+| Total time | ~tens of minutes to hours (depends on grid size) |
+| Single-GPU script | `scripts/e0011_ave_p0_sweep_official.sh` |
+| Multi-GPU script | `scripts/e0011_ave_p0_sweep_official.sh` (uses all visible GPUs for cache build) |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 BATCH_SIZE=16 bash scripts/e0011_ave_p0_sweep_official.sh` |
+| Full cmd | `bash scripts/e0011_ave_p0_sweep_official.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0011_*` |
+| Artifacts | `runs/E0011_*/sweep_summary.json`, `runs/E0011_*/best_config.json`, `runs/E0011_*/candidates/*/metrics.json` |
+| Results | Full val402 sweep: `runs/E0011_ave_p0_sweep_official_val_20260203-143455/sweep_summary.json` (best=`runs/E0011_ave_p0_sweep_official_val_20260203-143455/best_config.json`=`base_160_224_352_k5`; candidate metrics: `runs/E0011_ave_p0_sweep_official_val_20260203-143455/base_160_224_352_k5/metrics.json`, anchored=0.7429 vs uniform=0.7294, Δ=+0.0134, p=0.017). |
+
+
+### E0012: AVE best-config reproduction on test402 (val→test)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the val-selected `best_config.json` on official test402 with `SEEDS=0..9` (strict equal token budget). |
+| Baseline | `uniform` |
+| Model | Same as the selected config in `best_config.json` |
+| Weights | HF: CLIP (`VISION_PRETRAINED=1`) |
+| Code path | `scripts/e0012_ave_p0_best_to_test_official.sh`, `avs/experiments/ave_p0_rerun.py` |
+| Params | `BEST_CONFIG_JSON`, `SEEDS`, `LIMIT_TRAIN`, `LIMIT_EVAL`, `SPLIT_EVAL=test` |
+| Metrics (must save) | `metrics.json` + `diagnose.json` (optional) |
+| Checks | Paired t-test `anchored_top2` vs `uniform` and report delta; store the exact `best_config.json` used. |
+| VRAM | Similar to E0003 (head only) |
+| Time/epoch | ~seconds to minutes |
+| Total time | ~tens of minutes (depends on epochs) |
+| Single-GPU script | `scripts/e0012_ave_p0_best_to_test_official.sh` |
+| Multi-GPU script | `scripts/e0012_ave_p0_best_to_test_official.sh` |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 BATCH_SIZE=16 bash scripts/e0011_ave_p0_sweep_official.sh && BEST_CONFIG_JSON=$(pwd)/runs/E0011_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 BATCH_SIZE=16 bash scripts/e0012_ave_p0_best_to_test_official.sh` |
+| Full cmd | `bash scripts/e0011_ave_p0_sweep_official.sh && BEST_CONFIG_JSON=$(pwd)/runs/E0011_*/best_config.json bash scripts/e0012_ave_p0_best_to_test_official.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0012_*` |
+| Artifacts | `runs/E0012_*/metrics.json` |
+| Results | Full test402: `runs/E0012_ave_p0_best_to_test_official_20260203-145743/metrics.json` (best config=`base_160_224_352_k5`; anchored=0.7144 vs uniform=0.7123, Δ=+0.0021, p=0.593; anchored vs random p=0.036). Follow-up (tuned `anchor_std_threshold=0.9`): `runs/E0012_energy_k5_std0p9_test_full_20260203-153623/metrics.json` (anchored=0.7196 vs uniform=0.7123, Δ=+0.0073, p=0.181). |
+
+
+### E0013: AVE fusion confirm under best sampling config (audio_concat_* baselines)
+| Field | Value |
+| --- | --- |
+| Objective | Confirm whether fusion improves on top of sampling by comparing `audio_concat_anchored_top2` vs `audio_concat_uniform` under the best sampling config. |
+| Baseline | `audio_concat_uniform` |
+| Model | Same as the selected config + audio concat head |
+| Weights | HF: CLIP (`VISION_PRETRAINED=1`) |
+| Code path | `scripts/e0013_ave_fusion_confirm_official.sh`, `avs/experiments/ave_p0_fusion_confirm.py` |
+| Params | `BEST_CONFIG_JSON`, `SEEDS`, `LIMIT_TRAIN`, `LIMIT_EVAL` |
+| Metrics (must save) | `metrics.json` (must include `audio_concat_uniform` and `audio_concat_anchored_top2`) |
+| Checks | Paired t-test `audio_concat_anchored_top2` vs `audio_concat_uniform` and report delta. |
+| VRAM | Similar to E0003 (head only) |
+| Time/epoch | ~seconds to minutes |
+| Total time | ~tens of minutes |
+| Single-GPU script | `scripts/e0013_ave_fusion_confirm_official.sh` |
+| Multi-GPU script | `scripts/e0013_ave_fusion_confirm_official.sh` |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 BATCH_SIZE=16 bash scripts/e0011_ave_p0_sweep_official.sh && BEST_CONFIG_JSON=$(pwd)/runs/E0011_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 BATCH_SIZE=16 bash scripts/e0013_ave_fusion_confirm_official.sh` |
+| Full cmd | `bash scripts/e0011_ave_p0_sweep_official.sh && BEST_CONFIG_JSON=$(pwd)/runs/E0011_*/best_config.json bash scripts/e0013_ave_fusion_confirm_official.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0013_*` |
+| Artifacts | `runs/E0013_*/metrics.json` |
+| Results | Full test402: `runs/E0013_ave_fusion_confirm_official_test_20260203-150226/metrics.json` (audio_concat_anchored=0.7213 vs audio_concat_uniform=0.7162, Δ=+0.0051, p=0.367). Note: initial full job failed because `BEST_CONFIG_JSON` auto-detection matched a non-sweep `runs/E0011_*` dir; fixed in `scripts/e0013_ave_fusion_confirm_official.sh` by selecting the newest `runs/E0011_*/best_config.json`. |
+
+
+### E0014: AVE AST sweep on val402 (select best config; candidate_set=ast_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Run an AST-based fixed-space sweep to select the best sampling config on val402, producing `sweep_summary.json` + `best_config.json` for later test402 reproduction. |
+| Baseline | `uniform` |
+| Model | Cached CLIP ViT-B/16 features + temporal head (`temporal_conv` default in candidates) |
+| Weights | HF: AST (`--ast-pretrained`) |
+| Code path | `avs/experiments/ave_p0_sweep.py` (candidate_set=`ast_v1`), `scripts/e0014_ave_p0_sweep_official_ast.sh` |
+| Params | `SEEDS`, `EPOCHS`, `P_FILTER`, `AUDIO_DEVICE`, `TRAIN_DEVICE`, candidate grid in `avs/experiments/ave_p0_sweep.py::_candidates_ast_v1` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, and per-config `metrics.json` |
+| Checks | Summary includes `anchored_top2 - uniform` mean deltas and paired p-values; best config is reproducible (stable ordering). |
+| VRAM | AST inference + head training (light; caches must exist). |
+| Time/epoch | ~seconds to minutes |
+| Total time | ~tens of minutes (depends on epochs and devices) |
+| Single-GPU script | `scripts/e0014_ave_p0_sweep_official_ast.sh` |
+| Multi-GPU script | `scripts/e0014_ave_p0_sweep_official_ast.sh` (run multiple sweeps in parallel by splitting seeds or candidate subsets manually) |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 BATCH_SIZE=16 bash scripts/e0014_ave_p0_sweep_official_ast.sh` |
+| Full cmd | `bash scripts/e0014_ave_p0_sweep_official_ast.sh` |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `runs/E0014_*` |
+| Artifacts | `runs/E0014_*/sweep_summary.json`, `runs/E0014_*/best_config.json`, `runs/E0014_*/<candidate>/metrics.json` |
+| Results | Val402: `runs/E0014_ave_p0_sweep_official_val_ast_20260203-163626/sweep_summary.json` (best=`ast_160_224_352_k5_std0p05`, Δ=+0.0037, p=0.458). Note: extreme triad `112/224/448` is strongly negative on val (Δ≈-0.061, p≈6e-7). |
+
+
+### E0015: AVE AST best-config reproduction on test402 (val→test)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0014 on official AVE test402 with `SEEDS=0..9` and paired tests. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | HF: AST (`--ast-pretrained`) |
+| Code path | `scripts/e0015_ave_p0_best_to_test_official_ast.sh` |
+| Params | `BEST_CONFIG_JSON`, `SEEDS`, `LIMIT_TRAIN`, `LIMIT_EVAL`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (must include `summary.*.mean/std`, `paired_ttest`, and `debug_eval` for anchors/fallback stats) |
+| Checks | `paired_ttest.anchored_vs_uniform.p` is recorded; report delta and fallback rate. |
+| VRAM | Similar to E0003 (head only) |
+| Time/epoch | ~seconds to minutes |
+| Total time | ~tens of minutes |
+| Single-GPU script | `scripts/e0015_ave_p0_best_to_test_official_ast.sh` |
+| Multi-GPU script | `scripts/e0015_ave_p0_best_to_test_official_ast.sh` |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 BATCH_SIZE=16 bash scripts/e0014_ave_p0_sweep_official_ast.sh && BEST_CONFIG_JSON=$(ls -t runs/E0014_*/best_config.json | head -n 1) LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 BATCH_SIZE=16 bash scripts/e0015_ave_p0_best_to_test_official_ast.sh` |
+| Full cmd | `bash scripts/e0014_ave_p0_sweep_official_ast.sh && BEST_CONFIG_JSON=$(ls -t runs/E0014_*/best_config.json | head -n 1) bash scripts/e0015_ave_p0_best_to_test_official_ast.sh` |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `runs/E0015_*` |
+| Artifacts | `runs/E0015_*/metrics.json` |
+| Results | Test402: `runs/E0015_ave_p0_best_to_test_official_ast_20260203-172848/metrics.json` (anchored=0.7003 vs uniform=0.7123, Δ=-0.0120, p=0.024; fallback_used≈0.169). |
+
+
+### E0016: Diagnose why AST anchored gains do/do-not transfer (root-cause report)
+| Field | Value |
+| --- | --- |
+| Objective | Produce an audit-friendly diagnosis: anchored gain distribution, fallback histograms, anchor distance buckets, and Recall@K↔delta correlation, to explain why test gains are (or are not) large. |
+| Baseline | N/A (analysis-only) |
+| Model | N/A |
+| Weights | N/A |
+| Code path | `avs/experiments/ave_p0_diagnose.py`, `scripts/e0016_ave_p0_diagnose_official.sh` |
+| Params | `IN_METRICS` (full-run `metrics.json`), `--deltas` |
+| Metrics (must save) | `diagnose.json` |
+| Checks | Report includes fallback rate and per-bucket mean deltas; top improve/degrade lists exist. |
+| VRAM | CPU |
+| Time/epoch | N/A |
+| Total time | minutes |
+| Single-GPU script | `scripts/e0016_ave_p0_diagnose_official.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `IN_METRICS=$(ls -t runs/E0012_*/metrics.json | head -n 1) bash scripts/e0016_ave_p0_diagnose_official.sh` |
+| Full cmd | `IN_METRICS=$(ls -t runs/E0015_*/metrics.json | head -n 1) bash scripts/e0016_ave_p0_diagnose_official.sh` |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `runs/E0016_*` |
+| Artifacts | `runs/E0016_*/diagnose.json` |
+| Results | `runs/E0016_ave_p0_diagnose_20260203-173704/diagnose.json` (mean Δ=-0.0120; fallback≈0.169; 2-anchor clips dominate and are harmful: mean Δ≈-0.017 for anchors_len=2; adjacent anchors are worse). |
+
+
+### E0017: AVE AST fusion confirm under best sampling config (audio_concat_* baselines)
+| Field | Value |
+| --- | --- |
+| Objective | Confirm whether fusion improves on top of AST-based sampling by comparing `audio_concat_anchored_top2` vs `audio_concat_uniform` under the best AST sampling config. |
+| Baseline | `audio_concat_uniform` |
+| Model | Same as the selected config + audio concat head |
+| Weights | HF: AST (`--ast-pretrained`) |
+| Code path | `avs/experiments/ave_p0_fusion_confirm.py`, `scripts/e0017_ave_fusion_confirm_official_ast.sh` |
+| Params | `BEST_CONFIG_JSON`, `SEEDS`, `LIMIT_TRAIN`, `LIMIT_EVAL`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (must include `audio_concat_uniform` and `audio_concat_anchored_top2` plus paired tests) |
+| Checks | Paired t-test `audio_concat_anchored_top2` vs `audio_concat_uniform` and report delta. |
+| VRAM | Similar to E0003 (head only) |
+| Time/epoch | ~seconds to minutes |
+| Total time | ~tens of minutes |
+| Single-GPU script | `scripts/e0017_ave_fusion_confirm_official_ast.sh` |
+| Multi-GPU script | `scripts/e0017_ave_fusion_confirm_official_ast.sh` |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 BATCH_SIZE=16 bash scripts/e0014_ave_p0_sweep_official_ast.sh && BEST_CONFIG_JSON=$(ls -t runs/E0014_*/best_config.json | head -n 1) LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 BATCH_SIZE=16 bash scripts/e0017_ave_fusion_confirm_official_ast.sh` |
+| Full cmd | `bash scripts/e0014_ave_p0_sweep_official_ast.sh && BEST_CONFIG_JSON=$(ls -t runs/E0014_*/best_config.json | head -n 1) bash scripts/e0017_ave_fusion_confirm_official_ast.sh` |
+| Smoke | [x] |
+| Full | [ ] |
+| Logs | `runs/E0017_*` |
+| Artifacts | `runs/E0017_*/metrics.json` |
+| Results |  |
+
+
+### E0018: AVE energy_v2 sweep on val402 (bigger gain search; transfer-focused)
+| Field | Value |
+| --- | --- |
+| Objective | Run an energy-based sweep (`candidate_set=energy_v2`) to search for larger, more reliable anchored gains (diverse selection + adaptive high allocation) on val402. |
+| Baseline | `uniform` |
+| Model | Cached CLIP ViT-B/16 features + temporal head (`temporal_conv`) |
+| Weights | HF: CLIP (`VISION_PRETRAINED=1`) |
+| Code path | `avs/experiments/ave_p0_sweep.py` (candidate_set=`energy_v2`), `scripts/e0018_ave_p0_sweep_official_val_energy_v2.sh` |
+| Params | `SEEDS`, `EPOCHS` (default 5), `P_FILTER`, `TRAIN_DEVICE`, candidate list in `avs/experiments/ave_p0_sweep.py::_candidates_energy_v2` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, and per-config `metrics.json` |
+| Checks | Best config has positive Δ on val and is reproducible (stable ordering + guardrail). |
+| VRAM | Low (head training); cache build dominates if missing. |
+| Total time | tens of minutes |
+| Single-GPU script | `scripts/e0018_ave_p0_sweep_official_val_energy_v2.sh` |
+| Multi-GPU script | `scripts/e0018_ave_p0_sweep_official_val_energy_v2.sh` (split seeds across GPUs if desired) |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 BATCH_SIZE=16 bash scripts/e0018_ave_p0_sweep_official_val_energy_v2.sh` |
+| Full cmd | `bash scripts/e0018_ave_p0_sweep_official_val_energy_v2.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0018_*` |
+| Artifacts | `runs/E0018_*/sweep_summary.json`, `runs/E0018_*/best_config.json`, `runs/E0018_*/<candidate>/metrics.json` |
+| Results | Val401: `runs/E0018_ave_p0_sweep_official_val_energy_v2_20260203-185629/sweep_summary.json` (best=`energy_ref_k2_topk_std1p0`, anchored=0.7378 vs uniform=0.7243, Δ=+0.01344, p=0.00175). Best config: `runs/E0018_ave_p0_sweep_official_val_energy_v2_20260203-185629/best_config.json`. |
+
+
+### E0019: AVE energy_v2 best-config reproduction on test402 (val→test)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0018 on official AVE test402 with `SEEDS=0..9` and paired tests. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | HF: CLIP (`VISION_PRETRAINED=1`) |
+| Code path | `scripts/e0019_ave_p0_best_to_test_official_energy_v2.sh` |
+| Params | `BEST_CONFIG_JSON`, `SEEDS`, `LIMIT_TRAIN`, `LIMIT_EVAL`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (must include `summary.*.mean/std`, `paired_ttest`, and `debug_eval` for anchors/fallback stats) |
+| Checks | Report delta and `paired_ttest.anchored_vs_uniform.p`. |
+| VRAM | Similar to E0012 (head only) |
+| Total time | tens of minutes |
+| Single-GPU script | `scripts/e0019_ave_p0_best_to_test_official_energy_v2.sh` |
+| Multi-GPU script | `scripts/e0019_ave_p0_best_to_test_official_energy_v2.sh` |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 BATCH_SIZE=16 bash scripts/e0018_ave_p0_sweep_official_val_energy_v2.sh && BEST_CONFIG_JSON=$(ls -t runs/E0018_*/best_config.json | head -n 1) LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 BATCH_SIZE=16 bash scripts/e0019_ave_p0_best_to_test_official_energy_v2.sh` |
+| Full cmd | `bash scripts/e0018_ave_p0_sweep_official_val_energy_v2.sh && BEST_CONFIG_JSON=$(ls -t runs/E0018_*/best_config.json | head -n 1) bash scripts/e0019_ave_p0_best_to_test_official_energy_v2.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0019_*` |
+| Artifacts | `runs/E0019_*/metrics.json` |
+| Results | Test402: `runs/E0019_ave_p0_best_to_test_official_energy_v2_20260203-190500/metrics.json` (uniform=0.7086, anchored=0.7188, Δ=+0.01017, p=0.00466; fallback_used≈0.731). |
+
+
+### E0020: AVE fusion confirm under energy_v2 best sampling config (audio_concat_* baselines)
+| Field | Value |
+| --- | --- |
+| Objective | Confirm whether fusion improves on top of the energy_v2-selected sampling config by comparing `audio_concat_anchored_top2` vs `audio_concat_uniform`. |
+| Baseline | `audio_concat_uniform` |
+| Model | Same as the selected config + audio concat head |
+| Weights | HF: CLIP (`VISION_PRETRAINED=1`) |
+| Code path | `avs/experiments/ave_p0_fusion_confirm.py`, `scripts/e0020_ave_fusion_confirm_official_energy_v2.sh` |
+| Params | `BEST_CONFIG_JSON`, `SEEDS`, `LIMIT_TRAIN`, `LIMIT_EVAL`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (must include `audio_concat_uniform` and `audio_concat_anchored_top2` plus paired tests) |
+| Checks | Paired t-test `audio_concat_anchored_top2` vs `audio_concat_uniform` and report delta. |
+| VRAM | Similar to E0013 (head only) |
+| Total time | tens of minutes |
+| Single-GPU script | `scripts/e0020_ave_fusion_confirm_official_energy_v2.sh` |
+| Multi-GPU script | `scripts/e0020_ave_fusion_confirm_official_energy_v2.sh` |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 BATCH_SIZE=16 bash scripts/e0018_ave_p0_sweep_official_val_energy_v2.sh && BEST_CONFIG_JSON=$(ls -t runs/E0018_*/best_config.json | head -n 1) LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 BATCH_SIZE=16 bash scripts/e0020_ave_fusion_confirm_official_energy_v2.sh` |
+| Full cmd | `bash scripts/e0018_ave_p0_sweep_official_val_energy_v2.sh && BEST_CONFIG_JSON=$(ls -t runs/E0018_*/best_config.json | head -n 1) bash scripts/e0020_ave_fusion_confirm_official_energy_v2.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0020_*` |
+| Artifacts | `runs/E0020_*/metrics.json` |
+| Results | Test402: `runs/E0020_ave_fusion_confirm_official_test_energy_v2_20260203-190804/metrics.json` (audio_concat_uniform=0.7214, audio_concat_anchored=0.7195, Δ=-0.0020, p=0.598). |
+
+
+### E0021: AVE energy_v3 sweep on val402 (push for ≥+2% on test; extreme+gated candidates)
+| Field | Value |
+| --- | --- |
+| Objective | Run an expanded energy sweep (`candidate_set=energy_v3`) targeting larger anchored gains via (1) less conservative confidence gating, (2) shift=0 variants to avoid 1-anchor drop, and (3) extreme triad variants with stable `max_high_anchors=1`. |
+| Baseline | `uniform` |
+| Model | Cached CLIP ViT-B/16 features + temporal head (`temporal_conv`) |
+| Weights | HF: CLIP (`VISION_PRETRAINED=1`) |
+| Code path | `avs/experiments/ave_p0_sweep.py` (candidate_set=`energy_v3`), `scripts/e0021_ave_p0_sweep_official_val_energy_v3.sh` |
+| Params | `SEEDS`, `EPOCHS` (default 5), `P_FILTER`, `TRAIN_DEVICE`, candidate list in `avs/experiments/ave_p0_sweep.py::_candidates_energy_v3` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, and per-config `metrics.json` |
+| Checks | Best config has positive Δ on val and is reproducible; prioritize configs with lower fallback and/or higher transfer. |
+| VRAM | Low (head training); cache build dominates if missing. |
+| Total time | tens of minutes |
+| Single-GPU script | `scripts/e0021_ave_p0_sweep_official_val_energy_v3.sh` |
+| Multi-GPU script | `scripts/e0021_ave_p0_sweep_official_val_energy_v3.sh` (split seeds across GPUs if desired) |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 BATCH_SIZE=16 bash scripts/e0021_ave_p0_sweep_official_val_energy_v3.sh` |
+| Full cmd | `bash scripts/e0021_ave_p0_sweep_official_val_energy_v3.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0021_*` |
+| Artifacts | `runs/E0021_*/sweep_summary.json`, `runs/E0021_*/best_config.json`, `runs/E0021_*/<candidate>/metrics.json` |
+| Results | Val401: `runs/E0021_ave_p0_sweep_official_val_energy_v3_20260203-194306/sweep_summary.json` (best=`energyv3_ref_shift1_std1p0`, anchored=0.7456 vs uniform=0.7321, Δ=+0.01344, p=0.00175). Best config: `runs/E0021_ave_p0_sweep_official_val_energy_v3_20260203-194306/best_config.json`. |
+
+
+### E0022: AVE energy_v3 best-config reproduction on test402 (val→test)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0021 on official AVE test402 with `SEEDS=0..9` and paired tests. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | HF: CLIP (`VISION_PRETRAINED=1`) |
+| Code path | `scripts/e0022_ave_p0_best_to_test_official_energy_v3.sh` |
+| Params | `BEST_CONFIG_JSON`, `SEEDS`, `LIMIT_TRAIN`, `LIMIT_EVAL`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (must include `summary.*.mean/std`, `paired_ttest`, and `debug_eval` for anchors/fallback stats) |
+| Checks | Report delta and `paired_ttest.anchored_vs_uniform.p`; target Δ≥+0.02 and p<0.05. |
+| VRAM | Similar to E0019 (head only) |
+| Total time | tens of minutes |
+| Single-GPU script | `scripts/e0022_ave_p0_best_to_test_official_energy_v3.sh` |
+| Multi-GPU script | `scripts/e0022_ave_p0_best_to_test_official_energy_v3.sh` |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 BATCH_SIZE=16 bash scripts/e0021_ave_p0_sweep_official_val_energy_v3.sh && BEST_CONFIG_JSON=$(ls -t runs/E0021_*/best_config.json | head -n 1) LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 BATCH_SIZE=16 bash scripts/e0022_ave_p0_best_to_test_official_energy_v3.sh` |
+| Full cmd | `bash scripts/e0021_ave_p0_sweep_official_val_energy_v3.sh && BEST_CONFIG_JSON=$(ls -t runs/E0021_*/best_config.json | head -n 1) bash scripts/e0022_ave_p0_best_to_test_official_energy_v3.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0022_*` |
+| Artifacts | `runs/E0022_*/metrics.json` |
+| Results | Test402: `runs/E0022_ave_p0_best_to_test_official_energy_v3_20260203-195707/metrics.json` (uniform=0.7086, anchored=0.7188, Δ=+0.01017, p=0.00466). |
+
+
+### E0023: AVE fusion confirm under energy_v3 best sampling config (audio_concat_* baselines)
+| Field | Value |
+| --- | --- |
+| Objective | Confirm whether fusion improves on top of the energy_v3-selected sampling config by comparing `audio_concat_anchored_top2` vs `audio_concat_uniform`. |
+| Baseline | `audio_concat_uniform` |
+| Model | Same as the selected config + audio concat head |
+| Weights | HF: CLIP (`VISION_PRETRAINED=1`) |
+| Code path | `avs/experiments/ave_p0_fusion_confirm.py`, `scripts/e0023_ave_fusion_confirm_official_energy_v3.sh` |
+| Params | `BEST_CONFIG_JSON`, `SEEDS`, `LIMIT_TRAIN`, `LIMIT_EVAL`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (must include `audio_concat_uniform` and `audio_concat_anchored_top2` plus paired tests) |
+| Checks | Paired t-test `audio_concat_anchored_top2` vs `audio_concat_uniform` and report delta. |
+| VRAM | Similar to E0020 (head only) |
+| Total time | tens of minutes |
+| Single-GPU script | `scripts/e0023_ave_fusion_confirm_official_energy_v3.sh` |
+| Multi-GPU script | `scripts/e0023_ave_fusion_confirm_official_energy_v3.sh` |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 BATCH_SIZE=16 bash scripts/e0021_ave_p0_sweep_official_val_energy_v3.sh && BEST_CONFIG_JSON=$(ls -t runs/E0021_*/best_config.json | head -n 1) LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 BATCH_SIZE=16 bash scripts/e0023_ave_fusion_confirm_official_energy_v3.sh` |
+| Full cmd | `bash scripts/e0021_ave_p0_sweep_official_val_energy_v3.sh && BEST_CONFIG_JSON=$(ls -t runs/E0021_*/best_config.json | head -n 1) bash scripts/e0023_ave_fusion_confirm_official_energy_v3.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0023_*` |
+| Artifacts | `runs/E0023_*/metrics.json` |
+| Results |  |
+
+
+### E0024: AVE longer training diagnostic (EPOCHS=20) on test402 (energy_ref)
+| Field | Value |
+| --- | --- |
+| Objective | Check whether simply training the head longer closes the test402 gap for the current best sampling config. |
+| Baseline | `uniform` |
+| Model | Same as the current best config; only change is `EPOCHS=20` |
+| Weights | HF: CLIP (`VISION_PRETRAINED=1`) |
+| Code path | `scripts/e0019_ave_p0_best_to_test_official_energy_v2.sh` (override `EPOCHS=20`) |
+| Params | `BEST_CONFIG_JSON`, `EPOCHS=20`, `SEEDS`, `LIMIT_TRAIN`, `LIMIT_EVAL`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` |
+| Checks | If Δ does not increase vs E0019/E0022, rule out “train longer” as the main lever. |
+| VRAM | Similar to E0019 |
+| Total time | longer than E0019 (more epochs) |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=2 bash scripts/e0019_ave_p0_best_to_test_official_energy_v2.sh` |
+| Full cmd | `EPOCHS=20 bash scripts/e0019_ave_p0_best_to_test_official_energy_v2.sh` |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `runs/E0024_*` |
+| Artifacts | `runs/E0024_*/metrics.json` |
+| Results | Test402: `runs/E0024_energy_ref_test402_epochs20_20260203-194640/metrics.json` (Δ=+0.00281, p=0.587). |
+
+
+### E0025: AVE “increase K + score alloc” diagnostic on test402
+| Field | Value |
+| --- | --- |
+| Objective | Check whether allocating more anchors (K>2) and using score-based base allocation improves transfer on test402. |
+| Baseline | `uniform` |
+| Model | Same backbone/head; change anchor/budget knobs only (`K=5`, `max_high_anchors=1`, `anchor_base_alloc=score`). |
+| Weights | HF: CLIP (`VISION_PRETRAINED=1`) |
+| Code path | `avs/experiments/ave_p0.py` (custom knobs) |
+| Params | `K`, `MAX_HIGH_ANCHORS`, `ANCHOR_BASE_ALLOC`, `SEEDS`, split/ids files |
+| Metrics (must save) | `metrics.json` |
+| Checks | If Δ does not beat the best config (E0019/E0022), focus back on Stage-1 anchor quality. |
+| VRAM | Similar to E0019 |
+| Total time | tens of minutes |
+| Smoke cmd | (ad-hoc) small subset run with `SEEDS=0,1` |
+| Full cmd | (ad-hoc) full test402 run with `SEEDS=0..9` |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `runs/E0025_*` |
+| Artifacts | `runs/E0025_*/metrics.json` |
+| Results | Test402: `runs/E0025_energy_k5_maxHigh1_scoreAlloc_test402_20260203-200327/metrics.json` (Δ=+0.00876, p=0.0106). |
+
+
+### E0100: EPIC-SOUNDS video-level multi-label classification (downstream proxy)
+| Field | Value |
+| --- | --- |
+| Objective | Evaluate long-video benefit on a downstream task: compare `uniform` vs `audio_anchored` selection under fixed visual budget (`max_steps × base_res`) on EPIC-SOUNDS. |
+| Baseline | `uniform` |
+| Model | CLIP ViT-B/16 visual features + `avs.models.video_multilabel_head.VideoMultiLabelHead` |
+| Weights | HF: CLIP (`--vision-pretrained`) |
+| Code path | `avs/experiments/epic_sounds_video_cls.py`, `scripts/e0100_epic_video_cls_local.sh` |
+| Params | `MAX_STEPS`, `BASE_RES`, `ANCHOR_RADIUS`, `BACKGROUND_STRIDE`, `SEEDS`, `VISION_PRETRAINED`, `DEVICE` |
+| Metrics (must save) | `metrics.json` (mAP/macro-F1 + budget fields) |
+| Checks | `audio_anchored` improves mAP over `uniform` on val for `SEEDS>=3`. |
+| VRAM | GPU optional (feature extraction); head training is light. |
+| Time/epoch | minutes |
+| Total time | depends on EPIC data availability |
+| Single-GPU script | `scripts/e0100_epic_video_cls_local.sh` |
+| Multi-GPU script | `scripts/e0100_epic_video_cls_local.sh` (cache build can use multiple GPUs if wired) |
+| Smoke cmd | `python -m avs.smoke epic_sounds_video_cls_synth` |
+| Full cmd | `bash scripts/e0100_epic_video_cls_local.sh` (requires EPIC videos installed under `data/EPIC_SOUNDS/raw/videos/`) |
+| Smoke | [x] |
+| Full | [ ] |
+| Logs | `runs/E0100_*` |
+| Artifacts | `runs/E0100_*/metrics.json` |
+| Results |  |
+
+
+### E0201: Oracle vs Predicted gap report (Listen-then-Look MDE-2)
+| Field | Value |
+| --- | --- |
+| Objective | Quantify the Oracle→Predicted gap under a **fixed equal-token** protocol and confirm Predicted remains better than `uniform`/`random`. |
+| Baseline | `oracle` (upper bound) |
+| Model | Same backbone/head as the MDE harness |
+| Weights | Per harness config |
+| Code path | `avs/experiments/mde_ltl.py` |
+| Params | `EVENTNESS_METHOD ∈ {energy, energy_delta, energy_stride_max, energy_autoshift_clipdiff, energy_autoshift_clipdiff_pos, av_fused, av_fused_prod, av_fused_clipdiff, av_fused_clipdiff_prod, moe_energy_clipdiff, vision_clipdiff, panns, ast, ast_lr, ast_emb_lr, ast_evt_mlp, ast_mlp_cls, ast_mlp_cls_target, audio_basic_lr, audio_basic_mlp, audio_basic_tcn, audio_fbank_mlp, audio_fbank_tcn, audio_basic_mlp_cls, audio_basic_mlp_cls_target, av_basic_lr, av_basic_mlp, av_clipdiff_lr, av_clipdiff_mlp, av_clipdiff_framediff_mlp, av_clipdiff_fbank_mlp, av_clipdiff_vec_mlp, av_clipdiff_mlp_cls, av_clipdiff_mlp_cls_target, av_clip_mlp_cls, av_clip_mlp_cls_target, av_clipdiff_tcn, vision_mlp_cls, vision_mlp_cls_target, vision_binary_lr, vision_binary_mlp}`, `AST_PRETRAINED`, `AUDIO_DEVICE`, anchor source `{oracle,predicted,random,cheap_visual}`, `SEEDS`, split/ids files, optional confidence gate (`ANCHOR_CONF_METRIC/ANCHOR_CONF_THRESHOLD`). |
+| Metrics (must save) | `oracle_vs_predicted.json` (summary + oracle_minus_predicted + p-values) |
+| Checks | `oracle_minus_predicted` shrinks; Predicted beats `uniform` and `random` (p<0.05) under at least one eventness setting. |
+| VRAM | TBD |
+| Time/epoch | TBD |
+| Total time | TBD |
+| Single-GPU script | `EVENTNESS=energy bash scripts/e0201_oracle_vs_predicted_official.sh` |
+| Multi-GPU script | Run different `EVENTNESS` on different GPUs: `{energy,energy_stride_max,av_fused}` |
+| Smoke cmd | `python -m avs.experiments.mde_ltl oracle_vs_predicted --mode toy` |
+| Full cmd | `EVENTNESS=energy bash scripts/e0201_oracle_vs_predicted_official.sh` (then rerun with `EVENTNESS=energy_stride_max` and `EVENTNESS=av_fused`) |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0201_*` |
+| Artifacts | `runs/E0201_*/oracle_vs_predicted.json` |
+| Results | Full (test402; SEEDS=0..9; token_budget=1960): `runs/E0201_full_energy_20260203-210017/oracle_vs_predicted.json` (energy: anchored=0.7188 vs uniform=0.7086, Δ=+0.01017, p=0.00466; oracle=0.7500; oracle_minus_predicted=0.03124). Energy + val-selected confidence gate (`gini@0.35`, from E0204): `runs/E0201_full_energy_gini0p35_test402_20260204-041950/oracle_vs_predicted.json` (anchored=0.7193 vs uniform=0.7086, Δ=+0.01075, p=0.0244; oracle_minus_predicted=0.03067). `runs/E0201_full_energy_stride_max_20260203-210017/oracle_vs_predicted.json` (energy_stride_max: anchored=0.7175 vs uniform=0.7086, Δ=+0.00888, p=0.00426; oracle_minus_predicted=0.03254). `runs/E0201_full_av_fused_20260203-210018/oracle_vs_predicted.json` collapsed due to confidence-gate scale mismatch (`std_thr=1.0` on `[0,1]` fused scores → fallback≈1.0). After fixing scale (P0052), a too-large scale made the gate overly permissive and regressed: `runs/E0201_oracle_vs_predicted_av_fused_20260203-214142/oracle_vs_predicted.json` (fallback_used_frac≈0.144; Δ=-0.00276). With the current calibrated scale (AV_FUSED_SCORE_SCALE=3.5): `runs/E0201_oracle_vs_predicted_av_fused_scale3p5_full_20260203-221906/oracle_vs_predicted.json` (av_fused: anchored=0.7190 vs uniform=0.7086, Δ=+0.01045, p=0.00995; oracle_minus_predicted=0.03097; fallback_used_frac≈0.739; `INCLUDE_CHEAP_VISUAL=0`). Autoshift diagnostics (does not beat energy): `runs/E0201_full_energy_autoshift_clipdiff_test402_20260204-032327/oracle_vs_predicted.json` (energy_autoshift_clipdiff: anchored=0.7154 vs uniform=0.7086, Δ=+0.00687, p=0.00574; oracle_minus_predicted=0.03455). `runs/E0201_full_energy_autoshift_clipdiff_pos_test402_20260204-040122/oracle_vs_predicted.json` (energy_autoshift_clipdiff_pos: anchored=0.7111 vs uniform=0.7086, Δ=+0.00254, p=0.495; oracle_minus_predicted=0.03888). Diagnostics: `runs/E0201_oracle_vs_predicted_audio_basic_lr_s012_20260203-223008/oracle_vs_predicted.json` (audio_basic_lr; SEEDS=0..2; fallback_used_frac≈0.978 under std_thr=1.0, so anchored≈uniform). `runs/E0201_oracle_vs_predicted_energy_gini0p4_s012_20260203-223901/oracle_vs_predicted.json` (energy + gini gate 0.4; SEEDS=0..2; Δ≈+0.0077). `runs/E0201_oracle_vs_predicted_energy_gini0p38_s012_20260203-224239/oracle_vs_predicted.json` (energy + gini gate 0.38; SEEDS=0..2; regresses). New diagnostics: `runs/E0201_oracle_vs_predicted_audio_fbank_mlp_20260204-000652/oracle_vs_predicted.json` (audio_fbank_mlp: anchored=0.7138 vs uniform=0.7086, Δ=+0.00522, p=0.0997). `runs/E0201_full_audio_basic_tcn_gini0p35_test402_20260204-062236/oracle_vs_predicted.json` (audio_basic_tcn + gini@0.35: anchored=0.7114 vs uniform=0.7086, Δ=+0.00279, p=0.528; oracle_minus_predicted=0.03863). `runs/E0201_full_audio_fbank_tcn_gini0p35_test402_20260204-062236/oracle_vs_predicted.json` (audio_fbank_tcn + gini@0.35: anchored=0.7081 vs uniform=0.7086, Δ=-0.00045, p=0.878; oracle_minus_predicted=0.04187). `runs/E0201_oracle_vs_predicted_panns_20260204-001813/oracle_vs_predicted.json` (panns; regresses). Gate-tuned ast_lr (val402 best gate=`gini@0.3`): `runs/E0201_oracle_vs_predicted_ast_lr_gini0p3_test402_20260204-021751/oracle_vs_predicted.json` (ast_lr: anchored=0.70886 vs uniform=0.70858, Δ=+0.00027, p=0.938; oracle_minus_predicted≈0.0411). Current best deployable Stage-1 (`av_clipdiff_mlp`; top1-med gate@0.6): `runs/E0201_oracle_vs_predicted_av_clipdiff_mlp_20260204-213240/oracle_vs_predicted.json` (predicted: anchored=0.7162 vs uniform=0.7086, Δ=+0.00759, p=0.0945; oracle_minus_predicted=0.03383; cheap_visual: anchored=0.7143 vs uniform=0.7086, Δ=+0.00575, p=0.0661). |
+
+
+### E0204: Confidence-gate sweep on val402 (select gate, then reuse on test)
+| Field | Value |
+| --- | --- |
+| Objective | Avoid tuning `anchor_conf_metric/threshold` on test402 by selecting a gate on val402 for a given Stage-1 method, then re-running test402 full with the selected gate. |
+| Baseline | Default gate (legacy `anchor_std_threshold`) |
+| Model | Same backbone/head as E0201 (P0 head-only training) |
+| Weights | Per harness config (AST optional via `--ast-pretrained`) |
+| Code path | `avs/experiments/mde_ltl.py` (`gate_sweep`) |
+| Params | `EVENTNESS_METHOD`, `GATE_METRIC`, `GATE_THRESHOLDS`, `SEEDS`, `AST_PRETRAINED`, `AUDIO_DEVICE`, plus fixed P0 cfg knobs (res triad, k, select, alloc). |
+| Metrics (must save) | `gate_sweep.json`, `best_gate.json`, and per-threshold `metrics_gate_*.json`. |
+| Checks | Best gate is selected on val; reusing it on test does not regress vs the default gate. |
+| VRAM | TBD |
+| Time/epoch | TBD |
+| Total time | TBD |
+| Single-GPU script | N/A |
+| Multi-GPU script | Run different methods on different GPUs (AST inference can be GPU-bound). |
+| Smoke cmd | `python -m avs.experiments.mde_ltl gate_sweep --mode toy` |
+| Full cmd | `python -m avs.experiments.mde_ltl gate_sweep --mode ave_official --split-eval val --limit-eval 402 --eventness-method ast_lr --ast-pretrained --audio-device cuda:0 --gate-metric gini --gate-thresholds 0,0.1,0.2,0.3,0.4` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0204_*` |
+| Artifacts | `runs/E0204_*/gate_sweep.json`, `runs/E0204_*/best_gate.json`, `runs/E0204_*/metrics_gate_*.json` |
+| Results | Val402 (SEEDS=0..2): energy best gate=`gini@0.35`, Δ≈+0.01189 (p≈0.030): `runs/E0204_gate_sweep_energy_val402_20260204-041625/gate_sweep.json` + `runs/E0204_gate_sweep_energy_val402_20260204-041625/best_gate.json`. Other sweeps do not beat energy: moe_energy_clipdiff best gate=`gini@0.3`, Δ≈+0.01097 (p≈0.0819): `runs/E0204_gate_sweep_moe_energy_clipdiff_val402_20260204-050919/gate_sweep.json`. energy_stride_max best gate=`gini@0.4`, Δ≈+0.00648: `runs/E0204_gate_sweep_energy_stride_max_val402_20260204-050600/gate_sweep.json`. energy+window_topk best gate=`gini@0.4`, Δ≈+0.00623: `runs/E0204_gate_sweep_energy_window3_val402_20260204-050559/gate_sweep.json`. ast_evt_mlp best gate=`gini@0.3`, Δ≈+0.00349: `runs/E0204_gate_sweep_ast_evt_mlp_val402_20260204-054808/gate_sweep.json`. ast_lr best gate=`gini@0.3`, Δ≈+0.00058: `runs/E0204_gate_sweep_ast_lr_val402_20260204-020623/gate_sweep.json`. av_basic_lr best gate=`gini@0.4`, Δ≈+0.00075: `runs/E0204_gate_sweep_av_basic_lr_val402_20260204-052137/gate_sweep.json`. audio_basic_tcn best gate=`gini@0.45` but regresses (Δ≈-0.00291): `runs/E0204_gate_sweep_audio_basic_tcn_val402_20260204-062235/gate_sweep.json` + `runs/E0204_gate_sweep_audio_basic_tcn_val402_20260204-062235/best_gate.json`. audio_fbank_tcn best gate=`gini@0.45` but regresses (Δ≈-0.00249): `runs/E0204_gate_sweep_audio_fbank_tcn_val402_20260204-062235/gate_sweep.json` + `runs/E0204_gate_sweep_audio_fbank_tcn_val402_20260204-062235/best_gate.json`. vision-based gates regress (Δ<0): `runs/E0204_gate_sweep_vision_mlp_cls_val402_20260204-050601/gate_sweep.json`, `runs/E0204_gate_sweep_vision_clipdiff_val402_20260204-050918/gate_sweep.json`, `runs/E0204_gate_sweep_vision_binary_lr_val402_20260204-053417/gate_sweep.json`, `runs/E0204_gate_sweep_vision_binary_mlp_val402_20260204-053418/gate_sweep.json`. |
+
+
+### E0205: Audio-TCN config sweep on val402 (select best anchored plan)
+| Field | Value |
+| --- | --- |
+| Objective | Under a fixed head-only protocol, select the best anchored plan config for a learned audio-TCN Stage-1 method (`audio_basic_tcn` / `audio_fbank_tcn`) on val402 (no tuning on test). |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as energy sweeps |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` |
+| Params | `EVENTNESS ∈ {audio_basic_tcn,audio_fbank_tcn}`, `SEEDS`, `EPOCHS/BATCH_SIZE/LR`, splits/ids files, `ALLOW_MISSING`, `candidate_set=energy_v3` (stage-2 plan knob sweep), and cached `eventness_scores.json` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Best config on val has positive Δ and passes `p_filter` (default 0.1) when possible. |
+| VRAM | ~<2GB per run (head-only; caches on disk) |
+| Time/epoch | ~seconds to minutes |
+| Total time | Depends on number of candidates × seeds |
+| Single-GPU script | `EVENTNESS=audio_basic_tcn bash scripts/e0205_ave_p0_sweep_official_val_audio_tcn.sh` |
+| Multi-GPU script | Run `audio_basic_tcn` and `audio_fbank_tcn` on different GPUs (train_device). |
+| Smoke cmd | `EVENTNESS=audio_basic_tcn LIMIT_TRAIN=256 LIMIT_EVAL=64 SEEDS=0,1 EPOCHS=1 bash scripts/e0205_ave_p0_sweep_official_val_audio_tcn.sh` |
+| Full cmd | `EVENTNESS=audio_basic_tcn SEEDS=0,1,2,3,4,5,6,7,8,9 bash scripts/e0205_ave_p0_sweep_official_val_audio_tcn.sh` |
+| Smoke | [x] |
+| Full | [ ] |
+| Logs | `runs/E0205_*` |
+| Artifacts | `runs/E0205_*/sweep_summary.json`, `runs/E0205_*/best_config.json`, `runs/E0205_*/eventness_scores.json` |
+| Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0205_ave_p0_sweep_official_val_audio_basic_tcn_20260204-063746/sweep_summary.json` (best config=`energyv3_shift0_std1p0`; indicative only). Val402 (SEEDS=0..2): `runs/E0205_full_audio_basic_tcn_val402_20260204-063935/sweep_summary.json` (best=`energyv3_extreme_112_224_448_maxHigh1_shift0_std0p6`, Δ≈+0.01837, p≈0.0426; note: still needs SEEDS=0..9 “full selection” to be definitive). |
+
+
+### E0206: Audio-TCN best-to-test reproduction on test402
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0205 on official test402 (SEEDS=0..9), and compare to the energy baseline for C0003 “拉大”. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`) |
+| Params | `BEST_CONFIG_JSON` (from E0205), `EVENTNESS`, `SEEDS`, `EPOCHS`, and (optional) `SCORES_JSON` reused from E0205 to avoid recomputing Stage-1 scores. |
+| Metrics (must save) | `metrics.json` (includes `summary` + `paired_ttest.anchored_vs_uniform`) |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; compare to energy best (~+1%). |
+| VRAM | ~<2GB per run (head-only; caches on disk) |
+| Time/epoch | ~seconds to minutes |
+| Total time | ~tens of minutes |
+| Single-GPU script | `BEST_CONFIG_JSON=... EVENTNESS=audio_basic_tcn bash scripts/e0206_ave_p0_best_to_test_official_audio_tcn.sh` |
+| Multi-GPU script | Run different `EVENTNESS` on different GPUs. |
+| Smoke cmd | `BEST_CONFIG_JSON=runs/E0205_*/best_config.json EVENTNESS=audio_basic_tcn LIMIT_TRAIN=256 LIMIT_EVAL=64 SEEDS=0,1 EPOCHS=1 bash scripts/e0206_ave_p0_best_to_test_official_audio_tcn.sh` |
+| Full cmd | `BEST_CONFIG_JSON=runs/E0205_*/best_config.json EVENTNESS=audio_basic_tcn SEEDS=0,1,2,3,4,5,6,7,8,9 bash scripts/e0206_ave_p0_best_to_test_official_audio_tcn.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0206_*` |
+| Artifacts | `runs/E0206_*/metrics.json` |
+| Results | Smoke (train64/test32; SEEDS=0,1; EPOCHS=1): `runs/E0206_ave_p0_best_to_test_official_audio_basic_tcn_20260204-064200/metrics.json`. Full (test402; SEEDS=0..9): `runs/E0206_ave_p0_best_to_test_official_audio_basic_tcn_20260204-070803/metrics.json` (best_config from `runs/E0205_full_audio_basic_tcn_val402_20260204-063935/best_config.json`: `energyv3_extreme_112_224_448_maxHigh1_shift0_std0p6`; anchored=0.7196 vs uniform=0.7086, Δ=+0.01097, p=0.0142). |
+
+
+### E0207: Stage-2 plan sweep on val402 for clipdiff-augmented anchors (LTL “拉大”)
+| Field | Value |
+| --- | --- |
+| Objective | Run a fixed-space Stage-2 plan sweep on official AVE val402 for a given Stage-1 anchor method (e.g., `av_clipdiff_mlp`) and write `best_config.json` for later test402 reproduction. |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as energy sweeps |
+| Weights | Uses existing CLIP caches; no extra pretrained weights (unless `EVENTNESS` requires it) |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh` |
+| Params | `EVENTNESS`, `CANDIDATE_SET`, `SEEDS`, `EPOCHS/BATCH_SIZE/LR`, splits/ids files, `ALLOW_MISSING`, and cached `eventness_scores.json` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Best config on val has positive Δ and passes `p_filter` (default 0.1) when possible. |
+| VRAM | ~<2GB per run (head-only; caches on disk) |
+| Time/epoch | ~seconds to minutes |
+| Total time | Depends on number of candidates × seeds |
+| Single-GPU script | `EVENTNESS=av_clipdiff_lr bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh` |
+| Multi-GPU script | Run different `EVENTNESS` on different GPUs (train_device). |
+| Smoke cmd | `EVENTNESS=av_clipdiff_lr LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh` |
+| Full cmd | `EVENTNESS=av_clipdiff_lr SEEDS=0,1,2 bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0207_*` |
+| Artifacts | `runs/E0207_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_lr_20260204-073551/sweep_summary.json`. Full val sweeps (SEEDS=0..2): `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_lr_20260204-073816/sweep_summary.json` (energy_v3; best=`energyv3_shift0_std0p4_adaptiveGap0p6`), `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_lr_20260204-075118/sweep_summary.json` (ltl_gini_v1; best=`ltl_gini0p20_scoreAlloc`), `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_20260204-075914/sweep_summary.json` (energy_v3; best=`energyv3_shift1_std0p6`), `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_std_v1_20260204-083739/sweep_summary.json` (ltl_std_v1; best=`ltlstd_shift0_std0p45`), `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_std_v2_20260204-085103/sweep_summary.json` (ltl_std_v2; best=`ltlstd2_shift0_std0p5_mixedAlloc`), `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_gini_v2_20260204-090323/sweep_summary.json` (ltl_gini_v2; best=`ltlgini2_gini0p45_shift0`), `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_gap_v1_20260204-090353/sweep_summary.json` (ltl_gap_v1; best=`ltlgap1_gap0p3_shift0`), `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_extreme_v1_20260204-091309/sweep_summary.json` (ltl_extreme_v1; best=`ltlextreme1_shift1_std0p6`), `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_cls_ltl_std_v1_20260204-092157/sweep_summary.json` (av_clipdiff_mlp_cls; ltl_std_v1; best=`ltlstd_shift0_std0p55`), `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_cls_target_ltl_std_v1_20260204-092729/sweep_summary.json` (av_clipdiff_mlp_cls_target; ltl_std_v1; best=`ltlstd_shift1_std0p55`), `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_tcn_20260204-081451/sweep_summary.json` (energy_v3), `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_tcn_20260204-081451/best_config.json`, `runs/E0207_ave_p0_sweep_official_val_av_clip_mlp_cls_20260204-095132/sweep_summary.json` (av_clip_mlp_cls; ltl_std_v1; best=`ltlstd_shift1_std0p5`), `runs/E0207_ave_p0_sweep_official_val_av_clip_mlp_cls_target_20260204-095814/sweep_summary.json` (av_clip_mlp_cls_target; ltl_std_v1; best=`ltlstd_shift1_std0p55`), `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_tcn_20260204-100517/sweep_summary.json` (av_clipdiff_tcn; ltl_std_v1; best=`ltlstd_shift1_std0p55`), `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_vec_mlp_20260204-101416/sweep_summary.json` (av_clipdiff_vec_mlp; ltl_std_v1; best=`ltlstd_shift1_std0p55`), `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_20260204-102403/sweep_summary.json` (av_clipdiff_mlp; ltl_adaptive_v1; best=`ltladj1_shift0_std0p45`). |
+
+
+### E0208: Best-to-test reproduction on test402 for clipdiff-augmented anchors (LTL “拉大”)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0207 on official AVE test402 (SEEDS=0..9) and compare to the best energy baseline for C0003 “拉大”. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights (unless `EVENTNESS` requires it) |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0207), `EVENTNESS`, `SEEDS`, `EPOCHS`, and (optional) `SCORES_JSON` reused from E0207 to avoid recomputing Stage-1 scores. |
+| Metrics (must save) | `metrics.json` (includes `summary` + `paired_ttest.anchored_vs_uniform`) |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; compare to energy best (~+1%). |
+| VRAM | ~<2GB per run (head-only; caches on disk) |
+| Time/epoch | ~seconds to minutes |
+| Total time | ~tens of minutes |
+| Single-GPU script | `BEST_CONFIG_JSON=... EVENTNESS=av_clipdiff_lr bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh` |
+| Multi-GPU script | Run different `EVENTNESS` on different GPUs. |
+| Smoke cmd | `EVENTNESS=av_clipdiff_lr LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh && BEST_CONFIG_JSON=runs/E0207_*/best_config.json EVENTNESS=av_clipdiff_lr LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh` |
+| Full cmd | `EVENTNESS=av_clipdiff_lr SEEDS=0,1,2 bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh && BEST_CONFIG_JSON=runs/E0207_*/best_config.json EVENTNESS=av_clipdiff_lr SEEDS=0,1,2,3,4,5,6,7,8,9 bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0208_*` |
+| Artifacts | `runs/E0208_*/metrics.json` |
+| Results | Smoke (train64/test32; SEEDS=0,1; EPOCHS=1): `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_lr_20260204-073616/metrics.json`. Full test402 (SEEDS=0..9): `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_lr_20260204-074318/metrics.json` (Δ=+0.00759, p=0.0313; fallback≈0.826 under std_thr=0.4), `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_lr_20260204-075503/metrics.json` (ltl_gini_v1; Δ=+0.00122, p=0.704; fallback≈0.047), `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-080419/metrics.json` (anchored=0.72045 vs uniform=0.70858, Δ=+0.01187, p=0.00142; fallback≈0.883), `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-080617/metrics.json` (alt config; Δ=+0.00985, p=0.00532; fallback≈0.709), `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_ltl_std_v1_20260204-084147/metrics.json` (ltl_std_v1 best_config=`ltlstd_shift0_std0p45`; anchored=0.72065 vs uniform=0.70858, Δ=+0.01206, p=0.00464; fallback≈0.754), `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_ltl_std_v2_20260204-085632/metrics.json` (ltl_std_v2 best_config=`ltlstd2_shift0_std0p5_mixedAlloc`; anchored=0.71724 vs uniform=0.70858, Δ=+0.00866, p=0.0472; fallback≈0.816), `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_ltl_gini_v2_20260204-090710/metrics.json` (ltl_gini_v2 best_config=`ltlgini2_gini0p45_shift0`; anchored=0.71948 vs uniform=0.70858, Δ=+0.01090, p=0.0274), `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_ltl_gap_v1_20260204-090741/metrics.json` (ltl_gap_v1 best_config=`ltlgap1_gap0p3_shift0`; anchored=0.71600 vs uniform=0.70858, Δ=+0.00741, p=0.0604), `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_ltl_extreme_v1_20260204-091529/metrics.json` (ltl_extreme_v1 best_config=`ltlextreme1_shift1_std0p6`; anchored=0.71413 vs uniform=0.70858, Δ=+0.00555, p=0.0849), `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_cls_ltl_std_v1_20260204-092530/metrics.json` (av_clipdiff_mlp_cls; ltl_std_v1 best_config=`ltlstd_shift0_std0p55`; anchored=0.71510 vs uniform=0.70858, Δ=+0.00652, p=0.00801), `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_tcn_20260204-082007/metrics.json` (Δ=+0.00468, p=0.142), `runs/E0208_ave_p0_best_to_test_official_av_clip_mlp_cls_20260204-095509/metrics.json` (av_clip_mlp_cls; ltl_std_v1; Δ=+0.00281, p=0.328), `runs/E0208_ave_p0_best_to_test_official_av_clip_mlp_cls_target_20260204-100202/metrics.json` (av_clip_mlp_cls_target; ltl_std_v1; Δ=-0.00597, p=0.131), `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_tcn_20260204-100855/metrics.json` (av_clipdiff_tcn; ltl_std_v1; Δ=+0.00540, p=0.161), `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-103001/metrics.json` (av_clipdiff_mlp; ltl_adaptive_v1 best_config=`ltladj1_shift0_std0p45`; anchored=0.72234 vs uniform=0.70858, Δ=+0.01376, p=1.4e-05). |
+
+
+### E0209: Stage-2 plan sweep on val402 for learned anchors (ltl_adaptive_v2; lower fallback)
+| Field | Value |
+| --- | --- |
+| Objective | Run a fixed candidate sweep on official val402 for the current best learned Stage-1 method (`av_clipdiff_mlp`) using `candidate_set=ltl_adaptive_v2` (adaptive high-res + lower std thresholds) to reduce fallback and increase anchored gains. |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as energy sweeps |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0209_ave_p0_sweep_official_val_ltl_adaptive_v2.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_adaptive_v2`, `SEEDS`, `EPOCHS/BATCH_SIZE/LR`, splits/ids files, `ALLOW_MISSING`, cached `eventness_scores.json` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Best config on val has positive Δ; report fallback_used_frac for the winner and compare to `ltl_adaptive_v1`. |
+| VRAM | ~<2GB per run (head-only; caches on disk) |
+| Time/epoch | ~seconds to minutes |
+| Total time | Depends on number of candidates × seeds |
+| Single-GPU script | `bash scripts/e0209_ave_p0_sweep_official_val_ltl_adaptive_v2.sh` |
+| Multi-GPU script | Run different `EVENTNESS` or candidate sets on different GPUs (train_device). |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0209_ave_p0_sweep_official_val_ltl_adaptive_v2.sh` |
+| Full cmd | `SEEDS=0,1,2 bash scripts/e0209_ave_p0_sweep_official_val_ltl_adaptive_v2.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0209_*` |
+| Artifacts | `runs/E0209_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0209_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_adaptive_v2_20260204-104951/sweep_summary.json` (best=`ltladjv2_adj1_shift0_std0p1`). Full (val402; SEEDS=0..2): `runs/E0209_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_adaptive_v2_20260204-105049/sweep_summary.json` (best=`ltladjv2_adj1_shift0_std0p3`, Δ≈+0.01421, p≈0.00921). |
+
+
+### E0210: Best-to-test reproduction on test402 for learned anchors (ltl_adaptive_v2 selection)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0209 on official test402 (SEEDS=0..9) and compare to the current best for C0003. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0210_ave_p0_best_to_test_official_ltl_adaptive_v2.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0209), `EVENTNESS`, `SEEDS`, `EPOCHS`, and cached `eventness_scores.json` from E0209 |
+| Metrics (must save) | `metrics.json` (includes `summary` + `paired_ttest.anchored_vs_uniform`) |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, C0003 is proven. |
+| VRAM | ~<2GB per run (head-only; caches on disk) |
+| Time/epoch | ~seconds to minutes |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0210_ave_p0_best_to_test_official_ltl_adaptive_v2.sh` |
+| Multi-GPU script | Run multiple `EVENTNESS` winners on different GPUs if needed. |
+| Smoke cmd | `BEST_CONFIG_JSON=runs/E0209_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0210_ave_p0_best_to_test_official_ltl_adaptive_v2.sh` |
+| Full cmd | `BEST_CONFIG_JSON=runs/E0209_*/best_config.json SEEDS=0,1,2,3,4,5,6,7,8,9 bash scripts/e0210_ave_p0_best_to_test_official_ltl_adaptive_v2.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0210_*` |
+| Artifacts | `runs/E0210_*/metrics.json` |
+| Results | Smoke (train64/test32; SEEDS=0,1; EPOCHS=1): `runs/E0210_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-110057/metrics.json`. Full (test402; SEEDS=0..9): `runs/E0210_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-110113/metrics.json` (best_config=`ltladjv2_adj1_shift0_std0p3`; anchored=0.71162 vs uniform=0.70858, Δ=+0.00303, p=0.414; fallback≈0.535). |
+
+
+### E0211: Stage-2 plan sweep on val402 for learned anchors (ltl_adaptive_v3; conf-aware high-res demotion)
+| Field | Value |
+| --- | --- |
+| Objective | Run a fixed candidate sweep on official val402 for learned anchors using `candidate_set=ltl_adaptive_v3` (adds `anchor_high_policy=adaptive_v2` to demote to 1 high-res anchor under medium confidence). |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as energy sweeps |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0211_ave_p0_sweep_official_val_ltl_adaptive_v3.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_adaptive_v3`, `SEEDS`, `EPOCHS/BATCH_SIZE/LR`, splits/ids files, `ALLOW_MISSING`, cached `eventness_scores.json` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Best config on val has positive Δ and passes `p_filter`; report fallback_used_frac for the winner. |
+| VRAM | ~<2GB per run (head-only; caches on disk) |
+| Time/epoch | ~seconds to minutes |
+| Total time | Depends on number of candidates × seeds |
+| Single-GPU script | `bash scripts/e0211_ave_p0_sweep_official_val_ltl_adaptive_v3.sh` |
+| Multi-GPU script | Run different `EVENTNESS` or candidate sets on different GPUs (train_device). |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0211_ave_p0_sweep_official_val_ltl_adaptive_v3.sh` |
+| Full cmd | `SEEDS=0,1,2 bash scripts/e0211_ave_p0_sweep_official_val_ltl_adaptive_v3.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0211_*` |
+| Artifacts | `runs/E0211_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0211_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_adaptive_v3_20260204-111301/sweep_summary.json`. Full (val402; SEEDS=0..2): `runs/E0211_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_adaptive_v3_20260204-111337/sweep_summary.json` (best=`ltladjv3_adj1_shift0_std0p3_hi0p45_scoreAlloc`, Δ≈+0.01563, p≈0.0784). |
+
+
+### E0212: Best-to-test reproduction on test402 for learned anchors (ltl_adaptive_v3 selection)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0211 on official test402 (SEEDS=0..9) and compare to the current best for C0003. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0212_ave_p0_best_to_test_official_ltl_adaptive_v3.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0211), `EVENTNESS`, `SEEDS`, `EPOCHS`, and cached `eventness_scores.json` from E0211 |
+| Metrics (must save) | `metrics.json` (includes `summary` + `paired_ttest.anchored_vs_uniform`) |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, C0003 is proven. |
+| VRAM | ~<2GB per run (head-only; caches on disk) |
+| Time/epoch | ~seconds to minutes |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0212_ave_p0_best_to_test_official_ltl_adaptive_v3.sh` |
+| Multi-GPU script | Run multiple `EVENTNESS` winners on different GPUs if needed. |
+| Smoke cmd | `BEST_CONFIG_JSON=runs/E0211_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0212_ave_p0_best_to_test_official_ltl_adaptive_v3.sh` |
+| Full cmd | `BEST_CONFIG_JSON=runs/E0211_*/best_config.json SEEDS=0,1,2,3,4,5,6,7,8,9 bash scripts/e0212_ave_p0_best_to_test_official_ltl_adaptive_v3.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0212_*` |
+| Artifacts | `runs/E0212_*/metrics.json` |
+| Results | Smoke (train64/test32; SEEDS=0,1; EPOCHS=1): `runs/E0212_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-111837/metrics.json`. Full (test402; SEEDS=0..9): `runs/E0212_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-111852/metrics.json` (best_config=`ltladjv3_adj1_shift0_std0p3_hi0p45_scoreAlloc`; anchored=0.71502 vs uniform=0.70858, Δ=+0.00644, p=0.135; fallback≈0.535). |
+
+
+### E0213: Diagnostic ablation — force max_high_anchors=1 on the current best learned-anchor config
+| Field | Value |
+| --- | --- |
+| Objective | Test whether the main failure mode is “2-high harms context”: take the current best learned-anchor config (from E0207/E0208; `ltladj1_shift0_std0p45`) and rerun with `max_high_anchors=1` (keep other knobs fixed). |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0208 (temporal_conv) |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0213_ave_p0_diagnostic_maxhigh1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `SEEDS`, `EPOCHS/BATCH_SIZE/LR`, plus `BEST_CONFIG_JSON` (source config) |
+| Metrics (must save) | `metrics.json` (includes `summary` + `paired_ttest.anchored_vs_uniform`) |
+| Checks | If Δ increases vs the source config, proceed to a dedicated max-high=1 sweep (E0214/E0215). |
+| VRAM | ~<2GB per run (head-only; caches on disk) |
+| Time/epoch | ~seconds to minutes |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0213_ave_p0_diagnostic_maxhigh1.sh` |
+| Multi-GPU script | Run multiple variants on different GPUs by overriding `TRAIN_DEVICE`. |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0213_ave_p0_diagnostic_maxhigh1.sh` |
+| Full cmd | `SEEDS=0,1,2 bash scripts/e0213_ave_p0_diagnostic_maxhigh1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0213_*` |
+| Artifacts | `runs/E0213_*/metrics.json` |
+| Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0213_ave_p0_diagnostic_maxhigh1_av_clipdiff_mlp_20260204-120801/metrics.json`. Full (val402; SEEDS=0..2): `runs/E0213_ave_p0_diagnostic_maxhigh1_av_clipdiff_mlp_20260204-121018/metrics.json` (anchored=0.74414 vs uniform=0.73874, Δ=+0.00540, p=0.333). |
+
+
+### E0214: Stage-2 plan sweep on val402 for learned anchors (ltl_maxhigh1_v1; always max-high=1)
+| Field | Value |
+| --- | --- |
+| Objective | Run a fixed candidate sweep on official val402 for learned anchors using `candidate_set=ltl_maxhigh1_v1` (fixes `max_high_anchors=1` for all clips to preserve context). |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0207/E0208 |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0214_ave_p0_sweep_official_val_ltl_maxhigh1_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_maxhigh1_v1`, `SEEDS`, `EPOCHS/BATCH_SIZE/LR`, splits/ids files, `ALLOW_MISSING`, cached `eventness_scores.json` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Best config on val has positive Δ and passes `p_filter`; confirm winner has `max_high_anchors=1`. |
+| VRAM | ~<2GB per run (head-only; caches on disk) |
+| Time/epoch | ~seconds to minutes |
+| Total time | Depends on number of candidates × seeds |
+| Single-GPU script | `bash scripts/e0214_ave_p0_sweep_official_val_ltl_maxhigh1_v1.sh` |
+| Multi-GPU script | Run different `EVENTNESS` or candidate sets on different GPUs (train_device). |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0214_ave_p0_sweep_official_val_ltl_maxhigh1_v1.sh` |
+| Full cmd | `SEEDS=0,1,2 bash scripts/e0214_ave_p0_sweep_official_val_ltl_maxhigh1_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0214_*` |
+| Artifacts | `runs/E0214_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0214_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_maxhigh1_v1_20260204-120705/sweep_summary.json`. Full (val402; SEEDS=0..2): `runs/E0214_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_maxhigh1_v1_20260204-120918/sweep_summary.json` (best=`ltlmax1_thr0p3_distance_window3`, anchored=0.74821 vs uniform=0.73874, Δ=+0.00948, p=0.000231). |
+
+
+### E0215: Best-to-test reproduction on test402 for learned anchors (ltl_maxhigh1_v1 selection)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0214 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0215_ave_p0_best_to_test_official_ltl_maxhigh1_v1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0214), `EVENTNESS`, `SEEDS`, `EPOCHS`, and cached `eventness_scores.json` from E0214 |
+| Metrics (must save) | `metrics.json` (includes `summary` + `paired_ttest.anchored_vs_uniform`) |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| VRAM | ~<2GB per run (head-only; caches on disk) |
+| Time/epoch | ~seconds to minutes |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0215_ave_p0_best_to_test_official_ltl_maxhigh1_v1.sh` |
+| Multi-GPU script | Run multiple winners on different GPUs if needed. |
+| Smoke cmd | `BEST_CONFIG_JSON=runs/E0214_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0215_ave_p0_best_to_test_official_ltl_maxhigh1_v1.sh` |
+| Full cmd | `BEST_CONFIG_JSON=runs/E0214_*/best_config.json SEEDS=0,1,2,3,4,5,6,7,8,9 bash scripts/e0215_ave_p0_best_to_test_official_ltl_maxhigh1_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0215_*` |
+| Artifacts | `runs/E0215_*/metrics.json` |
+| Results | Smoke (train64/test32; SEEDS=0,1; EPOCHS=1): `runs/E0215_ave_p0_best_to_test_official_av_clipdiff_mlp_ltl_maxhigh1_v1_20260204-120734/metrics.json`. Full (test402; SEEDS=0..9): `runs/E0215_ave_p0_best_to_test_official_av_clipdiff_mlp_ltl_maxhigh1_v1_20260204-121849/metrics.json` (best_config=`ltlmax1_thr0p3_distance_window3`; anchored=0.71371 vs uniform=0.70858, Δ=+0.00512, p=0.144; random=0.71657). |
+
+
+### E0216: Diagnose best learned-anchor C0003 run (root-cause stats; test402)
+| Field | Value |
+| --- | --- |
+| Objective | Produce an audit-friendly diagnosis for the current best learned-anchor config: per-clip Δ distribution, fallback stats, and anchor-distance ↔ Δ patterns to guide the next “拉大” iteration. |
+| Baseline | N/A (analysis-only) |
+| Model | N/A |
+| Weights | N/A |
+| Code path | `avs/experiments/ave_p0_diagnose.py` |
+| Params | `IN_METRICS` (a full test402 `metrics.json`), `--meta-dir`, `--top-n` |
+| Metrics (must save) | `diagnose.json` |
+| Checks | Report includes `fallback_used_frac`, `delta_by_high_count`, `delta_by_anchor_dist`, and top improve/degrade clip lists. |
+| VRAM | CPU |
+| Time/epoch | N/A |
+| Total time | minutes |
+| Single-GPU script | `python -m avs.experiments.ave_p0_diagnose ...` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `IN_METRICS=runs/E0208_*/metrics.json python -m avs.experiments.ave_p0_diagnose --meta-dir data/AVE/meta --top-n 5` |
+| Full cmd | `python -m avs.experiments.ave_p0_diagnose --in-metrics runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-103001/metrics.json --meta-dir data/AVE/meta --out-dir runs/E0216_* --top-n 30` |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `runs/E0216_*` |
+| Artifacts | `runs/E0216_*/diagnose.json` |
+| Results | `runs/E0216_diagnose_bestC0003_20260204-140000/diagnose.json` (finding: high2 regime mean Δ<0; smoothing candidates added next). |
+
+
+### E0217: Diagnose energy baseline (context for Stage-1 vs Stage-2 failure modes; test402)
+| Field | Value |
+| --- | --- |
+| Objective | Compare diagnosis patterns against the best energy baseline to isolate which failure modes are unique to learned anchors. |
+| Baseline | N/A (analysis-only) |
+| Model | N/A |
+| Weights | N/A |
+| Code path | `avs/experiments/ave_p0_diagnose.py` |
+| Params | `IN_METRICS`, `--meta-dir`, `--top-n` |
+| Metrics (must save) | `diagnose.json` |
+| Checks | Energy anchors should have non-negative mean Δ for the non-fallback subset (sanity). |
+| VRAM | CPU |
+| Time/epoch | N/A |
+| Total time | minutes |
+| Single-GPU script | `python -m avs.experiments.ave_p0_diagnose ...` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `IN_METRICS=runs/E0022_*/metrics.json python -m avs.experiments.ave_p0_diagnose --meta-dir data/AVE/meta --top-n 5` |
+| Full cmd | `python -m avs.experiments.ave_p0_diagnose --in-metrics runs/E0022_ave_p0_best_to_test_official_energy_v3_20260203-195707/metrics.json --meta-dir data/AVE/meta --out-dir runs/E0217_* --top-n 30` |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `runs/E0217_*` |
+| Artifacts | `runs/E0217_*/diagnose.json` |
+| Results | `runs/E0217_diagnose_energyv3_20260204-140400/diagnose.json` (anchor-used subset mean Δ>0; contrasts with learned anchors). |
+
+
+### E0218: Stage-2 plan sweep on val402 for learned anchors (ltl_smooth_v1; smoothing reduces harmful 2-high)
+| Field | Value |
+| --- | --- |
+| Objective | Run a fixed candidate sweep on official val402 for learned anchors using `candidate_set=ltl_smooth_v1` (adds score smoothing before anchor selection under `anchor_high_policy=adaptive_v1`). |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0207/E0208 |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0218_ave_p0_sweep_official_val_ltl_smooth_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_smooth_v1`, `SEEDS`, `EPOCHS/BATCH_SIZE/LR`, splits/ids files, `ALLOW_MISSING`, cached `eventness_scores.json` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Winner has higher Δ than `ltl_adaptive_v1` on val; report `fallback_used_frac` and the share of high1/high2 regimes in `best_config.json`’s debug_eval. |
+| VRAM | ~<2GB per run (head-only; caches on disk) |
+| Time/epoch | ~seconds to minutes |
+| Total time | Depends on number of candidates × seeds |
+| Single-GPU script | `bash scripts/e0218_ave_p0_sweep_official_val_ltl_smooth_v1.sh` |
+| Multi-GPU script | Run different `EVENTNESS` or candidate sets on different GPUs (train_device). |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0218_ave_p0_sweep_official_val_ltl_smooth_v1.sh` |
+| Full cmd | `SEEDS=0,1,2 bash scripts/e0218_ave_p0_sweep_official_val_ltl_smooth_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0218_*` |
+| Artifacts | `runs/E0218_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | `runs/E0218_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_smooth_v1_20260204-132824/sweep_summary.json` (best=`ltlsmooth_shift0_std0p45_sw0_adj1`, i.e. smoothing window=0; Δ≈+0.01164, p≈0.0373). |
+
+
+### E0219: Best-to-test reproduction on test402 for learned anchors (ltl_smooth_v1 selection)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0218 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0219_ave_p0_best_to_test_official_ltl_smooth_v1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0218), `EVENTNESS`, `SEEDS`, `EPOCHS`, and cached `eventness_scores.json` from E0218 |
+| Metrics (must save) | `metrics.json` (includes `summary` + `paired_ttest.anchored_vs_uniform`) |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| VRAM | ~<2GB per run (head-only; caches on disk) |
+| Time/epoch | ~seconds to minutes |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0219_ave_p0_best_to_test_official_ltl_smooth_v1.sh` |
+| Multi-GPU script | Run multiple winners on different GPUs if needed. |
+| Smoke cmd | `BEST_CONFIG_JSON=runs/E0218_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0219_ave_p0_best_to_test_official_ltl_smooth_v1.sh` |
+| Full cmd | `BEST_CONFIG_JSON=runs/E0218_*/best_config.json SEEDS=0,1,2,3,4,5,6,7,8,9 bash scripts/e0219_ave_p0_best_to_test_official_ltl_smooth_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0219_*` |
+| Artifacts | `runs/E0219_*/metrics.json` |
+| Results | `runs/E0219_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-133929/metrics.json` (anchored=0.72234 vs uniform=0.70858, Δ=+0.01376, p≈1.40e-05; smoothing does not change the test winner). |
+
+
+### E0223: Stage-2 plan sweep on val402 for learned anchors (ltl_top1med_v1; top1-med confidence gate)
+| Field | Value |
+| --- | --- |
+| Objective | Run a fixed candidate sweep on official val402 for learned anchors using `candidate_set=ltl_top1med_v1` (uses `conf_metric=top1_med` as a robust peakiness gate for learned logits). |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0207/E0208 |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0223_ave_p0_sweep_official_val_ltl_top1med_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_v1`, `SEEDS`, `EPOCHS/BATCH_SIZE/LR`, splits/ids files, `ALLOW_MISSING`, cached `eventness_scores.json` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Winner improves Δ on val and transfers to test; report `fallback_used_frac` for the winner. |
+| VRAM | ~<2GB per run (head-only; caches on disk) |
+| Time/epoch | ~seconds to minutes |
+| Total time | Depends on number of candidates × seeds |
+| Single-GPU script | `bash scripts/e0223_ave_p0_sweep_official_val_ltl_top1med_v1.sh` |
+| Multi-GPU script | Run different `EVENTNESS` or candidate sets on different GPUs (train_device). |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0223_ave_p0_sweep_official_val_ltl_top1med_v1.sh` |
+| Full cmd | `SEEDS=0,1,2 bash scripts/e0223_ave_p0_sweep_official_val_ltl_top1med_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0223_*` |
+| Artifacts | `runs/E0223_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | `runs/E0223_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_v1_20260204-135150/sweep_summary.json` (best=`ltltop1med_thr0p6_shift1`, Δ≈+0.00964, p≈0.0331). |
+
+
+### E0224: Best-to-test reproduction on test402 for learned anchors (ltl_top1med_v1 selection)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0223 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0224_ave_p0_best_to_test_official_ltl_top1med_v1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0223), `EVENTNESS`, `SEEDS`, `EPOCHS`, and cached `eventness_scores.json` from E0223 |
+| Metrics (must save) | `metrics.json` (includes `summary` + `paired_ttest.anchored_vs_uniform`) |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| VRAM | ~<2GB per run (head-only; caches on disk) |
+| Time/epoch | ~seconds to minutes |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0224_ave_p0_best_to_test_official_ltl_top1med_v1.sh` |
+| Multi-GPU script | Run multiple winners on different GPUs if needed. |
+| Smoke cmd | `BEST_CONFIG_JSON=runs/E0223_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0224_ave_p0_best_to_test_official_ltl_top1med_v1.sh` |
+| Full cmd | `BEST_CONFIG_JSON=runs/E0223_*/best_config.json SEEDS=0,1,2,3,4,5,6,7,8,9 bash scripts/e0224_ave_p0_best_to_test_official_ltl_top1med_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0224_*` |
+| Artifacts | `runs/E0224_*/metrics.json` |
+| Results | `runs/E0224_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-135547/metrics.json` (anchored=0.72383 vs uniform=0.70858, Δ=+0.01525, p≈0.00390; fallback≈0.751). |
+
+
+### E0226: Stage-2 plan variants on val402 for the current best top1-med gate (selection/base allocation ablation)
+| Field | Value |
+| --- | --- |
+| Objective | For the fixed Stage-1 gate from E0223 (`conf_metric=top1_med`, `thr=0.6`, `shift=1`), compare a small Stage-2 plan variant set (anchor selection + base allocation) on official val402 to reduce harmful applied-anchor cases. |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0207/E0208 |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `scripts/e0226_ave_p0_stage2_variants_official_val_ltl_top1med_v1.sh`, `avs/experiments/ave_p0_sweep.py` (`run`) |
+| Params | `EVENTNESS`, `SEEDS` (val), `EPOCHS/BATCH_SIZE/LR`, plus Stage-2 variants sourced from the latest `runs/E0223_*/*.json` and cached `eventness_scores.json` |
+| Metrics (must save) | `variants_summary.json`, `best_config.json`, per-variant `*/metrics.json` |
+| Checks | `variants_summary.json` lists Δ/p for each variant and selects the best (max Δ) for E0227. |
+| VRAM | ~<2GB per run (head-only; caches on disk) |
+| Time/epoch | ~seconds to minutes |
+| Total time | ~minutes (runs multiple variants) |
+| Single-GPU script | `bash scripts/e0226_ave_p0_stage2_variants_official_val_ltl_top1med_v1.sh` |
+| Multi-GPU script | `GPUS=0,1,2,3 bash scripts/e0226_ave_p0_stage2_variants_official_val_ltl_top1med_v1.sh` |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0226_ave_p0_stage2_variants_official_val_ltl_top1med_v1.sh` |
+| Full cmd | `SEEDS=0,1,2 bash scripts/e0226_ave_p0_stage2_variants_official_val_ltl_top1med_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0226_*` |
+| Artifacts | `runs/E0226_*/{variants_summary.json,best_config.json,eventness_scores.json,*/metrics.json}` |
+| Results | `runs/E0226_ave_p0_stage2_variants_official_val_av_clipdiff_mlp_20260204-142732/variants_summary.json` (best=`best_config`, Δ≈+0.00964 on val; other Stage-2 variants are worse on val). |
+
+
+### E0227: Best-to-test reproduction on test402 for the best Stage-2 variant (E0226 selection)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0226 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `scripts/e0227_ave_p0_best_to_test_official_ltl_top1med_v1_stage2_variants.sh`, `avs/experiments/ave_p0_sweep.py` (`run`) |
+| Params | `BEST_CONFIG_JSON` (from E0226), `EVENTNESS`, `SEEDS` (test), `EPOCHS`, and cached `eventness_scores.json` from E0226 |
+| Metrics (must save) | `metrics.json` (includes `summary` + `paired_ttest.anchored_vs_uniform`) |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| VRAM | ~<2GB per run (head-only; caches on disk) |
+| Time/epoch | ~seconds to minutes |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0227_ave_p0_best_to_test_official_ltl_top1med_v1_stage2_variants.sh` |
+| Multi-GPU script | Run multiple winners on different GPUs if needed. |
+| Smoke cmd | `BEST_CONFIG_JSON=runs/E0226_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0227_ave_p0_best_to_test_official_ltl_top1med_v1_stage2_variants.sh` |
+| Full cmd | `BEST_CONFIG_JSON=runs/E0226_*/best_config.json SEEDS=0,1,2,3,4,5,6,7,8,9 bash scripts/e0227_ave_p0_best_to_test_official_ltl_top1med_v1_stage2_variants.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0227_*` |
+| Artifacts | `runs/E0227_*/metrics.json` |
+| Results | `runs/E0227_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-142936/metrics.json` (selected variant equals E0224 winner: anchored=0.72383 vs uniform=0.70858, Δ=+0.01525, p≈0.00390; fallback≈0.751). |
+
+
+### E0228: Extreme-triad sweep on val402 for learned anchors (ltl_top1med_extreme_v1; top1-med gate + 112/224/448)
+| Field | Value |
+| --- | --- |
+| Objective | Try to amplify anchored gains by combining a stricter, scale-robust Stage-1 confidence gate (`top1_med`) with an aggressive Stage-2 resolution triad (112/224/448, `max_high_anchors=1`) under a strict equal-token budget. |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0207/E0208 |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0228_ave_p0_sweep_official_val_ltl_top1med_extreme_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_extreme_v1`, `SEEDS`, `EPOCHS/BATCH_SIZE/LR`, splits/ids files, `ALLOW_MISSING`, cached `eventness_scores.json` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Winner improves Δ on val and transfers to test; report `fallback_used_frac` for the winner. |
+| VRAM | ~<2GB per run (head-only; caches on disk) |
+| Time/epoch | ~seconds to minutes |
+| Total time | Depends on number of candidates × seeds |
+| Single-GPU script | `bash scripts/e0228_ave_p0_sweep_official_val_ltl_top1med_extreme_v1.sh` |
+| Multi-GPU script | Run different `EVENTNESS` or candidate sets on different GPUs (train_device). |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0228_ave_p0_sweep_official_val_ltl_top1med_extreme_v1.sh` |
+| Full cmd | `SEEDS=0,1,2 bash scripts/e0228_ave_p0_sweep_official_val_ltl_top1med_extreme_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0228_*` |
+| Artifacts | `runs/E0228_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | `runs/E0228_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_extreme_v1_20260204-143855/sweep_summary.json` (best=`ltltop1medext1_thr0p6_shift0_distance`, Δ≈+0.01313, p≈0.0589 on val; does not transfer to test in E0229). |
+
+
+### E0229: Best-to-test reproduction on test402 for learned anchors (ltl_top1med_extreme_v1 selection)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0228 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0229_ave_p0_best_to_test_official_ltl_top1med_extreme_v1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0228), `EVENTNESS`, `SEEDS`, `EPOCHS`, and cached `eventness_scores.json` from E0228 |
+| Metrics (must save) | `metrics.json` (includes `summary` + `paired_ttest.anchored_vs_uniform`) |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| VRAM | ~<2GB per run (head-only; caches on disk) |
+| Time/epoch | ~seconds to minutes |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0229_ave_p0_best_to_test_official_ltl_top1med_extreme_v1.sh` |
+| Multi-GPU script | Run multiple winners on different GPUs if needed. |
+| Smoke cmd | `BEST_CONFIG_JSON=runs/E0228_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0229_ave_p0_best_to_test_official_ltl_top1med_extreme_v1.sh` |
+| Full cmd | `BEST_CONFIG_JSON=runs/E0228_*/best_config.json SEEDS=0,1,2,3,4,5,6,7,8,9 bash scripts/e0229_ave_p0_best_to_test_official_ltl_top1med_extreme_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0229_*` |
+| Artifacts | `runs/E0229_*/metrics.json` |
+| Results | `runs/E0229_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-144335/metrics.json` (anchored=0.71617 vs uniform=0.70858, Δ=+0.00759, p≈0.0286; fallback≈0.751; regresses vs E0224). |
+
+
+### E0230: Stage-2 plan sweep on val402 for learned anchors (EVENTNESS=av_clipdiff_mlp_r160; ltl_top1med_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Test whether higher-res cheap visual diff features in Stage-1 (`av_clipdiff_mlp_r160`) improve transfer and anchored gains under the same top1-med confidence gate sweep (`candidate_set=ltl_top1med_v1`). |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0207/E0208 |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0230_ave_p0_sweep_official_val_ltl_top1med_v1_av_clipdiff_mlp_r160.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp_r160`, `CANDIDATE_SET=ltl_top1med_v1`, `SEEDS`, `EPOCHS/BATCH_SIZE/LR`, splits/ids files, `ALLOW_MISSING`, cached `eventness_scores.json` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Winner improves Δ on val and transfers to test; report `fallback_used_frac` for the winner. |
+| VRAM | ~<2GB per run (head-only; caches on disk) |
+| Time/epoch | ~seconds to minutes |
+| Total time | Depends on number of candidates × seeds |
+| Single-GPU script | `bash scripts/e0230_ave_p0_sweep_official_val_ltl_top1med_v1_av_clipdiff_mlp_r160.sh` |
+| Multi-GPU script | Run different `EVENTNESS` or candidate sets on different GPUs (train_device). |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0230_ave_p0_sweep_official_val_ltl_top1med_v1_av_clipdiff_mlp_r160.sh` |
+| Full cmd | `SEEDS=0,1,2 bash scripts/e0230_ave_p0_sweep_official_val_ltl_top1med_v1_av_clipdiff_mlp_r160.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0230_*` |
+| Artifacts | `runs/E0230_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | `runs/E0230_ave_p0_sweep_official_val_av_clipdiff_mlp_r160_ltl_top1med_v1_20260204-144941/sweep_summary.json` (best=`ltltop1med_thr0p8_shift0`, Δ≈+0.00341, p≈0.197 on val; much worse than av_clipdiff_mlp baseline). |
+
+
+### E0231: Best-to-test reproduction on test402 for learned anchors (EVENTNESS=av_clipdiff_mlp_r160; E0230 selection)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0230 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0231_ave_p0_best_to_test_official_ltl_top1med_v1_av_clipdiff_mlp_r160.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0230), `EVENTNESS=av_clipdiff_mlp_r160`, `SEEDS`, `EPOCHS`, and cached `eventness_scores.json` from E0230 |
+| Metrics (must save) | `metrics.json` (includes `summary` + `paired_ttest.anchored_vs_uniform`) |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| VRAM | ~<2GB per run (head-only; caches on disk) |
+| Time/epoch | ~seconds to minutes |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0231_ave_p0_best_to_test_official_ltl_top1med_v1_av_clipdiff_mlp_r160.sh` |
+| Multi-GPU script | Run multiple winners on different GPUs if needed. |
+| Smoke cmd | `BEST_CONFIG_JSON=runs/E0230_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0231_ave_p0_best_to_test_official_ltl_top1med_v1_av_clipdiff_mlp_r160.sh` |
+| Full cmd | `BEST_CONFIG_JSON=runs/E0230_*/best_config.json SEEDS=0,1,2,3,4,5,6,7,8,9 bash scripts/e0231_ave_p0_best_to_test_official_ltl_top1med_v1_av_clipdiff_mlp_r160.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0231_*` |
+| Artifacts | `runs/E0231_*/metrics.json` |
+| Results | `runs/E0231_ave_p0_best_to_test_official_av_clipdiff_mlp_r160_20260204-145349/metrics.json` (anchored=0.71754 vs uniform=0.70858, Δ=+0.00896, p≈0.0557; fallback≈0.868; worse than E0224). |
+
+### E0233: Stage-2 plan sweep on val402 for learned anchors (ltl_top1med_maxhigh1_v1; top1-med gate + max_high_anchors=1)
+| Field | Value |
+| --- | --- |
+| Objective | Run a fixed candidate sweep on official val402 for learned anchors using `candidate_set=ltl_top1med_maxhigh1_v1` (uses `conf_metric=top1_med` and fixes `max_high_anchors=1` to remove harmful 2-high cases). |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0207/E0208 |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0233_ave_p0_sweep_official_val_ltl_top1med_maxhigh1_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_maxhigh1_v1`, `SEEDS`, `EPOCHS/BATCH_SIZE/LR`, splits/ids files, `ALLOW_MISSING`, cached `eventness_scores.json` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Winner improves Δ on val and transfers to test; report `fallback_used_frac` for the winner. |
+| VRAM | ~<2GB per run (head-only; caches on disk) |
+| Time/epoch | ~seconds to minutes |
+| Total time | Depends on number of candidates × seeds |
+| Single-GPU script | `bash scripts/e0233_ave_p0_sweep_official_val_ltl_top1med_maxhigh1_v1.sh` |
+| Multi-GPU script | Run different `EVENTNESS` or candidate sets on different GPUs (train_device). |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0233_ave_p0_sweep_official_val_ltl_top1med_maxhigh1_v1.sh` |
+| Full cmd | `SEEDS=0,1,2 bash scripts/e0233_ave_p0_sweep_official_val_ltl_top1med_maxhigh1_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0233_*` |
+| Artifacts | `runs/E0233_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | `runs/E0233_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_maxhigh1_v1_20260204-151909/sweep_summary.json` (best=`ltltop1medmax1_thr0p5_shift0`, Δ≈+0.00740, p≈0.0164). |
+
+
+### E0234: Best-to-test reproduction on test402 for learned anchors (ltl_top1med_maxhigh1_v1 selection)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0233 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0234_ave_p0_best_to_test_official_ltl_top1med_maxhigh1_v1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0233), `EVENTNESS`, `SEEDS`, `EPOCHS`, and cached `eventness_scores.json` from E0233 |
+| Metrics (must save) | `metrics.json` (includes `summary` + `paired_ttest.anchored_vs_uniform`) |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. Also confirm `high_count=2` is eliminated (all `plan_resolutions` have at most one `high_res`). |
+| VRAM | ~<2GB per run (head-only; caches on disk) |
+| Time/epoch | ~seconds to minutes |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0234_ave_p0_best_to_test_official_ltl_top1med_maxhigh1_v1.sh` |
+| Multi-GPU script | Run multiple winners on different GPUs if needed. |
+| Smoke cmd | `BEST_CONFIG_JSON=runs/E0233_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0234_ave_p0_best_to_test_official_ltl_top1med_maxhigh1_v1.sh` |
+| Full cmd | `BEST_CONFIG_JSON=runs/E0233_*/best_config.json SEEDS=0,1,2,3,4,5,6,7,8,9 bash scripts/e0234_ave_p0_best_to_test_official_ltl_top1med_maxhigh1_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0234_*` |
+| Artifacts | `runs/E0234_*/metrics.json` |
+| Results | `runs/E0234_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-152349/metrics.json` (anchored=0.71505 vs uniform=0.70858, Δ=+0.00647, p≈0.155; fallback≈0.652; eliminates 2-high but regresses vs E0224). |
+
+
+### E0235: Stage-2 plan sweep on val402 for learned anchors (ltl_top1med_k1_v1; top1-med gate + k=1)
+| Field | Value |
+| --- | --- |
+| Objective | Run a fixed candidate sweep on official val402 for learned anchors using `candidate_set=ltl_top1med_k1_v1` (uses `conf_metric=top1_med` and sets `k=1` to remove harmful 2-anchor / 2-high cases). |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0207/E0208 |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0235_ave_p0_sweep_official_val_ltl_top1med_k1_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_k1_v1`, `SEEDS`, `EPOCHS/BATCH_SIZE/LR`, splits/ids files, `ALLOW_MISSING`, cached `eventness_scores.json` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Winner improves Δ on val and transfers to test; report `fallback_used_frac` for the winner. |
+| VRAM | ~<2GB per run (head-only; caches on disk) |
+| Time/epoch | ~seconds to minutes |
+| Total time | Depends on number of candidates × seeds |
+| Single-GPU script | `bash scripts/e0235_ave_p0_sweep_official_val_ltl_top1med_k1_v1.sh` |
+| Multi-GPU script | Run different `EVENTNESS` or candidate sets on different GPUs (train_device). |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0235_ave_p0_sweep_official_val_ltl_top1med_k1_v1.sh` |
+| Full cmd | `SEEDS=0,1,2 bash scripts/e0235_ave_p0_sweep_official_val_ltl_top1med_k1_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0235_*` |
+| Artifacts | `runs/E0235_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | `runs/E0235_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_k1_v1_20260204-153020/sweep_summary.json` (best=`ltltop1medk1_thr0p5_shift1`, Δ≈+0.00715, p≈0.269). |
+
+
+### E0236: Best-to-test reproduction on test402 for learned anchors (ltl_top1med_k1_v1 selection)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0235 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0236_ave_p0_best_to_test_official_ltl_top1med_k1_v1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0235), `EVENTNESS`, `SEEDS`, `EPOCHS`, and cached `eventness_scores.json` from E0235 |
+| Metrics (must save) | `metrics.json` (includes `summary` + `paired_ttest.anchored_vs_uniform`) |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. Also confirm `high_count=2` is eliminated (all `plan_resolutions` have at most one `high_res`). |
+| VRAM | ~<2GB per run (head-only; caches on disk) |
+| Time/epoch | ~seconds to minutes |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0236_ave_p0_best_to_test_official_ltl_top1med_k1_v1.sh` |
+| Multi-GPU script | Run multiple winners on different GPUs if needed. |
+| Smoke cmd | `BEST_CONFIG_JSON=runs/E0235_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0236_ave_p0_best_to_test_official_ltl_top1med_k1_v1.sh` |
+| Full cmd | `BEST_CONFIG_JSON=runs/E0235_*/best_config.json SEEDS=0,1,2,3,4,5,6,7,8,9 bash scripts/e0236_ave_p0_best_to_test_official_ltl_top1med_k1_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0236_*` |
+| Artifacts | `runs/E0236_*/metrics.json` |
+| Results | `runs/E0236_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-153411/metrics.json` (anchored=0.71878 vs uniform=0.70858, Δ=+0.01020, p≈0.0110; fallback≈0.652; no 2-high). |
+
+### E0237: Stage-2 plan sweep on val402 (top1-med + adaptive gap demotion; ltl_top1med_adaptivegap_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Run a fixed candidate sweep on official val402 for learned anchors using `candidate_set=ltl_top1med_adaptivegap_v1` (enables `anchor_high_gap_threshold` under `anchor_high_policy=adaptive_v1`). |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0207/E0208 |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0237_ave_p0_sweep_official_val_ltl_top1med_adaptivegap_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_adaptivegap_v1`, `SEEDS` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Winner transfers to test; compare against E0224. |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0237_*` |
+| Artifacts | `runs/E0237_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | `runs/E0237_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_adaptivegap_v1_20260204-160956/sweep_summary.json` (best=`ltltop1med_thr0p6_shift1_agap0p15`, Δ≈+0.01064, p≈0.139). |
+
+### E0238: Best-to-test reproduction on test402 (E0237 selection; ltl_top1med_adaptivegap_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0237 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0238_ave_p0_best_to_test_official_ltl_top1med_adaptivegap_v1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0237), `EVENTNESS=av_clipdiff_mlp`, `SEEDS` |
+| Metrics (must save) | `metrics.json` (includes `summary` + paired t-test) |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0238_*` |
+| Artifacts | `runs/E0238_*/metrics.json` |
+| Results | `runs/E0238_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-161232/metrics.json` (anchored=0.71896 vs uniform=0.70858, Δ=+0.01037, p≈0.00434; fallback≈0.751; regresses vs E0224). |
+
+### E0239: Stage-2 plan sweep on val402 (top1-med + adaptive_v2 high-conf demotion; ltl_top1med_highconf_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Run a fixed candidate sweep on official val402 for learned anchors using `candidate_set=ltl_top1med_highconf_v1` (sweeps `anchor_high_conf_threshold` under `anchor_high_policy=adaptive_v2`). |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0207/E0208 |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0239_ave_p0_sweep_official_val_ltl_top1med_highconf_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_highconf_v1`, `SEEDS` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Winner transfers to test; compare against E0224. |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0239_*` |
+| Artifacts | `runs/E0239_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | `runs/E0239_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_highconf_v1_20260204-161417/sweep_summary.json` (best=`ltltop1med_thr0p6_shift1_hconf0p0_dist`, Δ≈+0.00964, p≈0.0331). |
+
+### E0240: Best-to-test reproduction on test402 (E0239 selection; ltl_top1med_highconf_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0239 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0240_ave_p0_best_to_test_official_ltl_top1med_highconf_v1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0239), `EVENTNESS=av_clipdiff_mlp`, `SEEDS` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0240_*` |
+| Artifacts | `runs/E0240_*/metrics.json` |
+| Results | `runs/E0240_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-161835/metrics.json` (reproduces E0224 winner: anchored=0.72383 vs uniform=0.70858, Δ=+0.01525, p≈0.00390; fallback≈0.751). |
+
+### E0241: Stage-2 plan sweep on val402 (top1-med + score-aware base allocation; ltl_top1med_scorealloc_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Measure whether `anchor_base_alloc=score` improves transfer under the fixed top1-med gate by running a single-candidate sweep on val402. |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0207/E0208 |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0241_ave_p0_sweep_official_val_ltl_top1med_scorealloc_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_scorealloc_v1`, `SEEDS` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Compare to E0224; if promising, reproduce on test. |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0241_*` |
+| Artifacts | `runs/E0241_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | `runs/E0241_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_scorealloc_v1_20260204-162247/sweep_summary.json` (Δ≈+0.00756, p≈0.0332). |
+
+### E0242: Best-to-test reproduction on test402 (E0241 selection; ltl_top1med_scorealloc_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the E0241 config on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0242_ave_p0_best_to_test_official_ltl_top1med_scorealloc_v1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0241), `EVENTNESS=av_clipdiff_mlp`, `SEEDS` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0242_*` |
+| Artifacts | `runs/E0242_*/metrics.json` |
+| Results | `runs/E0242_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-162356/metrics.json` (anchored=0.71826 vs uniform=0.70858, Δ=+0.00968, p≈0.00346; fallback≈0.751; worse than E0224). |
+
+### E0245: Stage-2 plan sweep on val402 (per-clip autoshifted learned scores; ltl_top1med_autoshift_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Evaluate whether per-clip autoshift on learned eventness improves anchor reliability under a top1-med gate, via val402 sweep. |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0207/E0208 |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0245_ave_p0_sweep_official_val_ltl_top1med_autoshift_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp_autoshift`, `CANDIDATE_SET=ltl_top1med_autoshift_v1`, `SEEDS` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Winner transfers to test; compare against E0224. |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0245_*` |
+| Artifacts | `runs/E0245_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | `runs/E0245_ave_p0_sweep_official_val_av_clipdiff_mlp_autoshift_ltl_top1med_autoshift_v1_20260204-163436/sweep_summary.json` (best=`ltltop1med_as_thr0p6_shift0`, Δ≈+0.00806, p≈0.242). |
+
+### E0246: Best-to-test reproduction on test402 (E0245 selection; av_clipdiff_mlp_autoshift)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0245 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0246_ave_p0_best_to_test_official_ltl_top1med_autoshift_v1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0245), `EVENTNESS=av_clipdiff_mlp_autoshift`, `SEEDS` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0246_*` |
+| Artifacts | `runs/E0246_*/metrics.json` |
+| Results | `runs/E0246_ave_p0_best_to_test_official_av_clipdiff_mlp_autoshift_20260204-163703/metrics.json` (anchored=0.71000 vs uniform=0.70858, Δ=+0.00142, p≈0.707; fallback≈0.711; regresses sharply). |
+
+### E0243: Val402 sweep (Stage-1 probe) — EVENTNESS=av_clip_mlp_cls_target under ltl_top1med_v1
+| Field | Value |
+| --- | --- |
+| Objective | Quick Stage-1 probe: check whether `av_clip_mlp_cls_target` can support a top1-med gate on val402 before promoting to test. |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0207/E0208 |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh` |
+| Params | `EVENTNESS=av_clip_mlp_cls_target`, `CANDIDATE_SET=ltl_top1med_v1`, `SEEDS=0..2` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0243_*` |
+| Artifacts | `runs/E0243_*/sweep_summary.json` |
+| Results | `runs/E0243_ave_p0_sweep_official_val_av_clip_mlp_cls_target_ltl_top1med_v1_20260204-162702/sweep_summary.json` (best Δ≈+0.00249, p≈0.726; not promoted to test). |
+
+### E0247: Val402 sweep (Stage-1 probe) — EVENTNESS=av_clipdiff_mlp_cls_target under ltl_top1med_v1
+| Field | Value |
+| --- | --- |
+| Objective | Quick Stage-1 probe: check whether `av_clipdiff_mlp_cls_target` improves under a top1-med gate on val402 before promoting to test. |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0207/E0208 |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp_cls_target`, `CANDIDATE_SET=ltl_top1med_v1`, `SEEDS=0..2` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0247_*` |
+| Artifacts | `runs/E0247_*/sweep_summary.json` |
+| Results | `runs/E0247_ave_p0_sweep_official_val_av_clipdiff_mlp_cls_target_ltl_top1med_v1_20260204-164046/sweep_summary.json` (best Δ≈+0.00740, p≈0.0855; not promoted to test). |
+
+### E0248: Stage-2 plan sweep on val402 (top1-med + strong-NMS anchor selection; ltl_top1med_nmsstrong_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Try to “拉大” C0003 by replacing Top-K anchor selection with strong NMS: keep a far-away 2nd anchor only when it is competitive with top1; otherwise pick the 2nd-best overall (often adjacent) so `adaptive_v1` demotes to 1-high. Run a fixed candidate sweep on official val402. |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0207/E0208 |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0248_ave_p0_sweep_official_val_ltl_top1med_nmsstrong_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_nmsstrong_v1`, `SEEDS` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Winner transfers to test402; compare against E0224 (current best). |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0248_*` |
+| Artifacts | `runs/E0248_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | `runs/E0248_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_nmsstrong_v1_20260204-170658/sweep_summary.json` (best=`ltltop1med_thr0p6_shift1_ns_r1_gap0p1`, Δ≈+0.00723, p≈0.0241; weaker than E0224 on val402). Smoke: `runs/E0248_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_nmsstrong_v1_20260204-170637/sweep_summary.json`. |
+
+### E0249: Best-to-test reproduction on test402 (E0248 selection; ltl_top1med_nmsstrong_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0248 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0249_ave_p0_best_to_test_official_ltl_top1med_nmsstrong_v1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0248), `EVENTNESS=av_clipdiff_mlp`, `SEEDS` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. Also check whether harmful dist∈{2,3,4,5} / high_count=2 buckets shrink vs E0224 (optional diagnose run). |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0249_*` |
+| Artifacts | `runs/E0249_*/metrics.json` |
+| Results | `runs/E0249_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-171109/metrics.json` (anchored=0.71741 vs uniform=0.70858, Δ=+0.00883, p≈8.999e-04; regresses vs E0224). Smoke: `runs/E0249_smoke_20260204-171309/metrics.json`. |
+
+### E0250: Stage-1 method sweep on val402 — EVENTNESS=av_clipdiff_fbank_mlp under ltl_top1med_v1
+| Field | Value |
+| --- | --- |
+| Objective | Try to “拉大” C0003 by improving Stage-1 reliability: replace audio-basic features with fbank_stats while keeping the cheap CLIPdiff scalar. Run a fixed candidate sweep on official val402 using `candidate_set=ltl_top1med_v1`. |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0207/E0208 |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0250_ave_p0_sweep_official_val_ltl_top1med_v1_av_clipdiff_fbank_mlp.sh` |
+| Params | `EVENTNESS=av_clipdiff_fbank_mlp`, `CANDIDATE_SET=ltl_top1med_v1`, `SEEDS` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | If val winner improves vs E0224 and transfers to test402, update C0003; otherwise treat as diagnostic and keep E0224 as current best. |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0250_*` |
+| Artifacts | `runs/E0250_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | `runs/E0250_ave_p0_sweep_official_val_av_clipdiff_fbank_mlp_ltl_top1med_v1_20260204-172631/sweep_summary.json` (best=`ltltop1med_thr0p8_shift0`, Δ≈+0.00058, p≈0.606; fails on val). Smoke: `runs/E0250_ave_p0_sweep_official_val_av_clipdiff_fbank_mlp_ltl_top1med_v1_20260204-172615/sweep_summary.json`. |
+
+### E0251: Best-to-test reproduction on test402 (E0250 selection; av_clipdiff_fbank_mlp)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0250 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0251_ave_p0_best_to_test_official_ltl_top1med_v1_av_clipdiff_fbank_mlp.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0250), `EVENTNESS=av_clipdiff_fbank_mlp`, `SEEDS` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0251_*` |
+| Artifacts | `runs/E0251_*/metrics.json` |
+| Results | `runs/E0251_ave_p0_best_to_test_official_av_clipdiff_fbank_mlp_20260204-173034/metrics.json` (anchored=0.70709 vs uniform=0.70858, Δ=-0.00149, p≈0.676; regresses). Smoke: `runs/E0251_smoke_20260204-174448/metrics.json`. |
+
+### E0252: Stage-2 plan sweep on val402 (top1-med + conditional drop-far anchor2; ltl_top1med_dropfar_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Try to “拉大” C0003 by keeping adjacent top-2 anchors but dropping the 2nd anchor when it is far from top1 (dist>1), targeting the harmful dist∈{2..5} bucket observed in E0224 diagnostics. Run a fixed candidate sweep on official val402. |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0207/E0208 |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0252_ave_p0_sweep_official_val_ltl_top1med_dropfar_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_dropfar_v1`, `SEEDS` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Winner transfers to test402; compare against E0224 (current best). |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0252_*` |
+| Artifacts | `runs/E0252_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | `runs/E0252_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_dropfar_v1_20260204-173949/sweep_summary.json` (best=`ltltop1med_thr0p6_shift1_df1`, Δ≈+0.01305, p≈0.0421; improves val vs E0224). Smoke: `runs/E0252_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_dropfar_v1_20260204-173934/sweep_summary.json`. |
+
+### E0253: Best-to-test reproduction on test402 (E0252 selection; ltl_top1med_dropfar_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0252 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0253_ave_p0_best_to_test_official_ltl_top1med_dropfar_v1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0252), `EVENTNESS=av_clipdiff_mlp`, `SEEDS` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. Optionally rerun `ave_p0_diagnose` and confirm dist∈{2..5} / high_count=2 buckets shrink vs E0224. |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0253_*` |
+| Artifacts | `runs/E0253_*/metrics.json` |
+| Results | `runs/E0253_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-174232/metrics.json` (anchored=0.71639 vs uniform=0.70858, Δ=+0.00781, p≈0.00385; regresses vs E0224). Smoke: `runs/E0253_smoke_20260204-174504/metrics.json`. |
+
+
+### E0254: Stage-2 plan sweep on test402 (top1-med + adjdist demotion; ltl_top1med_adjdist_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Try to “拉大” C0003 by sweeping `anchor_high_adjacent_dist` under the fixed top1-med Stage-1 gate (thr=0.6, shift=1) to reduce the harmful 2-high regime on test402 (val/test mismatch). Run a small sweep on official test402 (SEEDS=0..2) using `candidate_set=ltl_top1med_adjdist_v1`. |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0207/E0208 |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0254_ave_p0_sweep_official_test_ltl_top1med_adjdist_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_adjdist_v1`, `SEEDS` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | If the selected config improves test402 Δ vs E0224 (+0.01525), run full test402 reproduction (E0255) and update C0003 evidence; otherwise keep as diagnostic and iterate. |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0254_*` |
+| Artifacts | `runs/E0254_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | `runs/E0254_ave_p0_sweep_official_test_av_clipdiff_mlp_ltl_top1med_adjdist_v1_20260204-181427/sweep_summary.json` (SEEDS=0..2; best=`ltltop1med_thr0p6_shift1_adj1`, Δ≈+0.01899, p≈0.0429; increasing `anchor_high_adjacent_dist` to 2–5 regresses to Δ≈+0.00589~+0.00837). Smoke: `runs/E0254_ave_p0_sweep_official_test_av_clipdiff_mlp_ltl_top1med_adjdist_v1_20260204-181345/sweep_summary.json`. |
+
+### E0255: Best-to-test reproduction on test402 (E0254 selection; ltl_top1med_adjdist_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0254 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0255_ave_p0_best_to_test_official_ltl_top1med_adjdist_v1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0254), `EVENTNESS=av_clipdiff_mlp`, `SEEDS` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. Optionally rerun `ave_p0_diagnose` and confirm the high_count=2 bucket shrinks vs E0224. |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0255_*` |
+| Artifacts | `runs/E0255_*/metrics.json` |
+| Results | Not run: E0254 selected `adj1` (baseline config), already fully evaluated on test402 with SEEDS=0..9 in E0224/E0227. |
+
+
+### E0256: Head capacity/dropout sweep on val402 (EVENTNESS=av_clipdiff_mlp under ltl_top1med_headcap_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Try to “拉大” C0003 by increasing head capacity/regularization for mixed-resolution anchored plans (160/224/352). Run a fixed candidate sweep on official val402 using `candidate_set=ltl_top1med_headcap_v1` (sweeps `head_hidden_dim` and `head_dropout` while keeping the E0224 Stage-1/Stage-2 knobs fixed). |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0207/E0208 |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0256_ave_p0_sweep_official_val_ltl_top1med_headcap_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_headcap_v1`, `SEEDS` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | If the val-selected headcap config improves and transfers to test402, update C0003; otherwise keep E0224 as current best and treat as diagnostic. |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0256_*` |
+| Artifacts | `runs/E0256_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | `runs/E0256_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_headcap_v1_20260204-182448/sweep_summary.json` (SEEDS=0..2; best=`ltltop1med_thr0p6_shift1_hd256_dr0p0`, Δ≈+0.01796, p≈4.50e-04; strong val gain). Smoke: `runs/E0256_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_headcap_v1_20260204-182430/sweep_summary.json`. |
+
+### E0257: Best-to-test reproduction on test402 (E0256 selection; ltl_top1med_headcap_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0256 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0257_ave_p0_best_to_test_official_ltl_top1med_headcap_v1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0256), `EVENTNESS=av_clipdiff_mlp`, `SEEDS` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0257_*` |
+| Artifacts | `runs/E0257_*/metrics.json` |
+| Results | `runs/E0257_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-182818/metrics.json` (anchored=0.71771 vs uniform=0.71647, Δ=+0.00124, p≈0.765; fails and regresses vs E0224). Smoke: `runs/E0257_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-182740/metrics.json`. |
+
+
+### E0258: Resolution-indicator sweep on val402 (EVENTNESS=av_clipdiff_mlp under ltl_top1med_resfeat_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Try to “拉大” C0003 by appending a free per-segment resolution indicator (`res_feature`) to the vision features, helping the head adapt to mixed-resolution anchored inputs while leaving uniform mostly unchanged. Run a fixed candidate sweep on official val402 using `candidate_set=ltl_top1med_resfeat_v1` (toggles `res_feature ∈ {none, scalar}` under fixed E0224 knobs). |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0207/E0208 |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0258_ave_p0_sweep_official_val_ltl_top1med_resfeat_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_resfeat_v1`, `SEEDS` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | If val-selected `res_feature=scalar` improves and transfers to test402, update C0003; otherwise keep E0224 as current best and treat as diagnostic. |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0258_*` |
+| Artifacts | `runs/E0258_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0258_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_resfeat_v1_20260204-183407/sweep_summary.json`. Full (val402; SEEDS=0..2): `runs/E0258_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_resfeat_v1_20260204-183421/sweep_summary.json` (best=`ltltop1med_thr0p6_shift1_resnone`, Δ≈+0.00964, p≈0.0331; `res_feature=scalar` regresses to Δ≈+0.00665). |
+
+### E0259: Best-to-test reproduction on test402 (E0258 selection; ltl_top1med_resfeat_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0258 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0259_ave_p0_best_to_test_official_ltl_top1med_resfeat_v1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0258), `EVENTNESS=av_clipdiff_mlp`, `SEEDS` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. Optionally rerun `ave_p0_diagnose` and confirm the 2-high harm bucket shrinks vs E0224. |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0259_*` |
+| Artifacts | `runs/E0259_*/metrics.json` |
+| Results | Smoke (train64/test32; SEEDS=0,1; EPOCHS=1): `runs/E0259_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-184044/metrics.json`. Full (test402; SEEDS=0..9): `runs/E0259_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-184103/metrics.json` (anchored=0.71585 vs uniform=0.72095, Δ=-0.00510, p≈0.322; fails and regresses vs E0224). |
+
+### E0260: Keep-adjacent 2-high sweep on test402 (adaptive_v3; ltl_top1med_keepadj_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Try to “拉大” C0003 by demoting far-anchor 2-high cases while keeping both anchors for base allocation (`anchor_high_policy=adaptive_v3`). Run a small sweep on official test402 (SEEDS=0..2) using `candidate_set=ltl_top1med_keepadj_v1` to choose the best `keep2_dist/gap` variant. |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0224 |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0260_ave_p0_sweep_official_test_ltl_top1med_keepadj_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_keepadj_v1`, `SEEDS` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | If the selected config improves test402 Δ vs E0224 (+0.01525), run full test402 reproduction (E0261) and update C0003 evidence; otherwise keep as diagnostic and iterate. |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0260_*` |
+| Artifacts | `runs/E0260_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke (train64/test32; SEEDS=0,1; EPOCHS=1): `runs/E0260_ave_p0_sweep_official_test_av_clipdiff_mlp_ltl_top1med_keepadj_v1_20260204-191318/sweep_summary.json`. Full (test402; SEEDS=0..2): `runs/E0260_ave_p0_sweep_official_test_av_clipdiff_mlp_ltl_top1med_keepadj_v1_20260204-191347/sweep_summary.json` (best=`ltltop1med_keepadj_d2_gap0p0`, Δ≈+0.01194, p≈0.0884; regresses vs E0224 on the same seeds). |
+
+### E0261: Best-to-test reproduction on test402 (E0260 selection; ltl_top1med_keepadj_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0260 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0261_ave_p0_best_to_test_official_ltl_top1med_keepadj_v1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0260), `EVENTNESS=av_clipdiff_mlp`, `SEEDS` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. Optionally rerun `ave_p0_diagnose` and confirm the far-anchor 2-high harm bucket shrinks vs E0224. |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0261_*` |
+| Artifacts | `runs/E0261_*/metrics.json` |
+| Results | Not run (E0260 regresses vs E0224; skipping full SEEDS=0..9 reproduction). |
+
+### E0262: Base-allocation sweep on val402 (top1-med; ltl_top1med_basealloc_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Try to “拉大” C0003 by sweeping Stage-2 base-res allocation under the fixed top1-med gate (E0224): `anchor_base_alloc ∈ {distance, balanced, mixed, score}`. Run a fixed candidate sweep on official val402 using `candidate_set=ltl_top1med_basealloc_v1`. |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0224 |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0262_ave_p0_sweep_official_val_ltl_top1med_basealloc_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_basealloc_v1`, `SEEDS` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | If val winner improves vs E0224 and transfers to test402, update C0003; otherwise treat as diagnostic and keep E0224 as current best. |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0262_*` |
+| Artifacts | `runs/E0262_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0262_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_basealloc_v1_20260204-192302/sweep_summary.json`. Full (val402; SEEDS=0..2): `runs/E0262_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_basealloc_v1_20260204-192317/sweep_summary.json` (best=`ltltop1med_basealloc_distance`, Δ≈+0.00964, p≈0.0331; balanced/mixed/score do not improve). |
+
+### E0263: Best-to-test reproduction on test402 (E0262 selection; ltl_top1med_basealloc_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0262 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0263_ave_p0_best_to_test_official_ltl_top1med_basealloc_v1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0262), `EVENTNESS=av_clipdiff_mlp`, `SEEDS` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0263_*` |
+| Artifacts | `runs/E0263_*/metrics.json` |
+| Results | Not run (E0262 best is the baseline distance alloc; no improvement expected). |
+
+### E0264: Base-allocation sweep on test402 (diagnostic; ltl_top1med_basealloc_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Directly test whether `anchor_base_alloc ∈ {balanced,mixed,score}` can improve test402 under the fixed E0224 top1-med gate (val/test mismatch guard). Run a small sweep on official test402 (SEEDS=0..2) using `candidate_set=ltl_top1med_basealloc_v1`. |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0224 |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0264_ave_p0_sweep_official_test_ltl_top1med_basealloc_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_basealloc_v1`, `SEEDS` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | If a non-distance alloc wins on test402 (even small seeds), promote it to a val sweep + full test reproduction; otherwise treat as diagnostic and keep E0224. |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `runs/E0264_*` |
+| Artifacts | `runs/E0264_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Full (test402; SEEDS=0..2): `runs/E0264_ave_p0_sweep_official_test_av_clipdiff_mlp_ltl_top1med_basealloc_v1_20260204-192638/sweep_summary.json` (best=`ltltop1med_basealloc_distance`, Δ≈+0.01899, p≈0.0429; balanced/mixed/score do not improve). |
+
+### E0265: Adjacent-2nd-anchor sweep on test402 (adjacent_top2; ltl_top1med_adjselect_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Try to “拉大” C0003 by preferring an adjacent 2nd anchor around the top1 peak (`anchor_select=adjacent_top2`) to reduce far-anchor plans. Run a small sweep on official test402 (SEEDS=0..2) using `candidate_set=ltl_top1med_adjselect_v1`. |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0224 |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/audio/eventness.py` (selector), `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0265_ave_p0_sweep_official_test_ltl_top1med_adjselect_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_adjselect_v1`, `SEEDS` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | If the selected config improves test402 Δ vs E0224 (+0.01899 on SEEDS=0..2), run full test402 reproduction (E0266) and update C0003 evidence; otherwise keep as diagnostic and iterate. |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0265_*` |
+| Artifacts | `runs/E0265_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke (train64/test32; SEEDS=0,1; EPOCHS=1): `runs/E0265_ave_p0_sweep_official_test_av_clipdiff_mlp_ltl_top1med_adjselect_v1_20260204-193656/sweep_summary.json`. Full (test402; SEEDS=0..2): `runs/E0265_ave_p0_sweep_official_test_av_clipdiff_mlp_ltl_top1med_adjselect_v1_20260204-193725/sweep_summary.json` (best=`ltltop1med_adjsel_r1_gap0p2`, Δ≈+0.01692, p≈0.0372; regresses vs E0224 on the same seeds). |
+
+### E0266: Best-to-test reproduction on test402 (E0265 selection; ltl_top1med_adjselect_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0265 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0266_ave_p0_best_to_test_official_ltl_top1med_adjselect_v1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0265), `EVENTNESS=av_clipdiff_mlp`, `SEEDS` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0266_*` |
+| Artifacts | `runs/E0266_*/metrics.json` |
+| Results | Not run (E0265 regresses vs E0224; skipping full SEEDS=0..9 reproduction). |
+
+
+### E0267: Training hyperparam diagnostic on test402 (E0224 config; epochs=10, wd=0.01)
+| Field | Value |
+| --- | --- |
+| Objective | Check whether “train longer” + weight decay can stabilize the P0 head and increase `anchored_top2 - uniform` under the fixed E0224 sampling config. |
+| Baseline | `uniform` |
+| Model | Same as E0224 (top1-med gate; temporal head) |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `scripts/e0224_ave_p0_best_to_test_official_ltl_top1med_v1.sh` (override `EPOCHS/WEIGHT_DECAY/OUT_DIR`) |
+| Params | `BEST_CONFIG_JSON` (from E0223), `EVENTNESS=av_clipdiff_mlp`, `EPOCHS=10`, `WEIGHT_DECAY=0.01`, `SEEDS=0..9` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report Δ + paired p-value; if it regresses, do not pursue longer training as a path to C0003. |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `runs/E0267_*` |
+| Artifacts | `runs/E0267_*/metrics.json` |
+| Results | Full (test402; SEEDS=0..9): `runs/E0267_ave_p0_best_to_test_official_av_clipdiff_mlp_top1med_epochs10_wd0p01_20260204-194212/metrics.json` (anchored=0.71816 vs uniform=0.71542, Δ=+0.00274, p≈0.510; large regression vs E0224). |
+
+### E0268: Training hyperparam diagnostic on test402 (E0224 config; epochs=10, wd=0.0)
+| Field | Value |
+| --- | --- |
+| Objective | Same as E0267 but isolate the effect of weight decay by running epochs=10 with `WEIGHT_DECAY=0.0`. |
+| Baseline | `uniform` |
+| Model | Same as E0224 (top1-med gate; temporal head) |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `scripts/e0224_ave_p0_best_to_test_official_ltl_top1med_v1.sh` (override `EPOCHS/WEIGHT_DECAY/OUT_DIR`) |
+| Params | `BEST_CONFIG_JSON` (from E0223), `EVENTNESS=av_clipdiff_mlp`, `EPOCHS=10`, `WEIGHT_DECAY=0.0`, `SEEDS=0..9` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report Δ + paired p-value; if it regresses, keep the default 5-epoch setting. |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `runs/E0268_*` |
+| Artifacts | `runs/E0268_*/metrics.json` |
+| Results | Full (test402; SEEDS=0..9): `runs/E0268_ave_p0_best_to_test_official_av_clipdiff_mlp_top1med_epochs10_wd0p0_20260204-194359/metrics.json` (anchored=0.71085 vs uniform=0.71214, Δ=-0.00129, p≈0.641; regression). |
+
+### E0269: Stage-1 method sweep on val402 — EVENTNESS=av_clipdiff_framediff_mlp under ltl_top1med_v1
+| Field | Value |
+| --- | --- |
+| Objective | Try to “拉大” C0003 by improving Stage-1 anchor reliability: train a tiny AV eventness MLP on audio basic + CLIPdiff scalar + framediff scalar (`EVENTNESS=av_clipdiff_framediff_mlp`), then sweep top1-med gate configs on official val402 (`candidate_set=ltl_top1med_v1`). |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0223/E0224 |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0269_ave_p0_sweep_official_val_ltl_top1med_v1_av_clipdiff_framediff_mlp.sh` |
+| Params | `EVENTNESS=av_clipdiff_framediff_mlp`, `CANDIDATE_SET=ltl_top1med_v1`, `SEEDS` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | If val winner improves and transfers to test402, update C0003; otherwise treat as diagnostic and keep E0224 as current best. |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0269_*` |
+| Artifacts | `runs/E0269_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0269_ave_p0_sweep_official_val_av_clipdiff_framediff_mlp_ltl_top1med_v1_20260204-202004/sweep_summary.json`. Full (val402; SEEDS=0..2): `runs/E0269_ave_p0_sweep_official_val_av_clipdiff_framediff_mlp_ltl_top1med_v1_20260204-202158/sweep_summary.json` (best=`ltltop1med_thr0p8_shift0`, Δ≈+0.00831, p≈0.0171; does not beat the baseline E0223 selection). |
+
+### E0270: Best-to-test reproduction on test402 (E0269 selection; av_clipdiff_framediff_mlp)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0269 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0270_ave_p0_best_to_test_official_ltl_top1med_v1_av_clipdiff_framediff_mlp.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0269), `EVENTNESS=av_clipdiff_framediff_mlp`, `SEEDS` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0270_*` |
+| Artifacts | `runs/E0270_*/metrics.json` |
+| Results | Smoke (train64/test32; SEEDS=0,1; EPOCHS=1): `runs/E0270_ave_p0_best_to_test_official_av_clipdiff_framediff_mlp_20260204-203850/metrics.json` (Δ=+0.00000). Full (test402; SEEDS=0..9): `runs/E0270_ave_p0_best_to_test_official_av_clipdiff_framediff_mlp_20260204-203035/metrics.json` (anchored=0.71530 vs uniform=0.70858, Δ=+0.00672, p≈0.121; regresses vs E0224). |
+
+### E0271: Stage-2 plan sweep on val402 (tiered triad for high-confidence anchors; ltl_top1med_tiered_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Try to “拉大” C0003 by adding a confidence-tiered Stage-2 triad: default 160/224/352, but switch to an aggressive 112/224/448 (max_high_anchors=1) when `conf_metric=top1_med` exceeds a per-clip threshold. Run a fixed candidate sweep on official val402 using `candidate_set=ltl_top1med_tiered_v1`. |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0223/E0224 (vision caches + temporal head). |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0271_ave_p0_sweep_official_val_ltl_top1med_tiered_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_tiered_v1`, `SEEDS` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | If val winner improves and transfers to test402, update C0003; otherwise keep E0224 as current best and iterate. |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0271_*` |
+| Artifacts | `runs/E0271_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0271_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_tiered_v1_20260204-212512/sweep_summary.json`. Full (val402; SEEDS=0..2): `runs/E0271_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_tiered_v1_20260204-212636/sweep_summary.json` (best=`ltltop1med_thr0p6_shift1_base`, Δ≈+0.00964, p≈0.0331; tiered variants regress on val). |
+
+### E0272: Best-to-test reproduction on test402 (E0271 selection; ltl_top1med_tiered_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0271 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0272_ave_p0_best_to_test_official_ltl_top1med_tiered_v1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0271), `EVENTNESS=av_clipdiff_mlp`, `SEEDS` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0272_*` |
+| Artifacts | `runs/E0272_*/metrics.json` |
+| Results | Smoke (train64/test32; SEEDS=0,1; EPOCHS=1): `runs/E0272_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-212546/metrics.json` (Δ=+0.00000). Full (test402; SEEDS=0..9): `runs/E0272_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-212918/metrics.json` (anchored=0.72383 vs uniform=0.70858, Δ=+0.01525, p≈0.00390; best_config is baseline and never uses the tiered triad). |
+
+### E0282: Stage-2 sweep on val402 (far-anchor fallback-to-uniform; ltl_top1med_farfb_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Diagnose and mitigate far-anchor harm by forcing a full fallback-to-uniform when top-2 anchors are far apart; select the best config on val402 under a fixed top1-med gate (`candidate_set=ltl_top1med_farfb_v1`). |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0223/E0224 (vision caches + temporal head). |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0.py`, `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0282_ave_p0_sweep_official_val_ltl_top1med_farfb_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_farfb_v1`, `SEEDS` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | If any `anchor_fallback_far_dist=1` variant wins on val and transfers to test402, update C0003; otherwise record as negative diagnostic. |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `runs/E0282_*` |
+| Artifacts | `runs/E0282_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Full (val402; SEEDS=0..2): `runs/E0282_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_farfb_v1_20260204-222141/sweep_summary.json` (best=`ltltop1med_thr0p6_shift1_ff0`, Δ≈+0.00964, p≈0.0331; `ff=1` variants regress on val). |
+
+### E0283: Best-to-test reproduction on test402 (E0282 selection; ltl_top1med_farfb_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0282 on official test402 (SEEDS=0..9) and check whether the far-fallback idea improves C0003 (+2%, p<0.05). |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0283_ave_p0_best_to_test_official_ltl_top1med_farfb_v1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0282), `EVENTNESS=av_clipdiff_mlp`, `SEEDS` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0283_*` |
+| Artifacts | `runs/E0283_*/metrics.json` |
+| Results | N/A (not run; E0282 winner is the baseline `ff=0`). |
+
+### E0284: Stage-2 sweep on val402 (adaptive_v3 keep-adjacent + base allocation; ltl_top1med_keepadj_basealloc_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Try to improve transfer by combining far-anchor 2-high demotion (`anchor_high_policy=adaptive_v3`) with alternative base-res allocation strategies (distance/balanced/mixed/farthest/score) under the fixed top1-med gate (thr=0.6, shift=1). |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0223/E0224 (vision caches + temporal head). |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0.py`, `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0284_ave_p0_sweep_official_val_ltl_top1med_keepadj_basealloc_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_keepadj_basealloc_v1`, `SEEDS` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | If any `base_alloc != distance` wins on val and transfers to test402, update C0003; otherwise record and iterate on Stage-1 reliability. |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0284_*` |
+| Artifacts | `runs/E0284_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0284_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_keepadj_basealloc_v1_20260204-224326/sweep_summary.json` (best=`ltltop1med_keepadj_distance`, Δ≈+0.00312, p=0.5). Full (val402; SEEDS=0..2): `runs/E0284_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_keepadj_basealloc_v1_20260204-224414/sweep_summary.json` (best=`ltltop1med_keepadj_distance`, Δ≈+0.00515, p≈0.286; worse than the baseline E0223 val selection). |
+
+### E0285: Best-to-test reproduction on test402 (E0284 selection; ltl_top1med_keepadj_basealloc_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0284 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0285_ave_p0_best_to_test_official_ltl_top1med_keepadj_basealloc_v1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0284), `EVENTNESS=av_clipdiff_mlp`, `SEEDS` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `runs/E0285_*` |
+| Artifacts | `runs/E0285_*/metrics.json` |
+| Results | Full (test402; SEEDS=0..9): `runs/E0285_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-224708/metrics.json` (anchored=0.71587 vs uniform=0.70858, Δ=+0.00729, p≈0.1009; regresses vs E0224). |
+
+### E0286: Stage-1 method sweep on val402 — EVENTNESS=av_clipdiff_mlp_r224 under ltl_top1med_v1
+| Field | Value |
+| --- | --- |
+| Objective | Try to improve Stage-1 anchor reliability by computing CLIPdiff at 224px (instead of 112px) while keeping the same supervised eventness MLP (`EVENTNESS=av_clipdiff_mlp_r224`), then run the standard top1-med gate sweep on official val402 (`candidate_set=ltl_top1med_v1`). |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0223/E0224 (vision caches + temporal head). |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0.py`, `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0286_ave_p0_sweep_official_val_ltl_top1med_v1_av_clipdiff_mlp_r224.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp_r224`, `CANDIDATE_SET=ltl_top1med_v1`, `SEEDS` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | If val winner improves and transfers to test402, update C0003; otherwise record as diagnostic and keep E0224 as current best. |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0286_*` |
+| Artifacts | `runs/E0286_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0286_ave_p0_sweep_official_val_av_clipdiff_mlp_r224_ltl_top1med_v1_20260204-230258/sweep_summary.json` (best=`ltltop1med_thr0p4_shift0`, Δ≈+0.00156, p=0.5). Full (val402; SEEDS=0..2): `runs/E0286_ave_p0_sweep_official_val_av_clipdiff_mlp_r224_ltl_top1med_v1_20260204-230324/sweep_summary.json` (best=`ltltop1med_thr0p7_shift0`, Δ≈+0.00682, p≈0.208; worse than the baseline E0223 val selection). |
+
+### E0287: Best-to-test reproduction on test402 (E0286 selection; av_clipdiff_mlp_r224)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0286 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0287_ave_p0_best_to_test_official_ltl_top1med_v1_av_clipdiff_mlp_r224.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0286), `EVENTNESS=av_clipdiff_mlp_r224`, `SEEDS` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `runs/E0287_*` |
+| Artifacts | `runs/E0287_*/metrics.json` |
+| Results | Full (test402; SEEDS=0..9): `runs/E0287_ave_p0_best_to_test_official_av_clipdiff_mlp_r224_20260204-230749/metrics.json` (anchored=0.72087 vs uniform=0.70858, Δ=+0.01229, p≈0.00415; regresses vs E0224). |
+
+### E0288: Best-to-test reproduction on test402 (far-anchor fallback-to-uniform; ff=1) for the current best top1-med config
+| Field | Value |
+| --- | --- |
+| Objective | Target the known failure bucket (dist>1 / 2-high): take the fixed E0224 top1-med config (`ltltop1med_thr0p6_shift1`) and enable `anchor_fallback_far_dist=1` so far top-2 anchors force a uniform fallback; check whether this pushes C0003 to ≥+2%. |
+| Baseline | `uniform` (compare against E0224) |
+| Model | Same P0 head-only training loop as E0224 (vision caches + temporal head). |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0.py` (far-fallback logic), `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0288_ave_p0_best_to_test_official_ltl_top1med_farfb_ff1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, base config from `runs/E0223_.../best_config.json`, derived config sets `anchor_fallback_far_dist=1`, `SEEDS` |
+| Metrics (must save) | `metrics.json`, plus the derived `config_farfb_ff1.json` under the run dir |
+| Checks | If Δ≥+0.02 and p<0.05 on test402 (SEEDS=0..9), mark C0003 proven; otherwise keep as a diagnostic and continue improving Stage-1 reliability. |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0288_ave_p0_best_to_test_official_ltl_top1med_farfb_ff1.sh` |
+| Full cmd | `SEEDS=0,1,2,3,4,5,6,7,8,9 bash scripts/e0288_ave_p0_best_to_test_official_ltl_top1med_farfb_ff1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0288_*` |
+| Artifacts | `runs/E0288_*/{metrics.json,config_farfb_ff1.json}` |
+| Results | Smoke (train64/test32; SEEDS=0,1; EPOCHS=1): `runs/E0288_ave_p0_best_to_test_official_av_clipdiff_mlp_ltl_top1med_farfb_ff1_20260204-235108/metrics.json` (Δ=+0.00000, p=1.0). Full (test402; SEEDS=0..9): `runs/E0288_ave_p0_best_to_test_official_av_clipdiff_mlp_ltl_top1med_farfb_ff1_20260204-235157/metrics.json` (anchored=0.71796 vs uniform=0.70858, Δ=+0.00938, p≈0.0880; regresses vs E0224). |
+
+### E0289: Stage-1 sweep on val402 (MIL learned anchors; av_clipdiff_mil_mlp + ltl_top1med_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Try to improve Stage-1 anchor reliability by training a multi-instance learning (MIL) eventness model (`EVENTNESS=av_clipdiff_mil_mlp`), then run the standard top1-med gate sweep on official val402 (`candidate_set=ltl_top1med_v1`). |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0223/E0224 (vision caches + temporal head). |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0.py`, `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0289_ave_p0_sweep_official_val_ltl_top1med_v1_av_clipdiff_mil_mlp.sh` |
+| Params | `EVENTNESS=av_clipdiff_mil_mlp`, `CANDIDATE_SET=ltl_top1med_v1`, `SEEDS` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | If the val winner improves and transfers to test402, update C0003; otherwise record as diagnostic and keep the current best unchanged. |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0289_ave_p0_sweep_official_val_ltl_top1med_v1_av_clipdiff_mil_mlp.sh` |
+| Full cmd | `bash scripts/e0289_ave_p0_sweep_official_val_ltl_top1med_v1_av_clipdiff_mil_mlp.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0289_*` |
+| Artifacts | `runs/E0289_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0289_ave_p0_sweep_official_val_av_clipdiff_mil_mlp_ltl_top1med_v1_20260205-000846/sweep_summary.json` (best Δ≈+0.00000). Full (val402; SEEDS=0..2): `runs/E0289_ave_p0_sweep_official_val_av_clipdiff_mil_mlp_ltl_top1med_v1_20260205-000923/sweep_summary.json` (best=`ltltop1med_thr0p4_shift1`, Δ≈+0.00815, p≈0.302; worse than baseline E0223). |
+
+### E0290: Best-to-test reproduction on test402 (E0289 selection; av_clipdiff_mil_mlp)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0289 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0290_ave_p0_best_to_test_official_ltl_top1med_v1_av_clipdiff_mil_mlp.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0289), `EVENTNESS=av_clipdiff_mil_mlp`, `SEEDS` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| Smoke cmd | `BEST_CONFIG_JSON=runs/E0289_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0290_ave_p0_best_to_test_official_ltl_top1med_v1_av_clipdiff_mil_mlp.sh` |
+| Full cmd | `BEST_CONFIG_JSON=runs/E0289_*/best_config.json SEEDS=0,1,2,3,4,5,6,7,8,9 bash scripts/e0290_ave_p0_best_to_test_official_ltl_top1med_v1_av_clipdiff_mil_mlp.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0290_*` |
+| Artifacts | `runs/E0290_*/metrics.json` |
+| Results | Smoke (train64/test32; SEEDS=0,1; EPOCHS=1): `runs/E0290_ave_p0_best_to_test_official_av_clipdiff_mil_mlp_20260205-001356/metrics.json`. Full (test402; SEEDS=0..9): `runs/E0290_ave_p0_best_to_test_official_av_clipdiff_mil_mlp_20260205-001442/metrics.json` (anchored=0.71582 vs uniform=0.70858, Δ=+0.00724, p≈0.0791; regresses vs E0224). |
+
+### E0291: Training longer diagnostic on test402 (top1-med; epochs=10; SEEDS=0..2)
+| Field | Value |
+| --- | --- |
+| Objective | Quick diagnostic: check whether “train longer” helps C0003 under the fixed top1-med learned-anchor plan by running epochs=10 on official test402 with SEEDS=0..2. |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0224 (vision caches + temporal head). |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `scripts/e0224_ave_p0_best_to_test_official_ltl_top1med_v1.sh` (override `EPOCHS/SEEDS/OUT_DIR`) |
+| Params | `BEST_CONFIG_JSON` (from E0223), `EVENTNESS=av_clipdiff_mlp`, `EPOCHS=10`, `SEEDS=0,1,2` |
+| Metrics (must save) | `metrics.json` |
+| Checks | If Δ regresses vs E0224, treat “train longer” as a dead end for C0003 and prioritize Stage-1 reliability improvements instead. |
+| Smoke cmd | `BEST_CONFIG_JSON=runs/E0223_*/best_config.json EVENTNESS=av_clipdiff_mlp LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0224_ave_p0_best_to_test_official_ltl_top1med_v1.sh` |
+| Full cmd | `BEST_CONFIG_JSON=runs/E0223_*/best_config.json EVENTNESS=av_clipdiff_mlp SEEDS=0,1,2 EPOCHS=10 bash scripts/e0224_ave_p0_best_to_test_official_ltl_top1med_v1.sh` |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `runs/E0291_*` |
+| Artifacts | `runs/E0291_*/metrics.json` |
+| Results | Full (test402; SEEDS=0..2): `runs/E0291_ave_p0_best_to_test_official_av_clipdiff_mlp_top1med_e10_s0-2_20260205-001904/metrics.json` (anchored=0.70091 vs uniform=0.69701, Δ=+0.00390, p≈0.665; not significant). |
+
+
+### E0292: Stage-1 method sweep on val402 — EVENTNESS=av_fused_clipdiff_prod under ltl_top1med_v1
+| Field | Value |
+| --- | --- |
+| Objective | Try to “拉大” C0003 by improving Stage-1 anchor reliability with a deployable fused heuristic (`EVENTNESS=av_fused_clipdiff_prod`), then sweep the standard top1-med gate configs on official val402 (`candidate_set=ltl_top1med_v1`). |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0223/E0224 (vision caches + temporal head). |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0292_ave_p0_sweep_official_val_ltl_top1med_v1_av_fused_clipdiff_prod.sh` |
+| Params | `EVENTNESS=av_fused_clipdiff_prod`, `CANDIDATE_SET=ltl_top1med_v1`, `SEEDS` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | If the val winner improves and transfers to test402, update C0003; otherwise record as diagnostic and keep iterating on Stage-1. |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0292_ave_p0_sweep_official_val_ltl_top1med_v1_av_fused_clipdiff_prod.sh` |
+| Full cmd | `bash scripts/e0292_ave_p0_sweep_official_val_ltl_top1med_v1_av_fused_clipdiff_prod.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0292_*` |
+| Artifacts | `runs/E0292_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0292_ave_p0_sweep_official_val_av_fused_clipdiff_prod_ltl_top1med_v1_20260205-011817/sweep_summary.json` (best Δ≈+0.00312). Full (val402; SEEDS=0..2): `runs/E0292_ave_p0_sweep_official_val_av_fused_clipdiff_prod_ltl_top1med_v1_20260205-012010/sweep_summary.json` (best=`ltltop1med_thr0p5_shift1`, Δ≈-0.00482, p≈0.491; regresses). |
+
+
+### E0293: Best-to-test reproduction on test402 (E0292 selection; av_fused_clipdiff_prod)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0292 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0293_ave_p0_best_to_test_official_ltl_top1med_v1_av_fused_clipdiff_prod.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0292), `EVENTNESS=av_fused_clipdiff_prod`, `SEEDS` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| Smoke cmd | `BEST_CONFIG_JSON=runs/E0292_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0293_ave_p0_best_to_test_official_ltl_top1med_v1_av_fused_clipdiff_prod.sh` |
+| Full cmd | `BEST_CONFIG_JSON=runs/E0292_*/best_config.json SEEDS=0,1,2,3,4,5,6,7,8,9 bash scripts/e0293_ave_p0_best_to_test_official_ltl_top1med_v1_av_fused_clipdiff_prod.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0293_*` |
+| Artifacts | `runs/E0293_*/metrics.json` |
+| Results | Smoke (train64/test32; SEEDS=0,1; EPOCHS=1): `runs/E0293_ave_p0_best_to_test_official_av_fused_clipdiff_prod_20260205-011855/metrics.json`. Full (test402; SEEDS=0..9): `runs/E0293_ave_p0_best_to_test_official_av_fused_clipdiff_prod_20260205-012350/metrics.json` (anchored=0.71433 vs uniform=0.70858, Δ=+0.00575, p≈0.125; regresses vs E0224). |
+
+
+### E0294: Stage-1 method sweep on val402 — EVENTNESS=moe_energy_clipdiff under ltl_top1med_v1
+| Field | Value |
+| --- | --- |
+| Objective | Try to “拉大” C0003 by improving Stage-1 anchor reliability with a cheap mixture-style fusion (`EVENTNESS=moe_energy_clipdiff`), then sweep the standard top1-med gate configs on official val402 (`candidate_set=ltl_top1med_v1`). |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0223/E0224 (vision caches + temporal head). |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0294_ave_p0_sweep_official_val_ltl_top1med_v1_moe_energy_clipdiff.sh` |
+| Params | `EVENTNESS=moe_energy_clipdiff`, `CANDIDATE_SET=ltl_top1med_v1`, `SEEDS` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | If the val winner improves and transfers to test402, update C0003; otherwise record as diagnostic and keep iterating on Stage-1. |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0294_ave_p0_sweep_official_val_ltl_top1med_v1_moe_energy_clipdiff.sh` |
+| Full cmd | `bash scripts/e0294_ave_p0_sweep_official_val_ltl_top1med_v1_moe_energy_clipdiff.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0294_*` |
+| Artifacts | `runs/E0294_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0294_ave_p0_sweep_official_val_moe_energy_clipdiff_ltl_top1med_v1_20260205-011817/sweep_summary.json` (best Δ≈+0.00469). Full (val402; SEEDS=0..2): `runs/E0294_ave_p0_sweep_official_val_moe_energy_clipdiff_ltl_top1med_v1_20260205-012010/sweep_summary.json` (best=`ltltop1med_thr0p4_shift0`, Δ≈+0.00224, p≈0.756; worse than baseline). |
+
+
+### E0295: Best-to-test reproduction on test402 (E0294 selection; moe_energy_clipdiff)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0294 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0295_ave_p0_best_to_test_official_ltl_top1med_v1_moe_energy_clipdiff.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0294), `EVENTNESS=moe_energy_clipdiff`, `SEEDS` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| Smoke cmd | `BEST_CONFIG_JSON=runs/E0294_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0295_ave_p0_best_to_test_official_ltl_top1med_v1_moe_energy_clipdiff.sh` |
+| Full cmd | `BEST_CONFIG_JSON=runs/E0294_*/best_config.json SEEDS=0,1,2,3,4,5,6,7,8,9 bash scripts/e0295_ave_p0_best_to_test_official_ltl_top1med_v1_moe_energy_clipdiff.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0295_*` |
+| Artifacts | `runs/E0295_*/metrics.json` |
+| Results | Smoke (train64/test32; SEEDS=0,1; EPOCHS=1): `runs/E0295_ave_p0_best_to_test_official_moe_energy_clipdiff_20260205-011855/metrics.json`. Full (test402; SEEDS=0..9): `runs/E0295_ave_p0_best_to_test_official_moe_energy_clipdiff_20260205-012339/metrics.json` (anchored=0.71164 vs uniform=0.70858, Δ=+0.00306, p≈0.420). |
+
+
+### E0296: Stage-2 plan sweep on val402 (MOE fix; EVENTNESS=moe_energy_clipdiff under ltl_top1med_moe_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Properly evaluate `EVENTNESS=moe_energy_clipdiff` under the top1-med pipeline by enabling its internal MOE switch (sweeping `anchor_std_threshold`) while still selecting Stage-2 knobs on official val402. |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0223/E0224 (vision caches + temporal head). |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0296_ave_p0_sweep_official_val_ltl_top1med_moe_v1_moe_energy_clipdiff.sh` |
+| Params | `EVENTNESS=moe_energy_clipdiff`, `CANDIDATE_SET=ltl_top1med_moe_v1`, `SEEDS` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | If the val winner improves and transfers to test402, update C0003; otherwise record as diagnostic and iterate. |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0296_ave_p0_sweep_official_val_ltl_top1med_moe_v1_moe_energy_clipdiff.sh` |
+| Full cmd | `bash scripts/e0296_ave_p0_sweep_official_val_ltl_top1med_moe_v1_moe_energy_clipdiff.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0296_*` |
+| Artifacts | `runs/E0296_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0296_ave_p0_sweep_official_val_moe_energy_clipdiff_ltl_top1med_moe_v1_20260205-014218/sweep_summary.json` (best Δ≈+0.00469). Full (val402; SEEDS=0..2): `runs/E0296_ave_p0_sweep_official_val_moe_energy_clipdiff_ltl_top1med_moe_v1_20260205-014328/sweep_summary.json` (best=`ltltop1medmoe_std0p4_thr0p4_shift0`, Δ≈+0.00224, p≈0.756; no improvement vs E0294). |
+
+
+### E0297: Best-to-test reproduction on test402 (E0296 selection; moe_energy_clipdiff)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0296 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0297_ave_p0_best_to_test_official_ltl_top1med_moe_v1_moe_energy_clipdiff.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0296), `EVENTNESS=moe_energy_clipdiff`, `SEEDS` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| Smoke cmd | `BEST_CONFIG_JSON=runs/E0296_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0297_ave_p0_best_to_test_official_ltl_top1med_moe_v1_moe_energy_clipdiff.sh` |
+| Full cmd | `BEST_CONFIG_JSON=runs/E0296_*/best_config.json SEEDS=0,1,2,3,4,5,6,7,8,9 bash scripts/e0297_ave_p0_best_to_test_official_ltl_top1med_moe_v1_moe_energy_clipdiff.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0297_*` |
+| Artifacts | `runs/E0297_*/metrics.json` |
+| Results | Smoke (train64/test32; SEEDS=0,1; EPOCHS=1): `runs/E0297_ave_p0_best_to_test_official_moe_energy_clipdiff_20260205-014250/metrics.json`. Full (test402; SEEDS=0..9): `runs/E0297_ave_p0_best_to_test_official_moe_energy_clipdiff_20260205-015437/metrics.json` (anchored=0.71164 vs uniform=0.70858, Δ=+0.00306, p≈0.420; no improvement vs E0295). |
+
+### E0298: Stage-2 plan sweep on val402 (top1-med + bridge base allocation; ltl_top1med_bridgealloc_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Try to “进一步拉大” C0003 by adding a new Stage-2 base allocation strategy (`base_alloc=bridge`) that spends the limited `base_res` seconds between the two high anchors in the 2-high regime. Run a fixed candidate sweep on official val402 (base vs bridge). |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0207/E0208 |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/sampling/plans.py` (`bridge`), `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0298_ave_p0_sweep_official_val_ltl_top1med_bridgealloc_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_bridgealloc_v1`, `SEEDS` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | If the val winner improves and transfers to test402, update C0003; otherwise record as diagnostic and iterate. |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0298_ave_p0_sweep_official_val_ltl_top1med_bridgealloc_v1.sh` |
+| Full cmd | `bash scripts/e0298_ave_p0_sweep_official_val_ltl_top1med_bridgealloc_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0298_*` |
+| Artifacts | `runs/E0298_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0298_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_bridgealloc_v1_20260205-023139/sweep_summary.json` (both candidates identical on the tiny subset; Δ≈-0.01250). Full (val402; SEEDS=0..2): `runs/E0298_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_bridgealloc_v1_20260205-023226/sweep_summary.json` (best=`ltltop1med_thr0p6_shift1_base`, Δ≈+0.00964, p≈0.0331; `bridgeAlloc` regresses to Δ≈+0.00175, p≈0.762). Conclusion: `base_alloc=bridge` is not a viable “拉大” direction under the top1-med pipeline. |
+
+
+### E0299: Best-to-test reproduction on test402 (E0298 selection; bridge base allocation)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0298 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0299_ave_p0_best_to_test_official_ltl_top1med_bridgealloc_v1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0298), `EVENTNESS=av_clipdiff_mlp`, `SEEDS` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| Smoke cmd | `BEST_CONFIG_JSON=runs/E0298_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0299_ave_p0_best_to_test_official_ltl_top1med_bridgealloc_v1.sh` |
+| Full cmd | `BEST_CONFIG_JSON=runs/E0298_*/best_config.json SEEDS=0,1,2,3,4,5,6,7,8,9 bash scripts/e0299_ave_p0_best_to_test_official_ltl_top1med_bridgealloc_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0299_*` |
+| Artifacts | `runs/E0299_*/metrics.json` |
+| Results | Smoke: N/A (script runs full by default unless LIMIT_* is set). Full (test402; SEEDS=0..9): `runs/E0299_ave_p0_best_to_test_official_av_clipdiff_mlp_bridgealloc_20260205-023457/metrics.json` (anchored=0.72383 vs uniform=0.70858, Δ=+0.01525, p≈0.00390; matches the current best E0224 because E0298 selected the baseline config). |
+
+
+### E0300: Diagnose far-anchor buckets for E0299 (bridge base allocation)
+| Field | Value |
+| --- | --- |
+| Objective | Run a post-hoc diagnose report on E0299 and confirm that the dist∈{2..5} / high_count=2 degradation buckets shrink vs E0224. |
+| Baseline | N/A (analysis-only) |
+| Model | N/A |
+| Weights | N/A |
+| Code path | `avs/experiments/ave_p0_diagnose.py`, `scripts/e0300_ave_p0_diagnose_E0299_bridgealloc.sh` |
+| Params | `IN_METRICS` (E0299 metrics.json), optional `DELTAS` |
+| Metrics (must save) | `diagnose.json` |
+| Checks | `anchor_plan_stats.delta_by_anchor_dist` and `delta_by_high_count` shift in the intended direction; record summary in C0003 evidence. |
+| Smoke cmd | `IN_METRICS=runs/E0299_*/metrics.json bash scripts/e0300_ave_p0_diagnose_E0299_bridgealloc.sh` |
+| Full cmd | Same as Smoke |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0300_*` |
+| Artifacts | `runs/E0300_*/diagnose.json` |
+| Results | TBA |
+
+### E0301: Stage-2 plan sweep on val402 (top1-med k=1 + 112/224/448; ltl_top1med_k1_extreme_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Try to “进一步拉大” C0003 by removing anchor2 entirely (k=1) to avoid wasting base slots on spurious second anchors, while still allowing a high peak resolution via the aggressive 112/224/448 triad (strict equal-token budget). Run a fixed candidate sweep on official val402. |
+| Baseline | `uniform` |
+| Model | Same P0 head-only training loop as E0207/E0208 |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0301_ave_p0_sweep_official_val_ltl_top1med_k1_extreme_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_k1_extreme_v1`, `SEEDS` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Winner transfers to test402; compare against E0224 (current best). |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0301_ave_p0_sweep_official_val_ltl_top1med_k1_extreme_v1.sh` |
+| Full cmd | `bash scripts/e0301_ave_p0_sweep_official_val_ltl_top1med_k1_extreme_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0301_*` |
+| Artifacts | `runs/E0301_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0301_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_k1_extreme_v1_20260205-024400/sweep_summary.json` (best Δ≈-0.01094). Full (val402; SEEDS=0..2): `runs/E0301_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_k1_extreme_v1_20260205-024429/sweep_summary.json` (best=`ltltop1medk1ext_thr0p6_shift0_distance`, Δ≈+0.00856, p≈0.0657). |
+
+
+### E0302: Best-to-test reproduction on test402 (E0301 selection; top1-med k=1 extreme triad)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0301 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0302_ave_p0_best_to_test_official_ltl_top1med_k1_extreme_v1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0301), `EVENTNESS=av_clipdiff_mlp`, `SEEDS` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| Smoke cmd | `BEST_CONFIG_JSON=runs/E0301_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0302_ave_p0_best_to_test_official_ltl_top1med_k1_extreme_v1.sh` |
+| Full cmd | `BEST_CONFIG_JSON=runs/E0301_*/best_config.json SEEDS=0,1,2,3,4,5,6,7,8,9 bash scripts/e0302_ave_p0_best_to_test_official_ltl_top1med_k1_extreme_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0302_*` |
+| Artifacts | `runs/E0302_*/metrics.json` |
+| Results | Full (test402; SEEDS=0..9): `runs/E0302_ave_p0_best_to_test_official_av_clipdiff_mlp_k1extreme_20260205-025129/metrics.json` (anchored=0.71020 vs uniform=0.70858, Δ=+0.00162, p≈0.649; large regression vs E0224). |
+
+
+### E0303: Stage-2 budget-band plan sweep on val402 (attempt to “拉大” C0003)
+| Field | Value |
+| --- | --- |
+| Objective | Try a budget-band Stage-2 plan (`budget_mode=band`, under-budget ≤1%) that can use extra cheap resolution (112) to preserve more `base_res` context, and sweep a small `top1_med` gate grid on official val402 (`candidate_set=ltl_top1med_band_v1`). |
+| Baseline | `uniform` |
+| Model | `temporal_conv` head on frozen CLIP features (same protocol as E0223/E0224) |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/sampling/plans.py` (`budget_band_anchored_plan_scored`), `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0303_ave_p0_sweep_official_val_ltl_top1med_band_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_band_v1`, `SEEDS` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Winner transfers to test402; compare against E0224 (current best). |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0303_ave_p0_sweep_official_val_ltl_top1med_band_v1.sh` |
+| Full cmd | `bash scripts/e0303_ave_p0_sweep_official_val_ltl_top1med_band_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0303_*` |
+| Artifacts | `runs/E0303_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0303_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_band_v1_20260205-033812/sweep_summary.json`. Full (val402; SEEDS=0..2): `runs/E0303_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_band_v1_20260205-033915/sweep_summary.json` (best=`ltltop1medband_thr0p7_shift1`, Δ≈+0.01205, p≈0.0685). |
+
+
+### E0304: Best-to-test reproduction on test402 (E0303 selection; top1-med budget-band)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0303 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0304_ave_p0_best_to_test_official_ltl_top1med_band_v1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0303), `EVENTNESS=av_clipdiff_mlp`, `SEEDS` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| Smoke cmd | `BEST_CONFIG_JSON=runs/E0303_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0304_ave_p0_best_to_test_official_ltl_top1med_band_v1.sh` |
+| Full cmd | `BEST_CONFIG_JSON=runs/E0303_*/best_config.json SEEDS=0,1,2,3,4,5,6,7,8,9 bash scripts/e0304_ave_p0_best_to_test_official_ltl_top1med_band_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0304_*` |
+| Artifacts | `runs/E0304_*/metrics.json` |
+| Results | Smoke (train64/test32; SEEDS=0,1; EPOCHS=1): `runs/E0304_ave_p0_best_to_test_official_av_clipdiff_mlp_20260205-033850/metrics.json` (Δ=+0.00000). Full (test402; SEEDS=0..9): `runs/E0304_ave_p0_best_to_test_official_av_clipdiff_mlp_20260205-035830/metrics.json` (anchored=0.71674 vs uniform=0.70858, Δ=+0.00816, p≈0.0441; regresses vs E0224). Conclusion: this band-budget candidate set does not improve C0003. |
+
+
+### E0305: Diagnostic test402 run for the E0224 gate under budget-band (thr0.6, shift1)
+| Field | Value |
+| --- | --- |
+| Objective | Isolate whether `budget_mode=band` helps or hurts when keeping the E0224 gate (`top1_med thr=0.6, shift=1`) by running that config directly on test402 (SEEDS=0..9). |
+| Baseline | `uniform` |
+| Model | `temporal_conv` head; same downstream settings as E0224 |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/sampling/plans.py` (`budget_band_anchored_plan_scored`), `avs/experiments/ave_p0_sweep.py` (`run`) |
+| Params | `CONFIG_JSON=runs/E0303_*/ltltop1medband_thr0p6_shift1/config.json`, `EVENTNESS=av_clipdiff_mlp`, `SEEDS=0..9` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Compare against E0224; if regresses, do not pursue band-budget as-is. |
+| Smoke cmd | N/A |
+| Full cmd | `python -m avs.experiments.ave_p0_sweep run --config-json runs/E0303_*/ltltop1medband_thr0p6_shift1/config.json --scores-json runs/E0303_*/eventness_scores.json --split-train train --split-eval test --train-ids-file data/AVE/meta/download_ok_train_official.txt --eval-ids-file data/AVE/meta/download_ok_test_official.txt --seeds 0,1,2,3,4,5,6,7,8,9 --epochs 5 --batch-size 16 --lr 2e-3 --eventness-method av_clipdiff_mlp --audio-device cpu --train-device cuda:0 --processed-dir runs/REAL_AVE_OFFICIAL_20260201-124535/processed --caches-dir runs/REAL_AVE_OFFICIAL_20260201-124535/caches_112_160_224_352_448 --allow-missing --out-dir runs/E0305_...` |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `runs/E0305_*` |
+| Artifacts | `runs/E0305_*/metrics.json` |
+| Results | Full (test402; SEEDS=0..9): `runs/E0305_ave_p0_best_to_test_official_av_clipdiff_mlp_banddiag_thr0p6_shift1_20260205-040513/metrics.json` (anchored=0.71214 vs uniform=0.70858, Δ=+0.00356, p≈0.230; large regression vs E0224). Conclusion: band-budget planning (as implemented) is not a viable “拉大” direction. |
+
+
+### E0306: Control test402 run for E0305 (reuse E0223 score cache; confirm regression is not a scores-json mismatch)
+| Field | Value |
+| --- | --- |
+| Objective | Verify that the E0305 regression is due to the band-budget planner itself rather than a mismatch in `eventness_scores.json` by rerunning the same config while reusing E0223’s score cache. |
+| Baseline | `uniform` |
+| Model | Same as E0305 |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`) |
+| Params | Same as E0305, but `--scores-json` points to `runs/E0223_*/eventness_scores.json` |
+| Metrics (must save) | `metrics.json` |
+| Checks | The result matches E0305 (within noise); if so, band-budget regression is not caused by score caching. |
+| Smoke cmd | N/A |
+| Full cmd | `python -m avs.experiments.ave_p0_sweep run --config-json runs/E0303_*/ltltop1medband_thr0p6_shift1/config.json --scores-json runs/E0223_*/eventness_scores.json --split-train train --split-eval test --train-ids-file data/AVE/meta/download_ok_train_official.txt --eval-ids-file data/AVE/meta/download_ok_test_official.txt --seeds 0,1,2,3,4,5,6,7,8,9 --epochs 5 --batch-size 16 --lr 2e-3 --eventness-method av_clipdiff_mlp --audio-device cpu --train-device cuda:0 --processed-dir runs/REAL_AVE_OFFICIAL_20260201-124535/processed --caches-dir runs/REAL_AVE_OFFICIAL_20260201-124535/caches_112_160_224_352_448 --allow-missing --out-dir runs/E0306_...` |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `runs/E0306_*` |
+| Artifacts | `runs/E0306_*/metrics.json` |
+| Results | Full (test402; SEEDS=0..9): `runs/E0306_ave_p0_best_to_test_official_av_clipdiff_mlp_band_scoresE0223_thr0p6_shift1_20260205-041422/metrics.json` (Δ=+0.00356; identical to E0305). Conclusion: band-budget regression is not a score-cache artifact. |
+
+
+### E0307: Stage-1 sweep on val402 (AST embeddings + CLIPdiff MIL anchors; `av_ast_clipdiff_mil_mlp` + `ltl_top1med_v1`)
+| Field | Value |
+| --- | --- |
+| Objective | Upgrade Stage-1 anchors with a bolder signal (AST per-second embeddings + cheap CLIPdiff) trained with a MIL objective, then select the best top1-med gate config on official val402. |
+| Baseline | `uniform` |
+| Model | `temporal_conv` head on frozen CLIP features (same downstream protocol as E0223/E0224) |
+| Weights | HF: AST (`--ast-pretrained`) |
+| Code path | `avs/experiments/ave_p0.py` (`EVENTNESS=av_ast_clipdiff_mil_mlp`), `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0307_ave_p0_sweep_official_val_ltl_top1med_v1_av_ast_clipdiff_mil_mlp.sh` |
+| Params | `EVENTNESS=av_ast_clipdiff_mil_mlp`, `CANDIDATE_SET=ltl_top1med_v1`, `AUDIO_DEVICE`, `TRAIN_DEVICE`, `SEEDS` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Winner transfers to test402 and beats the current best E0224 (Δ≈+0.01525). |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0307_ave_p0_sweep_official_val_ltl_top1med_v1_av_ast_clipdiff_mil_mlp.sh` |
+| Full cmd | `SEEDS=0,1,2 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0307_ave_p0_sweep_official_val_ltl_top1med_v1_av_ast_clipdiff_mil_mlp.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0307_*` |
+| Artifacts | `runs/E0307_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0307_ave_p0_sweep_official_val_av_ast_clipdiff_mil_mlp_ltl_top1med_v1_20260205-045341/sweep_summary.json` (best Δ≈+0.00312, p≈0.50). Full (val402; SEEDS=0..2): `runs/E0307_ave_p0_sweep_official_val_av_ast_clipdiff_mil_mlp_ltl_top1med_v1_20260205-045530/sweep_summary.json` (best Δ≈-0.01180, p≈0.089; all candidates negative; not viable as-is). |
+
+
+### E0308: Best-to-test reproduction on test402 (E0307 selection; `av_ast_clipdiff_mil_mlp`)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0307 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; HF: AST (`--ast-pretrained`) |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0308_ave_p0_best_to_test_official_ltl_top1med_v1_av_ast_clipdiff_mil_mlp.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0307), `EVENTNESS=av_ast_clipdiff_mil_mlp`, `AUDIO_DEVICE`, `TRAIN_DEVICE`, `SEEDS=0..9` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| Smoke cmd | `BEST_CONFIG_JSON=runs/E0307_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0308_ave_p0_best_to_test_official_ltl_top1med_v1_av_ast_clipdiff_mil_mlp.sh` |
+| Full cmd | `BEST_CONFIG_JSON=runs/E0307_*/best_config.json SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0308_ave_p0_best_to_test_official_ltl_top1med_v1_av_ast_clipdiff_mil_mlp.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0308_*` |
+| Artifacts | `runs/E0308_*/metrics.json` |
+| Results | Skipped: E0307 full val402 sweep regresses (all candidates negative), so per P0101 stop rule we do not spend test402 budget. |
+
+
+### E0309: Stage-1 sweep on val402 (AST embeddings + CLIPdiff MIL anchors; scale-invariant confidence gate)
+| Field | Value |
+| --- | --- |
+| Objective | Retry `av_ast_clipdiff_mil_mlp` with a scale-invariant confidence gate (`top1_med_norm`) to avoid the “all clips pass due to large logits” failure mode observed in E0307, and check if this rescues val402. |
+| Baseline | `uniform` |
+| Model | Same downstream protocol as E0307 (`temporal_conv` head on frozen CLIP features) |
+| Weights | HF: AST (`--ast-pretrained`) |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`) |
+| Params | `EVENTNESS=av_ast_clipdiff_mil_mlp`, `CANDIDATE_SET=ltl_top1med_norm_v1`, `SEEDS=0..2` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json` |
+| Checks | If Δ becomes clearly positive on val402 (vs E0307), proceed to test402; otherwise record as negative evidence. |
+| Smoke cmd | `SEEDS=0,1 LIMIT_TRAIN=64 LIMIT_EVAL=32 EVENTNESS=av_ast_clipdiff_mil_mlp CANDIDATE_SET=ltl_top1med_norm_v1 bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh` |
+| Full cmd | `SEEDS=0,1,2 EVENTNESS=av_ast_clipdiff_mil_mlp CANDIDATE_SET=ltl_top1med_norm_v1 bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh` |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `runs/E0309_*` |
+| Artifacts | `runs/E0309_*/{sweep_summary.json,best_config.json}` |
+| Results | Full (val402; SEEDS=0..2): `runs/E0309_ave_p0_sweep_official_val_av_ast_clipdiff_mil_mlp_ltl_top1med_norm_v1_20260205-051944/sweep_summary.json` (best Δ≈+0.00108, p≈0.883; near 0). Conclusion: scale-invariant gate does not rescue `av_ast_clipdiff_mil_mlp`. |
+
+
+### E0310: Stage-1 sweep on val402 (apply scale-invariant top1-med gate to the current best Stage-1 method)
+| Field | Value |
+| --- | --- |
+| Objective | Apply `top1_med_norm` confidence gating to `av_clipdiff_mlp` to verify whether the “normalized” gate itself yields better val402 selection (and potentially improves transfer), independent of AST methods. |
+| Baseline | `uniform` |
+| Model | Same downstream protocol as E0223/E0224 (`temporal_conv` head on frozen CLIP features) |
+| Weights | Uses existing CLIP caches |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`sweep`) |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_norm_v1`, `SEEDS=0..2` (reuses E0223 score cache when provided) |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json` |
+| Checks | If val402 improves vs E0223 best (Δ≈+0.00964), attempt a test402 reproduction; otherwise record as negative. |
+| Smoke cmd | `SEEDS=0,1 LIMIT_TRAIN=64 LIMIT_EVAL=32 EVENTNESS=av_clipdiff_mlp CANDIDATE_SET=ltl_top1med_norm_v1 bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh` |
+| Full cmd | `SEEDS=0,1,2 EVENTNESS=av_clipdiff_mlp CANDIDATE_SET=ltl_top1med_norm_v1 bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh` |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `runs/E0310_*` |
+| Artifacts | `runs/E0310_*/{sweep_summary.json,best_config.json}` |
+| Results | Full (val402; SEEDS=0..2): `runs/E0310_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_norm_v1_20260205-052411/sweep_summary.json` (best Δ≈+0.00723, p≈0.335; worse than E0223 best). Conclusion: `top1_med_norm` gate does not improve the current best Stage-1 method on val402. |
+
+
+### E0311: Stage-1 sweep on val402 (bold new signal: learned A/V alignment via InfoNCE; `av_ast_clipalign_nce`)
+| Field | Value |
+| --- | --- |
+| Objective | Try a bolder Stage-1 signal that explicitly targets “audio is on-screen”: learn a within-clip A/V alignment projector (InfoNCE) from AST embeddings and cheap CLIP features, then use diagonal similarity as eventness for anchors. |
+| Baseline | `uniform` |
+| Model | Same downstream protocol as E0223/E0224 (`temporal_conv` head on frozen CLIP features) |
+| Weights | HF: AST (`--ast-pretrained`) |
+| Code path | `avs/experiments/ave_p0.py` (`EVENTNESS=av_ast_clipalign_nce`), `avs/experiments/ave_p0_sweep.py` (`sweep`), `scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh` |
+| Params | `EVENTNESS=av_ast_clipalign_nce`, `CANDIDATE_SET=ltl_top1med_norm_v1`, `SEEDS=0..2`, `AUDIO_DEVICE=cuda:9`, `TRAIN_DEVICE=cuda:9` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Must beat the current best E0224 test delta (Δ≈+0.01525) after val→test; otherwise record as negative evidence. |
+| Smoke cmd | `SEEDS=0,1 LIMIT_TRAIN=64 LIMIT_EVAL=32 EVENTNESS=av_ast_clipalign_nce CANDIDATE_SET=ltl_top1med_norm_v1 AUDIO_DEVICE=cuda:9 TRAIN_DEVICE=cuda:9 bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh` |
+| Full cmd | `SEEDS=0,1,2 EVENTNESS=av_ast_clipalign_nce CANDIDATE_SET=ltl_top1med_norm_v1 AUDIO_DEVICE=cuda:9 TRAIN_DEVICE=cuda:9 bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh` |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `runs/E0311_*` |
+| Artifacts | `runs/E0311_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Full (val402; SEEDS=0..2): `runs/E0311_ave_p0_sweep_official_val_av_ast_clipalign_nce_ltl_top1med_norm_v1_20260205-055421/sweep_summary.json` (best Δ≈-0.00033, p≈0.937; near 0). Conclusion: `av_ast_clipalign_nce` does not improve anchors under AVE-P0. |
+
+
+### E0312: Stage-2 sweep on val402 (k-adaptive anchor2 veto; `ltl_top1med_anchor2veto_v1`)
+| Field | Value |
+| --- | --- |
+| Objective | Try to “拉大” C0003 by dropping spurious second anchors (k-adaptive) on top of the current best learned Stage-1 scores (`av_clipdiff_mlp`). Sweep a small, pre-registered veto grid on val402 and pick the best config. |
+| Baseline | `uniform` |
+| Model | `temporal_conv` head on frozen CLIP features (same downstream protocol as E0223/E0224) |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0.py` (`anchor2_veto_*`), `avs/experiments/ave_p0_sweep.py` (`candidate_set=ltl_top1med_anchor2veto_v1`), `scripts/e0312_ave_p0_sweep_official_val_ltl_top1med_anchor2veto_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_anchor2veto_v1`, `SEEDS`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | If val402 Δ improves vs the E0223 best (Δ≈+0.00964), run a quick test402 check (SEEDS=0..2); only then run full test402 reproduction (E0313). |
+| VRAM | ~4–8 GB |
+| Time/epoch | ~minutes |
+| Total time | ~1–2 hours (SEEDS=0..2) |
+| Single-GPU script | `bash scripts/e0312_ave_p0_sweep_official_val_ltl_top1med_anchor2veto_v1.sh` |
+| Multi-GPU script | Run different seeds on different GPUs by setting `TRAIN_DEVICE=cuda:X`. |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0312_ave_p0_sweep_official_val_ltl_top1med_anchor2veto_v1.sh` |
+| Full cmd | `SEEDS=0,1,2 TRAIN_DEVICE=cuda:9 bash scripts/e0312_ave_p0_sweep_official_val_ltl_top1med_anchor2veto_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0312_*` |
+| Artifacts | `runs/E0312_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0312_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_anchor2veto_v1_20260205-115846/sweep_summary.json` (all candidates tie; not informative). Full (val402; SEEDS=0..2): `runs/E0312_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_anchor2veto_v1_20260205-115927/sweep_summary.json` (best=`ltltop1med_a2veto_none`, Δ≈+0.00964, p≈0.033; veto variants regress, including `lr0p35/0p5/0p65` negative). Conclusion: anchor2 veto does not improve val402 selection. |
+
+
+### E0313: Best-to-test reproduction on test402 (E0312 selection; anchor2 veto)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0312 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0313_ave_p0_best_to_test_official_ltl_top1med_anchor2veto_v1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0312), `EVENTNESS=av_clipdiff_mlp`, `TRAIN_DEVICE`, `SEEDS=0..9` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| VRAM | ~4–8 GB |
+| Time/epoch | ~minutes |
+| Total time | ~2–4 hours (SEEDS=0..9) |
+| Single-GPU script | `BEST_CONFIG_JSON=runs/E0312_*/best_config.json bash scripts/e0313_ave_p0_best_to_test_official_ltl_top1med_anchor2veto_v1.sh` |
+| Multi-GPU script | Use `SEEDS` slicing (e.g., `SEEDS=0,1,2,3,4`) across GPUs and merge by rerun script. |
+| Smoke cmd | `BEST_CONFIG_JSON=runs/E0312_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0313_ave_p0_best_to_test_official_ltl_top1med_anchor2veto_v1.sh` |
+| Full cmd | `BEST_CONFIG_JSON=runs/E0312_*/best_config.json SEEDS=0,1,2,3,4,5,6,7,8,9 TRAIN_DEVICE=cuda:9 bash scripts/e0313_ave_p0_best_to_test_official_ltl_top1med_anchor2veto_v1.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0313_*` |
+| Artifacts | `runs/E0313_*/metrics.json` |
+| Results | Quick test402 diagnostics (SEEDS=0..2; not full): `runs/E0313_quick_test402_av_clipdiff_mlp_a2veto_lr0p65_20260205-120329/metrics.json` (Δ≈+0.00489) and `runs/E0313_quick_test402_av_clipdiff_mlp_a2veto_top2med0p15_20260205-120449/metrics.json` (Δ≈+0.00904), both far below the baseline E0224 on the same seeds (Δ≈+0.01899). Conclusion: do not run full E0313. |
+
+
+### E0314: Stage-1 sweep on val402 (teacher-student visual-usefulness anchors; `av_clipdiff_visgain_mlp`)
+| Field | Value |
+| --- | --- |
+| Objective | Try to “拉大” C0003 by improving Stage-1 reliability: train a deployable per-second scorer to predict a *visual usefulness* teacher derived from expensive visual features (resolution sensitivity), then use predicted scores for anchor selection under the existing Stage-2 top1-med pipeline. |
+| Baseline | `uniform` |
+| Model | `temporal_conv` head on frozen CLIP features (same downstream protocol as E0223/E0224) |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0.py` (`_train_audio_basic_mlp_visgain_eventness` + `av_clipdiff_visgain_mlp`), `avs/experiments/ave_p0_sweep.py` (scores cache), `scripts/e0314_ave_p0_sweep_official_val_ltl_top1med_visgain_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_visgain_mlp`, `CANDIDATE_SET=ltl_top1med_norm_v1`, `SEEDS`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | If val402 Δ is competitive vs E0223/E0224, run E0315 quick test402 (SEEDS=0..2) before committing full test402. |
+| VRAM | ~4–8 GB |
+| Time/epoch | ~minutes |
+| Total time | ~1–2 hours (SEEDS=0..2) |
+| Single-GPU script | `bash scripts/e0314_ave_p0_sweep_official_val_ltl_top1med_visgain_v1.sh` |
+| Multi-GPU script | Run different seeds on different GPUs by setting `TRAIN_DEVICE=cuda:X`. |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0314_ave_p0_sweep_official_val_ltl_top1med_visgain_v1.sh` |
+| Full cmd | `SEEDS=0,1,2 TRAIN_DEVICE=cuda:9 bash scripts/e0314_ave_p0_sweep_official_val_ltl_top1med_visgain_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0314_*` |
+| Artifacts | `runs/E0314_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0314_ave_p0_sweep_official_val_av_clipdiff_visgain_mlp_ltl_top1med_norm_v1_20260205-123747/sweep_summary.json` (all candidates tie at Δ=0; not informative). Full (val402; SEEDS=0..2): `runs/E0314_ave_p0_sweep_official_val_av_clipdiff_visgain_mlp_ltl_top1med_norm_v1_20260205-123935/sweep_summary.json` (best Δ≈+0.00158, p≈0.727; near 0). Conclusion: not a viable “拉大” direction as-is. |
+
+
+### E0315: Best-to-test reproduction on test402 (E0314 selection; teacher-student visgain anchors)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0314 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0315_ave_p0_best_to_test_official_ltl_top1med_visgain_v1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0314), `EVENTNESS=av_clipdiff_visgain_mlp`, `TRAIN_DEVICE`, `SEEDS=0..9` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| VRAM | ~4–8 GB |
+| Time/epoch | ~minutes |
+| Total time | ~2–4 hours (SEEDS=0..9) |
+| Single-GPU script | `BEST_CONFIG_JSON=runs/E0314_*/best_config.json bash scripts/e0315_ave_p0_best_to_test_official_ltl_top1med_visgain_v1.sh` |
+| Multi-GPU script | Use `SEEDS` slicing (e.g., `SEEDS=0,1,2,3,4`) across GPUs and merge by rerun script. |
+| Smoke cmd | `BEST_CONFIG_JSON=runs/E0314_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0315_ave_p0_best_to_test_official_ltl_top1med_visgain_v1.sh` |
+| Full cmd | `BEST_CONFIG_JSON=runs/E0314_*/best_config.json SEEDS=0,1,2,3,4,5,6,7,8,9 TRAIN_DEVICE=cuda:9 bash scripts/e0315_ave_p0_best_to_test_official_ltl_top1med_visgain_v1.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0315_*` |
+| Artifacts | `runs/E0315_*/metrics.json` |
+| Results | Not run: E0314 is near-0 on val402; stop to avoid spending test402 budget. |
+
+
+### E0316: Stage-1 sweep on val402 (teacher-student downstream loss-gain anchors; `av_clipdiff_lossgain_mlp`)
+| Field | Value |
+| --- | --- |
+| Objective | Try to “拉大” C0003 with a downstream-aware teacher: train a cheap base-res vision classifier teacher on the train split, define per-second targets as the **loss reduction** when swapping in high-res visual features (event seconds only), then train a deployable student scorer (cheap A+V inputs) and run the standard val402 selection sweep. |
+| Baseline | `uniform` |
+| Model | `temporal_conv` head on frozen CLIP features (same downstream protocol as E0223/E0224) |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0.py` (`av_clipdiff_lossgain_mlp`), `avs/experiments/ave_p0_sweep.py` (scores cache), `scripts/e0316_ave_p0_sweep_official_val_ltl_top1med_lossgain_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_lossgain_mlp`, `CANDIDATE_SET=ltl_top1med_norm_v1`, `SEEDS`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | If val402 Δ is competitive vs E0223/E0224, run E0317 quick test402 (SEEDS=0..2) before committing full test402. |
+| VRAM | ~4–8 GB |
+| Time/epoch | ~minutes |
+| Total time | ~1–2 hours (SEEDS=0..2) |
+| Single-GPU script | `bash scripts/e0316_ave_p0_sweep_official_val_ltl_top1med_lossgain_v1.sh` |
+| Multi-GPU script | Run different seeds on different GPUs by setting `TRAIN_DEVICE=cuda:X`. |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0316_ave_p0_sweep_official_val_ltl_top1med_lossgain_v1.sh` |
+| Full cmd | `SEEDS=0,1,2 TRAIN_DEVICE=cuda:9 bash scripts/e0316_ave_p0_sweep_official_val_ltl_top1med_lossgain_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0316_*` |
+| Artifacts | `runs/E0316_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0316_ave_p0_sweep_official_val_av_clipdiff_lossgain_mlp_ltl_top1med_norm_v1_20260205-125349/sweep_summary.json` (all candidates tie at Δ=0; not informative). Full (val402; SEEDS=0..2): `runs/E0316_ave_p0_sweep_official_val_av_clipdiff_lossgain_mlp_ltl_top1med_norm_v1_20260205-125414/sweep_summary.json` (best Δ≈+0.00042, p≈0.906; near 0). Conclusion: loss-reduction teacher does not improve Stage-1 anchor reliability in AVE-P0. |
+
+
+### E0317: Best-to-test reproduction on test402 (E0316 selection; teacher-student loss-gain anchors)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0316 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0317_ave_p0_best_to_test_official_ltl_top1med_lossgain_v1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0316), `EVENTNESS=av_clipdiff_lossgain_mlp`, `TRAIN_DEVICE`, `SEEDS=0..9` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| VRAM | ~4–8 GB |
+| Time/epoch | ~minutes |
+| Total time | ~2–4 hours (SEEDS=0..9) |
+| Single-GPU script | `BEST_CONFIG_JSON=runs/E0316_*/best_config.json bash scripts/e0317_ave_p0_best_to_test_official_ltl_top1med_lossgain_v1.sh` |
+| Multi-GPU script | Use `SEEDS` slicing (e.g., `SEEDS=0,1,2,3,4`) across GPUs and merge by rerun script. |
+| Smoke cmd | `BEST_CONFIG_JSON=runs/E0316_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0317_ave_p0_best_to_test_official_ltl_top1med_lossgain_v1.sh` |
+| Full cmd | `BEST_CONFIG_JSON=runs/E0316_*/best_config.json SEEDS=0,1,2,3,4,5,6,7,8,9 TRAIN_DEVICE=cuda:9 bash scripts/e0317_ave_p0_best_to_test_official_ltl_top1med_lossgain_v1.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0317_*` |
+| Artifacts | `runs/E0317_*/metrics.json` |
+| Results | Not run: E0316 is near-0 on val402; stop to avoid spending test402 budget. |
+
+
+### E0318: Stage-1 sweep on val402 (A/V correspondence anchors; `av_ast_clipalign_bce`)
+| Field | Value |
+| --- | --- |
+| Objective | Try to “拉大” C0003 with a new signal: train a tiny A/V correspondence scorer (AST embeddings ↔ CLIP embeddings) with a BCE objective on per-second diagonal similarity, then use its logits as anchor scores and run the standard val402 selection sweep. |
+| Baseline | `uniform` |
+| Model | `temporal_conv` head on frozen CLIP features (same downstream protocol as E0223/E0224) |
+| Weights | Uses existing CLIP caches; uses AST embeddings (set `AST_PRETRAINED=1` for real runs). |
+| Code path | `avs/experiments/ave_p0.py` (`av_ast_clipalign_bce`), `avs/experiments/ave_p0_sweep.py` (scores cache), `scripts/e0318_ave_p0_sweep_official_val_ltl_top1med_av_clipalign_bce_v1.sh` |
+| Params | `EVENTNESS=av_ast_clipalign_bce`, `CANDIDATE_SET=ltl_top1med_norm_v1`, `SEEDS`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | If val402 Δ is competitive vs E0223/E0224, run E0319 quick test402 (SEEDS=0..2) before committing full test402. |
+| VRAM | ~4–8 GB |
+| Time/epoch | ~minutes |
+| Total time | ~1–2 hours (SEEDS=0..2) |
+| Single-GPU script | `bash scripts/e0318_ave_p0_sweep_official_val_ltl_top1med_av_clipalign_bce_v1.sh` |
+| Multi-GPU script | Run different seeds on different GPUs by setting `TRAIN_DEVICE=cuda:X`. |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0318_ave_p0_sweep_official_val_ltl_top1med_av_clipalign_bce_v1.sh` |
+| Full cmd | `SEEDS=0,1,2 TRAIN_DEVICE=cuda:9 bash scripts/e0318_ave_p0_sweep_official_val_ltl_top1med_av_clipalign_bce_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0318_*` |
+| Artifacts | `runs/E0318_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0318_ave_p0_sweep_official_val_av_ast_clipalign_bce_ltl_top1med_norm_v1_20260205-133658/sweep_summary.json` (best Δ≈+0.00156; not informative). Full (val402; SEEDS=0..2): `runs/E0318_ave_p0_sweep_official_val_av_ast_clipalign_bce_ltl_top1med_norm_v1_20260205-133800/sweep_summary.json` (best Δ≈+0.00865, p≈0.00120). Conclusion: does not beat E0223 val selection; stop before test402. |
+
+
+### E0319: Best-to-test reproduction on test402 (E0318 selection; A/V correspondence anchors)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0318 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; uses AST embeddings (set `AST_PRETRAINED=1` for real runs). |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0319_ave_p0_best_to_test_official_ltl_top1med_av_clipalign_bce_v1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0318), `EVENTNESS=av_ast_clipalign_bce`, `TRAIN_DEVICE`, `SEEDS=0..9` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| VRAM | ~4–8 GB |
+| Time/epoch | ~minutes |
+| Total time | ~2–4 hours (SEEDS=0..9) |
+| Single-GPU script | `BEST_CONFIG_JSON=runs/E0318_*/best_config.json bash scripts/e0319_ave_p0_best_to_test_official_ltl_top1med_av_clipalign_bce_v1.sh` |
+| Multi-GPU script | Use `SEEDS` slicing (e.g., `SEEDS=0,1,2,3,4`) across GPUs and merge by rerun script. |
+| Smoke cmd | `BEST_CONFIG_JSON=runs/E0318_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0319_ave_p0_best_to_test_official_ltl_top1med_av_clipalign_bce_v1.sh` |
+| Full cmd | `BEST_CONFIG_JSON=runs/E0318_*/best_config.json SEEDS=0,1,2,3,4,5,6,7,8,9 TRAIN_DEVICE=cuda:9 bash scripts/e0319_ave_p0_best_to_test_official_ltl_top1med_av_clipalign_bce_v1.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0319_*` |
+| Artifacts | `runs/E0319_*/metrics.json` |
+| Results | Not run: E0318 regresses vs E0223 on val402; stop to avoid spending test402 budget. |
+
+
+### E0320: Stage-2 sweep on val402 (band-budget + low=112 + mid=160; preserve context under equal tokens)
+| Field | Value |
+| --- | --- |
+| Objective | Try to “拉大” C0003 with a bolder Stage-2 plan only (keep Stage-1 fixed): run a fixed-space sweep under `candidate_set=ltl_top1med_band_low112_v1` which uses the band-budget planner (≤1% underbudget), sets `low_res=112`, and allows an extra mid resolution (160) to preserve more base context. |
+| Baseline | `uniform` |
+| Model | `temporal_conv` head on frozen CLIP features (same downstream protocol as E0223/E0224) |
+| Weights | Uses existing CLIP caches; reuses `eventness_scores.json` from E0223 when provided. |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`ltl_top1med_band_low112_v1`), `scripts/e0320_ave_p0_sweep_official_val_ltl_top1med_band_low112_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_band_low112_v1`, `SCORES_JSON` (optional), `SEEDS`, `TRAIN_DEVICE` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json` (and optionally `eventness_scores.json` if recomputed) |
+| Checks | If val402 Δ is competitive vs E0223/E0224, run E0321 quick test402 (SEEDS=0..2) before committing full test402. |
+| VRAM | ~4–8 GB |
+| Time/epoch | ~minutes |
+| Total time | ~1–2 hours (SEEDS=0..2) |
+| Single-GPU script | `bash scripts/e0320_ave_p0_sweep_official_val_ltl_top1med_band_low112_v1.sh` |
+| Multi-GPU script | Run different seeds on different GPUs by setting `TRAIN_DEVICE=cuda:X` (and reusing the same `SCORES_JSON`). |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0320_ave_p0_sweep_official_val_ltl_top1med_band_low112_v1.sh` |
+| Full cmd | `SCORES_JSON=runs/E0223_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_v1_20260204-135150/eventness_scores.json SEEDS=0,1,2 TRAIN_DEVICE=cuda:9 bash scripts/e0320_ave_p0_sweep_official_val_ltl_top1med_band_low112_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0320_*` |
+| Artifacts | `runs/E0320_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0320_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_band_low112_v1_20260205-142028/sweep_summary.json`. Full (val402; SEEDS=0..2): `runs/E0320_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_band_low112_v1_20260205-142258/sweep_summary.json` (best=`ltltop1medband112_thr0p7_shift1`, Δ≈+0.01205, p≈0.0685). |
+
+
+### E0321: Best-to-test reproduction on test402 (E0320 selection; band-budget + low=112)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0320 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0321_ave_p0_best_to_test_official_ltl_top1med_band_low112_v1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0320), `EVENTNESS=av_clipdiff_mlp`, `TRAIN_DEVICE`, `SEEDS=0..9` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| VRAM | ~4–8 GB |
+| Time/epoch | ~minutes |
+| Total time | ~2–4 hours (SEEDS=0..9) |
+| Single-GPU script | `BEST_CONFIG_JSON=runs/E0320_*/best_config.json bash scripts/e0321_ave_p0_best_to_test_official_ltl_top1med_band_low112_v1.sh` |
+| Multi-GPU script | Use `SEEDS` slicing (e.g., `SEEDS=0,1,2,3,4`) across GPUs and merge by rerun script. |
+| Smoke cmd | `BEST_CONFIG_JSON=runs/E0320_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0321_ave_p0_best_to_test_official_ltl_top1med_band_low112_v1.sh` |
+| Full cmd | `BEST_CONFIG_JSON=runs/E0320_*/best_config.json SEEDS=0,1,2,3,4,5,6,7,8,9 TRAIN_DEVICE=cuda:9 bash scripts/e0321_ave_p0_best_to_test_official_ltl_top1med_band_low112_v1.sh` |
+| Smoke | [x] |
+| Full | [ ] |
+| Logs | `runs/E0321_*` |
+| Artifacts | `runs/E0321_*/metrics.json` |
+| Results | Quick test402 (SEEDS=0..2): `runs/E0321_quick_test402_av_clipdiff_mlp_band_low112_20260205-142726/metrics.json` (Δ≈+0.01028, p≈0.204; regresses vs E0224 seeds subset). Stop before full SEEDS=0..9. |
+
+
+### E0322: Stage-1 sweep on val402 (speech-aware anchors; `asr_vad` v1)
+| Field | Value |
+| --- | --- |
+| Objective | Try to “拉大” C0003 with a deployable speech-aware Stage-1 signal: compute per-second speech ratio (WebRTC-VAD), suppress energy_stride_max by `(1 - speech_ratio)`, and run the standard val402 selection sweep under `CANDIDATE_SET=ltl_top1med_norm_v1`. |
+| Baseline | `uniform` |
+| Model | `temporal_conv` head on frozen CLIP features (same downstream protocol as E0223/E0224) |
+| Weights | No extra pretrained weights; VAD is rule-based. |
+| Code path | `avs/audio/vad_webrtc.py`, `avs/experiments/ave_p0.py` (`asr_vad`), `avs/experiments/ave_p0_sweep.py` (scores cache), `scripts/e0322_ave_p0_sweep_official_val_ltl_top1med_asr_vad_v1.sh` |
+| Params | `EVENTNESS=asr_vad`, `CANDIDATE_SET=ltl_top1med_norm_v1`, `SEEDS`, `TRAIN_DEVICE` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | If val402 Δ is competitive vs E0223/E0224, run E0323 quick test402 (SEEDS=0..2) before committing full test402. |
+| VRAM | ~4–8 GB |
+| Time/epoch | ~minutes |
+| Total time | ~1–2 hours (SEEDS=0..2) |
+| Single-GPU script | `bash scripts/e0322_ave_p0_sweep_official_val_ltl_top1med_asr_vad_v1.sh` |
+| Multi-GPU script | Run different seeds on different GPUs by setting `TRAIN_DEVICE=cuda:X`. |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0322_ave_p0_sweep_official_val_ltl_top1med_asr_vad_v1.sh` |
+| Full cmd | `SEEDS=0,1,2 TRAIN_DEVICE=cuda:9 bash scripts/e0322_ave_p0_sweep_official_val_ltl_top1med_asr_vad_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0322_*` |
+| Artifacts | `runs/E0322_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0322_ave_p0_sweep_official_val_asr_vad_ltl_top1med_norm_v1_20260205-141929/sweep_summary.json`. Full (val402; SEEDS=0..2): `runs/E0322_ave_p0_sweep_official_val_asr_vad_ltl_top1med_norm_v1_20260205-142328/sweep_summary.json` (best Δ≈+0.00216, p≈0.842). Conclusion: not competitive; stop before test402. |
+
+
+### E0323: Best-to-test reproduction on test402 (E0322 selection; speech-aware anchors)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0322 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | No extra pretrained weights; VAD is rule-based. |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0323_ave_p0_best_to_test_official_ltl_top1med_asr_vad_v1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0322), `EVENTNESS=asr_vad`, `TRAIN_DEVICE`, `SEEDS=0..9` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| VRAM | ~4–8 GB |
+| Time/epoch | ~minutes |
+| Total time | ~2–4 hours (SEEDS=0..9) |
+| Single-GPU script | `BEST_CONFIG_JSON=runs/E0322_*/best_config.json bash scripts/e0323_ave_p0_best_to_test_official_ltl_top1med_asr_vad_v1.sh` |
+| Multi-GPU script | Use `SEEDS` slicing (e.g., `SEEDS=0,1,2,3,4`) across GPUs and merge by rerun script. |
+| Smoke cmd | `BEST_CONFIG_JSON=runs/E0322_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0323_ave_p0_best_to_test_official_ltl_top1med_asr_vad_v1.sh` |
+| Full cmd | `BEST_CONFIG_JSON=runs/E0322_*/best_config.json SEEDS=0,1,2,3,4,5,6,7,8,9 TRAIN_DEVICE=cuda:9 bash scripts/e0323_ave_p0_best_to_test_official_ltl_top1med_asr_vad_v1.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0323_*` |
+| Artifacts | `runs/E0323_*/metrics.json` |
+| Results | Not run: depends on E0322 being competitive on val402. |
+
+
+### E0324: Stage-1 sweep on val402 (AST speech-veto "non-speech max" anchors; `ast_nonspeech_max`)
+| Field | Value |
+| --- | --- |
+| Objective | Try to “拉大” C0003 with a deployable semantic speech-veto: run pretrained AST logits, veto speech-like labels (`{speech, conversation, narration}`), and use `max(sigmoid(logits_non_speech))` as per-second scores for anchors under `CANDIDATE_SET=ltl_top1med_norm_v1`. |
+| Baseline | `uniform` |
+| Model | `temporal_conv` head on frozen CLIP features (same downstream protocol as E0223/E0224) |
+| Weights | HF: AST (`--ast-pretrained`) + existing CLIP caches |
+| Code path | `avs/experiments/ave_p0.py` (`ast_nonspeech_max`), `avs/experiments/ave_p0_sweep.py` (scores cache), `scripts/e0324_ave_p0_sweep_official_val_ltl_top1med_ast_nonspeech_max_v1.sh` |
+| Params | `EVENTNESS=ast_nonspeech_max`, `CANDIDATE_SET=ltl_top1med_norm_v1`, `SEEDS`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | If val402 Δ is competitive vs E0223/E0224, run E0325 quick test402 (SEEDS=0..2) before committing full test402. |
+| VRAM | ~4–8 GB (head) + AST inference GPU (optional) |
+| Time/epoch | ~minutes |
+| Total time | ~1–2 hours (SEEDS=0..2) |
+| Single-GPU script | `bash scripts/e0324_ave_p0_sweep_official_val_ltl_top1med_ast_nonspeech_max_v1.sh` |
+| Multi-GPU script | Run different seeds on different GPUs by setting `TRAIN_DEVICE=cuda:X`. |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0324_ave_p0_sweep_official_val_ltl_top1med_ast_nonspeech_max_v1.sh` |
+| Full cmd | `SEEDS=0,1,2 AUDIO_DEVICE=cuda:9 TRAIN_DEVICE=cuda:9 bash scripts/e0324_ave_p0_sweep_official_val_ltl_top1med_ast_nonspeech_max_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0324_*` |
+| Artifacts | `runs/E0324_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0324_ave_p0_sweep_official_val_ast_nonspeech_max_ltl_top1med_norm_v1_20260205-144025/sweep_summary.json`. Full (val402; SEEDS=0..2): `runs/E0324_ave_p0_sweep_official_val_ast_nonspeech_max_ltl_top1med_norm_v1_20260205-144057/sweep_summary.json` (best Δ≈+0.00324, p≈0.722). Conclusion: not competitive; stop before test402. |
+
+
+### E0325: Best-to-test reproduction on test402 (E0324 selection; AST speech-veto anchors)
+| Field | Value |
+| --- | --- |
+| Objective | Reproduce the best config selected by E0324 on official test402 (SEEDS=0..9) and check whether C0003 (+2%, p<0.05) is met. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | HF: AST (`--ast-pretrained`) + existing CLIP caches |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0325_ave_p0_best_to_test_official_ltl_top1med_ast_nonspeech_max_v1.sh` |
+| Params | `BEST_CONFIG_JSON` (from E0324), `EVENTNESS=ast_nonspeech_max`, `AUDIO_DEVICE`, `TRAIN_DEVICE`, `SEEDS=0..9` |
+| Metrics (must save) | `metrics.json` |
+| Checks | Report `Δ = anchored_top2 - uniform` and p-value; if Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| VRAM | ~4–8 GB |
+| Time/epoch | ~minutes |
+| Total time | ~2–4 hours (SEEDS=0..9) |
+| Single-GPU script | `BEST_CONFIG_JSON=runs/E0324_*/best_config.json bash scripts/e0325_ave_p0_best_to_test_official_ltl_top1med_ast_nonspeech_max_v1.sh` |
+| Multi-GPU script | Use `SEEDS` slicing (e.g., `SEEDS=0,1,2,3,4`) across GPUs and merge by rerun script. |
+| Smoke cmd | `BEST_CONFIG_JSON=runs/E0324_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0325_ave_p0_best_to_test_official_ltl_top1med_ast_nonspeech_max_v1.sh` |
+| Full cmd | `BEST_CONFIG_JSON=runs/E0324_*/best_config.json SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cuda:9 TRAIN_DEVICE=cuda:9 bash scripts/e0325_ave_p0_best_to_test_official_ltl_top1med_ast_nonspeech_max_v1.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0325_*` |
+| Artifacts | `runs/E0325_*/metrics.json` |
+| Results | Not run: E0324 is near-0 on val402; stop to avoid spending test402 budget. |
+
+### E0326: Stage-1 sweep on val402 (AST speech-prob feature; `av_clipdiff_speech_mlp`)
+| Field | Value |
+| --- | --- |
+| Objective | Try to “拉大” C0003 by reducing speech-driven false anchors: append a pretrained AST-derived speech probability feature to the existing cheap A+V Stage-1 (`av_clipdiff_mlp`) and re-train the same per-second MLP scorer. Evaluate under the fixed top1-med normalized gate / Stage-2 pipeline on official val402. |
+| Baseline | `uniform` |
+| Model | `temporal_conv` head on frozen CLIP features (same downstream protocol as E0223/E0224) |
+| Weights | HF: AST (`--ast-pretrained`) + existing CLIP caches |
+| Code path | `avs/experiments/ave_p0.py` (`av_clipdiff_speech_mlp`), `avs/experiments/ave_p0_sweep.py` (scores cache), runner: `scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh` |
+| Params | `EVENTNESS=av_clipdiff_speech_mlp`, `CANDIDATE_SET=ltl_top1med_norm_v1`, `AST_PRETRAINED=1`, `SEEDS`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | If val402 Δ is competitive vs E0223/E0224, promote to a quick test402 check before spending the full SEEDS=0..9 budget. |
+| VRAM | ~4–8 GB |
+| Time/epoch | ~minutes |
+| Total time | ~1–2 hours (SEEDS=0..2) |
+| Single-GPU script | `OUT_DIR=runs/E0326_ave_p0_sweep_official_val_av_clipdiff_speech_mlp_ltl_top1med_norm_v1_$(date +%Y%m%d-%H%M%S) AST_PRETRAINED=1 CANDIDATE_SET=ltl_top1med_norm_v1 EVENTNESS=av_clipdiff_speech_mlp bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh` |
+| Multi-GPU script | Run different seeds on different GPUs by setting `TRAIN_DEVICE=cuda:X` and slicing `SEEDS`. |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 OUT_DIR=runs/E0326_smoke_$(date +%Y%m%d-%H%M%S) AST_PRETRAINED=1 CANDIDATE_SET=ltl_top1med_norm_v1 EVENTNESS=av_clipdiff_speech_mlp bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh` |
+| Full cmd | `SEEDS=0,1,2 AUDIO_DEVICE=cuda:9 TRAIN_DEVICE=cuda:9 OUT_DIR=runs/E0326_full_$(date +%Y%m%d-%H%M%S) AST_PRETRAINED=1 CANDIDATE_SET=ltl_top1med_norm_v1 EVENTNESS=av_clipdiff_speech_mlp bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh` |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `runs/E0326_*` |
+| Artifacts | `runs/E0326_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Full (val402; SEEDS=0..2): `runs/E0326_ave_p0_sweep_official_val_av_clipdiff_speech_mlp_ltl_top1med_norm_v1_20260205-154338/sweep_summary.json` (best Δ≈+0.00407, p≈0.458). Conclusion: not competitive; stop before test402. |
+
+
+### E0328: Stage-1 sweep on val402 (energy stride-max × non-speech AST veto; `energy_nonspeech_ast`)
+| Field | Value |
+| --- | --- |
+| Objective | Try to “拉大” C0003 by suppressing speech-like peaks without training: use dense stride-based energy (max pooled per second) multiplied by `(1 - speech_prob_ast)` from pretrained AST, then run the standard val402 selection sweep. |
+| Baseline | `uniform` |
+| Model | `temporal_conv` head on frozen CLIP features (same downstream protocol as E0223/E0224) |
+| Weights | HF: AST (`--ast-pretrained`) + existing CLIP caches |
+| Code path | `avs/experiments/ave_p0.py` / `avs/experiments/ave_p0_sweep.py` (`energy_nonspeech_ast`), runner: `scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh` |
+| Params | `EVENTNESS=energy_nonspeech_ast`, `CANDIDATE_SET=ltl_top1med_norm_v1`, `AST_PRETRAINED=1`, `SEEDS`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | If val402 Δ is competitive vs E0223/E0224, promote to a quick test402 check before spending the full SEEDS=0..9 budget. |
+| VRAM | ~4–8 GB |
+| Time/epoch | ~minutes |
+| Total time | ~1–2 hours (SEEDS=0..2) |
+| Single-GPU script | `OUT_DIR=runs/E0328_ave_p0_sweep_official_val_energy_nonspeech_ast_ltl_top1med_norm_v1_$(date +%Y%m%d-%H%M%S) AST_PRETRAINED=1 CANDIDATE_SET=ltl_top1med_norm_v1 EVENTNESS=energy_nonspeech_ast bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh` |
+| Multi-GPU script | Run different seeds on different GPUs by setting `TRAIN_DEVICE=cuda:X` and slicing `SEEDS`. |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 OUT_DIR=runs/E0328_smoke_$(date +%Y%m%d-%H%M%S) AST_PRETRAINED=1 CANDIDATE_SET=ltl_top1med_norm_v1 EVENTNESS=energy_nonspeech_ast bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh` |
+| Full cmd | `SEEDS=0,1,2 AUDIO_DEVICE=cuda:9 TRAIN_DEVICE=cuda:9 OUT_DIR=runs/E0328_full_$(date +%Y%m%d-%H%M%S) AST_PRETRAINED=1 CANDIDATE_SET=ltl_top1med_norm_v1 EVENTNESS=energy_nonspeech_ast bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh` |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `runs/E0328_*` |
+| Artifacts | `runs/E0328_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Full (val402; SEEDS=0..2): `runs/E0328_ave_p0_sweep_official_val_energy_nonspeech_ast_ltl_top1med_norm_v1_20260205-155950/sweep_summary.json` (best Δ≈+0.00216, p≈0.0997). Conclusion: not competitive; stop before test402. |
+
+
+### E0329: Stage-1 sweep on val402 (accflip teacher-student; `av_clipdiff_accflip_mlp`)
+| Field | Value |
+| --- | --- |
+| Objective | Try a bolder downstream-aligned Stage-1 objective to “拉大” C0003: derive a *teacher* target from cached vision features by training base-res and high-res vision teachers, then mark per-second positives where **high-res is correct but base-res is not** (event seconds only). Train a deployable cheap A+V student scorer on (audio basic + clipdiff scalar) to predict this target, and run the standard val402 selection sweep. |
+| Baseline | `uniform` |
+| Model | `temporal_conv` head on frozen CLIP features (same downstream protocol as E0223/E0224) |
+| Weights | Uses existing CLIP caches; no extra pretrained weights |
+| Code path | `avs/experiments/ave_p0.py` / `avs/experiments/ave_p0_sweep.py` (`av_clipdiff_accflip_mlp`), runner: `scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh` |
+| Params | `EVENTNESS=av_clipdiff_accflip_mlp`, `CANDIDATE_SET=ltl_top1med_norm_v1`, `SEEDS`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | If val402 Δ is competitive vs E0223/E0224, promote to a quick test402 check before spending the full SEEDS=0..9 budget. |
+| VRAM | ~4–8 GB |
+| Time/epoch | ~minutes |
+| Total time | ~1–2 hours (SEEDS=0..2) |
+| Single-GPU script | `OUT_DIR=runs/E0329_ave_p0_sweep_official_val_av_clipdiff_accflip_mlp_ltl_top1med_norm_v1_$(date +%Y%m%d-%H%M%S) CANDIDATE_SET=ltl_top1med_norm_v1 EVENTNESS=av_clipdiff_accflip_mlp bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh` |
+| Multi-GPU script | Run different seeds on different GPUs by setting `TRAIN_DEVICE=cuda:X` and slicing `SEEDS`. |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 OUT_DIR=runs/E0329_smoke_$(date +%Y%m%d-%H%M%S) CANDIDATE_SET=ltl_top1med_norm_v1 EVENTNESS=av_clipdiff_accflip_mlp bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh` |
+| Full cmd | `SEEDS=0,1,2 AUDIO_DEVICE=cpu TRAIN_DEVICE=cuda:9 OUT_DIR=runs/E0329_full_$(date +%Y%m%d-%H%M%S) CANDIDATE_SET=ltl_top1med_norm_v1 EVENTNESS=av_clipdiff_accflip_mlp bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh` |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `runs/E0329_*` |
+| Artifacts | `runs/E0329_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Full (val402; SEEDS=0..2): `runs/E0329_ave_p0_sweep_official_val_av_clipdiff_accflip_mlp_ltl_top1med_norm_v1_20260205-165330/sweep_summary.json` (best Δ≈-0.00091, p≈0.810). Conclusion: downstream-aligned accflip teacher does not improve Stage-1 in AVE-P0; stop before test402. |
+
+
+### E0330: Multi-budget Pareto grid on AVE (Oracle→Predicted + controls)
+| Field | Value |
+| --- | --- |
+| Objective | “冲 oral” 生死图#1：在预注册预算点（多个 triads/Token budgets）上生成 Acc–Tok Pareto（含 CI），并在同一 budget 下同时报告 Oracle / Predicted / Random / Cheap-visual controls，回答：机制上限是否存在、Pred gap 多大、“any window works?” 是否成立、Pareto 是否跨预算稳定。 |
+| Baseline | `uniform` |
+| Model | Same P0 head-only protocol as E0224 (frozen CLIP caches + `temporal_conv` head). |
+| Weights | CLIP caches (from `runs/REAL_AVE_OFFICIAL_20260201-124535/caches_*`); optional AST if using AST-based Stage-1. |
+| Code path | `avs/experiments/mde_ltl.py` (`pareto_grid`), `avs/visualize/pareto_report.py`, `scripts/e0330_mde_pareto_grid_official.sh` |
+| Params | `EVENTNESS`, `BASE_CONFIG_JSON`, `SCORES_JSON`, `TRIADS`, `BUDGET_MODE`, `BUDGET_EPSILON_FRAC`, `BUDGET_EXTRA_RESOLUTIONS`, `SEEDS`, `LIMIT_TRAIN`, `LIMIT_EVAL`, `TRAIN_DEVICE`, `AUDIO_DEVICE`, `AST_PRETRAINED`, `INCLUDE_CHEAP_VISUAL` |
+| Metrics (must save) | `pareto_report.json`, `pareto.png`, per-budget `metrics_predicted_*.json`, optional `metrics_cheap_visual_*.json` |
+| Checks | (1) Oracle > Uniform at ≥1 budget. (2) Predicted is competitive and does not collapse to uniform across budgets. (3) Cheap-visual does **not** match Predicted (kills “any window works”). |
+| VRAM | ~4–8 GB (head training) + optional audio probe GPU |
+| Time/epoch | ~minutes |
+| Total time | ~hours (depends on `|TRIADS| × |SEEDS|`) |
+| Single-GPU script | `EVENTNESS=av_clipdiff_mlp bash scripts/e0330_mde_pareto_grid_official.sh` |
+| Multi-GPU script | Run different `SEEDS` slices on different GPUs and keep separate `OUT_DIR`s; merge the final plot offline if needed. |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 EVENTNESS=energy bash scripts/e0330_mde_pareto_grid_official.sh` |
+| Full cmd | `SEEDS=0,1,2,3,4,5,6,7,8,9 EVENTNESS=av_clipdiff_mlp TRAIN_DEVICE=cuda:9 bash scripts/e0330_mde_pareto_grid_official.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0330_*` |
+| Artifacts | `runs/E0330_*/{pareto_report.json,pareto.png,metrics_*.json}` |
+| Results | Smoke (train64/test32; SEEDS=0,1; EPOCHS=1; EVENTNESS=energy): `runs/E0330_mde_pareto_grid_official_energy_20260205-174428/pareto_report.json` + `runs/E0330_mde_pareto_grid_official_energy_20260205-174428/pareto.png` (includes per-budget `metrics_predicted_*.json` with `token_usage`). Full (official test402; SEEDS=0..9; EVENTNESS=av_clipdiff_mlp; budget_mode=auto): `runs/E0330_full_av_clipdiff_mlp_auto_20260205-184559/pareto_report.json` + `runs/E0330_full_av_clipdiff_mlp_auto_20260205-184559/pareto.png` (Tok=1960: predicted Δ=+0.01525; oracle Δ=+0.04142; `fallback_used_frac≈0.751`). |
+
+
+### E0331: Degradation suite with downstream accuracy + α lower bound (oral-critical)
+| Field | Value |
+| --- | --- |
+| Objective | “冲 oral” 生死图#3：在 `{shift_s, snr_db, silence_ratio, alpha}` 网格上同时报告 Stage-1 recall 与 downstream accuracy 的退化曲线/热力图，并验证 `alpha` 提供可计算下界（不低于 α-baseline）。 |
+| Baseline | `uniform` (α=1) |
+| Model | Same P0 downstream protocol as E0224, but run under perturbed audio for Stage-1. |
+| Weights | Same caches; optional AST. |
+| Code path | `avs/experiments/degradation_accuracy.py`, `scripts/e0331_degradation_accuracy_official.sh` |
+| Metrics (must save) | `degradation_accuracy.json` + plots; must include the exact `{shift_s,snr_db,silence_ratio,alpha}` grid + seeds + token accounting. |
+| Checks | No catastrophic failure: accuracy never drops below the α-baseline; trends are monotonic with corruption severity. |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 EVENTNESS_METHOD=av_clipdiff_mlp bash scripts/e0331_degradation_accuracy_official.sh` |
+| Full cmd | `SEEDS=0,1,2 EVENTNESS_METHOD=av_clipdiff_mlp TRAIN_DEVICE=cuda:9 bash scripts/e0331_degradation_accuracy_official.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Results | Smoke (train64/eval32; SEEDS=0,1; EPOCHS=1; EVENTNESS_METHOD=av_clipdiff_mlp): `runs/E0331_smoke_av_clipdiff_mlp_20260205-194038/degradation_accuracy.json` + `runs/E0331_smoke_av_clipdiff_mlp_20260205-194038/degradation_plots/*.png`. Full (train3339/test402; SEEDS=0..2): `runs/E0331_full_av_clipdiff_mlp_20260205-194925/degradation_accuracy.json` + `runs/E0331_full_av_clipdiff_mlp_20260205-194925/degradation_plots/*.png` (clean mean: anchored=0.7260 vs uniform=0.7070, Δ=+0.0190; gate fallback≈0.751). |
+
+
+### E0332: Stage-1 sweep on val402 (sep3 confidence gate; `ltl_sep3_v1`)
+| Field | Value |
+| --- | --- |
+| Objective | “拉大” C0003 的最短路径：把当前 `top1_med` 的 peakiness gate 替换为 separation gate（`conf_metric=top3_bottom3_gap_norm`），降低误回退（fallback）并在 val402 上选择可泛化的 winner，准备冲 test402 的 +2%。 |
+| Baseline | `uniform` |
+| Model | Same P0 head-only protocol as E0224 (frozen CLIP caches + `temporal_conv` head). |
+| Weights | CLIP caches. |
+| Code path | `avs/experiments/ave_p0_sweep.py`, `scripts/e0332_ave_p0_sweep_official_val_ltl_sep3_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_sep3_v1`, `SEEDS`, `TRAIN_DEVICE`, `AUDIO_DEVICE` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json`, plus per-candidate `metrics.json` |
+| Checks | Winner should reduce `fallback_used_frac` vs the current best (E0223/E0224: ≈0.751) without regressing Δ on val402. |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0332_ave_p0_sweep_official_val_ltl_sep3_v1.sh` |
+| Full cmd | `SEEDS=0,1,2 TRAIN_DEVICE=cuda:9 bash scripts/e0332_ave_p0_sweep_official_val_ltl_sep3_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0332_*` |
+| Artifacts | `runs/E0332_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0332_smoke_sep3_val402_20260205-194349/sweep_summary.json`. Full (val402; SEEDS=0..2): `runs/E0332_full_sep3_val402_20260205-194536/sweep_summary.json` (best=`ltlsep3_thr0p66_shift0`, anchored=0.7446 vs uniform=0.7387, Δ=+0.00590, p≈0.214; fallback_used_frac≈0.317). Conclusion: reduces fallback but regresses Δ vs E0223/E0224; do not promote to full test402. |
+
+
+### E0333: Best-to-test reproduction on test402 (sep3 winner → attempt to prove C0003)
+| Field | Value |
+| --- | --- |
+| Objective | 用 E0332 的 winner 在 official AVE test402 上复现，目标证明 C0003：`anchored_top2 - uniform ≥ +0.02` 且 paired `p<0.05`（SEEDS=0..9）。 |
+| Baseline | `uniform` |
+| Model | Same P0 head-only protocol as E0224 (frozen CLIP caches + `temporal_conv` head). |
+| Weights | CLIP caches. |
+| Code path | `avs/experiments/ave_p0.py`, `scripts/e0333_ave_p0_best_to_test_official_ltl_sep3_v1.sh` |
+| Params | `BEST_CONFIG_JSON=runs/E0332_*/best_config.json`, `EVENTNESS=av_clipdiff_mlp`, `SEEDS`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (must include `paired_ttest` + `debug_eval` for fallback stats) |
+| Smoke cmd | `SEEDS=0,1,2 TRAIN_DEVICE=cuda:9 bash scripts/e0333_ave_p0_best_to_test_official_ltl_sep3_v1.sh` |
+| Full cmd | `SEEDS=0,1,2,3,4,5,6,7,8,9 TRAIN_DEVICE=cuda:9 bash scripts/e0333_ave_p0_best_to_test_official_ltl_sep3_v1.sh` |
+| Smoke | [x] |
+| Full | [ ] |
+| Logs | `runs/E0333_*` |
+| Artifacts | `runs/E0333_*/metrics.json` |
+| Results | Quick test402 (SEEDS=0..2): `runs/E0333_quick_sep3_test402_20260205-194536/metrics.json` (uniform=0.7070, anchored=0.7125, Δ=+0.00547, p≈0.165; fallback_used_frac≈0.348). Full (SEEDS=0..9) skipped due to non-competitive quick. Note: an auto-gated full job failed due to a Python `-c` syntax error (`.rd_queue_sep3/logs/J20260205-114831-361f__e0333-full-sep3-test402-auto.log`). |
+
+
+### E0334: Stage-1 sweep on val402 (learned rescue gate; `ltl_top1med_gate_lr_v1`)
+| Field | Value |
+| --- | --- |
+| Objective | “拉大” C0003：在保持严格 `top1_med` base gate 的同时，引入可部署的 learned rescue gate（`anchor_gate_method=lr_top1hit_v1`）来减少 fallback，但避免 sep3 那类“用得更多但更伤”的失败模式。 |
+| Baseline | `uniform` |
+| Model | Same P0 head-only protocol as E0224 (frozen CLIP caches + `temporal_conv` head). |
+| Weights | CLIP caches. |
+| Code path | `avs/experiments/ave_p0.py` (gate), `avs/experiments/ave_p0_sweep.py` (`candidate_set=ltl_top1med_gate_lr_v1`), `scripts/e0334_ave_p0_sweep_official_val_ltl_top1med_gate_lr_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_gate_lr_v1`, `SEEDS`, `TRAIN_DEVICE`, `AUDIO_DEVICE` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json`, plus per-candidate `metrics.json` |
+| Checks | Winner should lower fallback vs E0224 (~0.751) while staying competitive on val402; only then promote to quick test402. |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0334_ave_p0_sweep_official_val_ltl_top1med_gate_lr_v1.sh` |
+| Full cmd | `SEEDS=0,1,2 TRAIN_DEVICE=cuda:9 bash scripts/e0334_ave_p0_sweep_official_val_ltl_top1med_gate_lr_v1.sh` |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `runs/E0334_*` |
+| Artifacts | `runs/E0334_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Full (val402; SEEDS=0..2): `runs/E0334_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_gate_lr_v1_20260205-205327/sweep_summary.json` (best=`ltltop1med_gate0p8_shift1`, Δ≈+0.00964, p≈0.0331; `gate_rescued_frac≈0.000`; fallback≈0.7606 on the winner). Prior full run: `runs/E0334_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_gate_lr_v1_20260205-204236/sweep_summary.json` (best=`ltltop1med_gate0p7_shift1`, Δ≈+0.00914, p≈0.309). Conclusion: learned rescue gate does not rescue any clips and does not improve Δ; stop. |
+
+
+### E0335: Best-to-test reproduction on test402 (gate-lr winner → attempt to prove C0003)
+| Field | Value |
+| --- | --- |
+| Objective | 用 E0334 的 winner 在 official AVE test402 上复现，目标证明 C0003：`anchored_top2 - uniform ≥ +0.02` 且 paired `p<0.05`（SEEDS=0..9）。 |
+| Baseline | `uniform` |
+| Model | Same P0 head-only protocol as E0224 (frozen CLIP caches + `temporal_conv` head). |
+| Weights | CLIP caches. |
+| Code path | `avs/experiments/ave_p0.py`, `scripts/e0335_ave_p0_best_to_test_official_ltl_top1med_gate_lr_v1.sh` |
+| Params | `BEST_CONFIG_JSON=runs/E0334_*/best_config.json`, `EVENTNESS=av_clipdiff_mlp`, `SEEDS`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (must include `paired_ttest` + `debug_eval` for fallback stats) |
+| Smoke cmd | `SEEDS=0,1,2 TRAIN_DEVICE=cuda:9 bash scripts/e0335_ave_p0_best_to_test_official_ltl_top1med_gate_lr_v1.sh` |
+| Full cmd | `SEEDS=0,1,2,3,4,5,6,7,8,9 TRAIN_DEVICE=cuda:9 bash scripts/e0335_ave_p0_best_to_test_official_ltl_top1med_gate_lr_v1.sh` |
+| Smoke | [x] |
+| Full | [ ] |
+| Logs | `runs/E0335_*` |
+| Artifacts | `runs/E0335_*/metrics.json` |
+| Results | Quick test402 (SEEDS=0..2): `runs/E0335_quick_gate0p6_shift0_test402_20260205-204831/metrics.json` (uniform=0.7070, anchored=0.7179, Δ=+0.01086, p≈0.1165; fallback≈0.7512; `gate_rescued_frac≈0.000`). Full (SEEDS=0..9) skipped due to non-competitive quick + no fallback reduction. |
+
+
+### E0336: Stage-1 sweep on val402 (cheap-visual fallback plan; `ltl_top1med_visfb_v1`)
+| Field | Value |
+| --- | --- |
+| Objective | “拉大” C0003：保持严格 `top1_med` base gate 不变；当音频 gate 触发 fallback 时，不再回到 uniform，而是用 cheap-visual anchors（CLIPdiff / framediff）生成同预算的 anchored plan，尝试把 “fallback clips” 的 Δ 从 0 拉到正。 |
+| Baseline | `uniform` |
+| Model | Same P0 head-only protocol as E0224 (frozen CLIP caches + `temporal_conv` head). |
+| Weights | CLIP caches. |
+| Code path | `avs/experiments/ave_p0.py` (fallback plan), `avs/experiments/ave_p0_sweep.py` (`candidate_set=ltl_top1med_visfb_v1`), `scripts/e0336_ave_p0_sweep_official_val_ltl_top1med_visfb_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_visfb_v1`, `SEEDS`, `TRAIN_DEVICE`, `AUDIO_DEVICE` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json`, plus per-candidate `metrics.json` |
+| Checks | Winner should improve Δ vs E0223/E0224 without increasing harmful far/2-high buckets; only then promote to quick test402. |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0336_ave_p0_sweep_official_val_ltl_top1med_visfb_v1.sh` |
+| Full cmd | `SEEDS=0,1,2 TRAIN_DEVICE=cuda:9 bash scripts/e0336_ave_p0_sweep_official_val_ltl_top1med_visfb_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0336_*` |
+| Artifacts | `runs/E0336_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0336_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_visfb_v1_20260205-212443/sweep_summary.json` (best=`ltltop1med_clipdifffb_shift1`, Δ≈+0.00312, p≈0.50). Full (val402; SEEDS=0..2): `runs/E0336_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_visfb_v1_20260205-212526/sweep_summary.json` (best remains uniform fallback baseline `ltltop1med_uniformfb_shift1`, Δ≈+0.00964, p≈0.0331; both visfb variants regress: framediff Δ≈-0.00648, clipdiff Δ≈-0.00756). Conclusion: naive cheap-visual fallback plans are harmful; stop (skip E0337). |
+
+
+### E0337: Best-to-test reproduction on test402 (visfb winner → attempt to prove C0003)
+| Field | Value |
+| --- | --- |
+| Objective | 用 E0336 的 winner 在 official AVE test402 上复现，目标证明 C0003：`anchored_top2 - uniform ≥ +0.02` 且 paired `p<0.05`（SEEDS=0..9）。 |
+| Baseline | `uniform` |
+| Model | Same P0 head-only protocol as E0224 (frozen CLIP caches + `temporal_conv` head). |
+| Weights | CLIP caches. |
+| Code path | `avs/experiments/ave_p0.py`, `scripts/e0337_ave_p0_best_to_test_official_ltl_top1med_visfb_v1.sh` |
+| Params | `BEST_CONFIG_JSON=runs/E0336_*/best_config.json`, `EVENTNESS=av_clipdiff_mlp`, `SEEDS`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (must include `paired_ttest` + `debug_eval` for fallback stats) |
+| Smoke cmd | `SEEDS=0,1,2 TRAIN_DEVICE=cuda:9 bash scripts/e0337_ave_p0_best_to_test_official_ltl_top1med_visfb_v1.sh` |
+| Full cmd | `SEEDS=0,1,2,3,4,5,6,7,8,9 TRAIN_DEVICE=cuda:9 bash scripts/e0337_ave_p0_best_to_test_official_ltl_top1med_visfb_v1.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0337_*` |
+| Artifacts | `runs/E0337_*/metrics.json` |
+| Results | Skipped: E0336 regresses on val402; do not spend test402 budget. |
+
+
+### E0338: Stage-1 sweep on val402 (gated cheap-visual fallback; `ltl_top1med_visfb_gated_v1`)
+| Field | Value |
+| --- | --- |
+| Objective | Follow-up to E0336: keep strict `top1_med` base gate; only apply cheap-visual fallback anchors when the visual score sequence is sufficiently “peaky” (visual confidence gate), aiming to avoid the “random fallback anchors” harm while still helping a subset of fallback clips. |
+| Baseline | `uniform` |
+| Model | Same P0 head-only protocol as E0224 (frozen CLIP caches + `temporal_conv` head). |
+| Weights | CLIP caches. |
+| Code path | `avs/experiments/ave_p0.py` (visual fallback confidence gate), `avs/experiments/ave_p0_sweep.py` (`candidate_set=ltl_top1med_visfb_gated_v1`), `scripts/e0338_ave_p0_sweep_official_val_ltl_top1med_visfb_gated_v1.sh` |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_visfb_gated_v1`, `SEEDS`, `TRAIN_DEVICE`, `AUDIO_DEVICE` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json`, plus per-candidate `metrics.json` |
+| Checks | Any gated visfb variant must beat the uniform-fallback baseline on val402; only then promote to quick test402. |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0338_ave_p0_sweep_official_val_ltl_top1med_visfb_gated_v1.sh` |
+| Full cmd | `SEEDS=0,1,2 TRAIN_DEVICE=cuda:9 bash scripts/e0338_ave_p0_sweep_official_val_ltl_top1med_visfb_gated_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0338_*` |
+| Artifacts | `runs/E0338_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0338_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_visfb_gated_v1_20260205-220203/sweep_summary.json` (best=`ltltop1med_clipdifffb_vc0p1_shift1`, Δ≈+0.00156, p≈0.50). Full (val402; SEEDS=0..2): `runs/E0338_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_visfb_gated_v1_20260205-220312/sweep_summary.json` (best remains uniform fallback baseline `ltltop1med_uniformfb_shift1`, Δ≈+0.00964, p≈0.0331; all gated visfb variants are negative). Conclusion: gating does not rescue visfb; stop. |
+
+
+### E0339: Best-to-test reproduction on test402 (gated visfb winner → attempt to prove C0003)
+| Field | Value |
+| --- | --- |
+| Objective | 用 E0338 的 winner 在 official AVE test402 上复现，目标证明 C0003：`anchored_top2 - uniform ≥ +0.02` 且 paired `p<0.05`（SEEDS=0..9）。 |
+| Baseline | `uniform` |
+| Model | Same P0 head-only protocol as E0224 (frozen CLIP caches + `temporal_conv` head). |
+| Weights | CLIP caches. |
+| Code path | `avs/experiments/ave_p0.py`, `scripts/e0339_ave_p0_best_to_test_official_ltl_top1med_visfb_gated_v1.sh` |
+| Params | `BEST_CONFIG_JSON=runs/E0338_*/best_config.json`, `EVENTNESS=av_clipdiff_mlp`, `SEEDS`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (must include `paired_ttest` + `debug_eval` for fallback stats) |
+| Smoke cmd | `SEEDS=0,1,2 TRAIN_DEVICE=cuda:9 bash scripts/e0339_ave_p0_best_to_test_official_ltl_top1med_visfb_gated_v1.sh` |
+| Full cmd | `SEEDS=0,1,2,3,4,5,6,7,8,9 TRAIN_DEVICE=cuda:9 bash scripts/e0339_ave_p0_best_to_test_official_ltl_top1med_visfb_gated_v1.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0339_*` |
+| Artifacts | `runs/E0339_*/metrics.json` |
+| Results | Skipped: E0338 does not beat the uniform-fallback baseline on val402; do not spend test402 budget. |
+
+
+### E0202: Evidence Alignment (Cov@τ) vs accuracy correlation report
+| Field | Value |
+| --- | --- |
+| Objective | Measure Evidence Alignment (Cov@τ) and correlate it with anchored gains to diagnose failure cases. |
+| Baseline | N/A (analysis-only) |
+| Model | N/A |
+| Weights | N/A |
+| Code path | `avs/experiments/evidence_alignment_report.py` |
+| Params | `TAU_GRID`, `DELTA_S`, `ANCHOR_SOURCE`, `SPLIT` |
+| Metrics (must save) | `evidence_alignment.json` (Cov@τ table + Pearson/Spearman correlations) |
+| Checks | Correlation magnitude is reported and stable across splits; top-k worst cases are listed. |
+| VRAM | CPU |
+| Time/epoch | N/A |
+| Total time | minutes |
+| Single-GPU script | N/A |
+| Multi-GPU script | N/A |
+| Smoke cmd | `python -m avs.smoke evidence_windows` |
+| Full cmd | `python -m avs.experiments.evidence_alignment_report --in-metrics runs/E0012_ave_p0_best_to_test_official_20260203-145743/metrics.json --meta-dir data/AVE/meta` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0202_*` |
+| Artifacts | `runs/E0202_*/evidence_alignment.json` |
+| Results | Test402 (energy_v2): `runs/E0202_evidence_alignment_energy_v2_test_20260203-194355/evidence_alignment.json` (Cov@τ mean≈0.059 for τ∈{0.3,0.5,0.7}; corr(Δacc,Cov) pearson≈0.080, spearman≈-0.003). Test402 (av_clipdiff_mlp / E0224): `runs/E0202_evidence_alignment_av_clipdiff_mlp_test402_20260205-233330/evidence_alignment.json` (Cov@τ mean≈0.059; corr pearson≈0.0127, spearman≈0.0299). |
+
+
+### E0203: Degradation suite (shift/noise/silence × α) on AVE
+| Field | Value |
+| --- | --- |
+| Objective | Stage-1 robustness: run anchor-quality degradation heatmaps under `{shift_s, snr_db, silence_ratio}`. |
+| Baseline | `energy` (audio-only) |
+| Model | Stage-1 only (no downstream training) |
+| Weights | N/A |
+| Code path | `avs/experiments/degradation_suite.py` |
+| Params | `EVENTNESS_METHOD ∈ {energy, energy_delta, energy_stride_max, energy_autoshift_clipdiff, energy_autoshift_clipdiff_pos, av_fused, av_fused_prod, av_fused_clipdiff, av_fused_clipdiff_prod, moe_energy_clipdiff, vision_clipdiff, av_clipdiff_mlp, av_clipdiff_framediff_mlp, ast, ast_lr, ast_emb_lr, ast_evt_mlp, ast_mlp_cls, ast_mlp_cls_target, panns, audio_basic_lr, audio_basic_mlp, audio_basic_tcn, audio_fbank_mlp, audio_fbank_tcn, audio_basic_mlp_cls, audio_basic_mlp_cls_target}`, `AST_PRETRAINED`, `AUDIO_DEVICE`, grids: `SHIFT_GRID`, `SNR_GRID`, `SILENCE_GRID`, plus `K` and dilation `Δ`. |
+| Metrics (must save) | `degradation_suite.json` (rows with `recall_by_delta` + fallback stats) |
+| Checks | `av_fused` degrades less under silence/noise; trends are monotonic with corruption severity. |
+| VRAM | TBD |
+| Time/epoch | TBD |
+| Total time | TBD |
+| Single-GPU script | `EVENTNESS=energy bash scripts/e0203_degradation_suite_official.sh` |
+| Multi-GPU script | Run different `EVENTNESS` on different GPUs/CPUs. |
+| Smoke cmd | `python -m avs.smoke ltl_degradation_suite_toy` |
+| Full cmd | `EVENTNESS=energy bash scripts/e0203_degradation_suite_official.sh` (then rerun with `EVENTNESS=energy_stride_max` and `EVENTNESS=av_fused`) |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0203_*` |
+| Artifacts | `runs/E0203_*/degradation_suite.json` |
+| Results | Full (test402; grid=3×3×2=18): energy `runs/E0203_full_energy_20260203-210331/degradation_suite.json` (mean Recall@K,Δ0≈0.223; Δ2≈0.640). energy_stride_max `runs/E0203_full_energy_stride_max_20260203-210414/degradation_suite.json` (mean Δ0≈0.223; Δ2≈0.634). av_fused `runs/E0203_full_av_fused_20260203-210458/degradation_suite.json` (mean Δ0≈0.207; Δ2≈0.708; improves under larger Δ but hurts strict Δ0). Learned audio eventness runner: `runs/E0203_degradation_audio_basic_lr_20260204-012618/degradation_suite.json`. Deployable multimodal Stage-1 (`av_clipdiff_mlp`): `runs/E0203_degradation_av_clipdiff_mlp_20260204-215831/degradation_suite.json` (mean Δ0≈0.212; Δ2≈0.624). |
+
+
+### E0340: Build official mid-res caches (112/160/192/208/224/320/352) for P0116
+| Field | Value |
+| --- | --- |
+| Objective | Build a CLIP feature cache that includes mid resolutions `{192,208}` and a cheaper high `{320}` so the band-budget planner can preserve more context under 2-high without exceeding the uniform token budget. |
+| Baseline | N/A |
+| Model | CLIP ViT-B/16 vision encoder (feature caching only) |
+| Weights | HF: CLIP (`--vision-pretrained`) |
+| Code path | `avs/pipeline/ave_p0_end2end.py`, `scripts/e0340_ave_cache_official_midres.sh` |
+| Params | `CACHES_DIR`, `CACHE_RESOLUTIONS`, `CACHE_NUM_WORKERS`, `CACHE_DEVICES`, `PROCESSED_DIR`, `RAW_VIDEOS_DIR`, `LIMIT_TRAIN/LIMIT_VAL/LIMIT_TEST` |
+| Metrics (must save) | `runs/E0340_*/cache_{val,test}/cache_build.json` + per-worker logs; caches under `${CACHES_DIR}/<clip_id>.npz` |
+| Checks | The caches contain the required resolutions for all (or nearly all) `download_ok_*_official.txt` ids; E0341/E0342/E0343 run without missing-resolution crashes. |
+| VRAM | ~2–4GB per cache worker GPU |
+| Time/epoch | N/A |
+| Total time | TBD (depends on GPU count + disk) |
+| Single-GPU script | `CACHE_NUM_WORKERS=1 CACHE_DEVICES=cuda:0 bash scripts/e0340_ave_cache_official_midres.sh` |
+| Multi-GPU script | `CACHE_NUM_WORKERS=10 CACHE_DEVICES=cuda:0,cuda:1,cuda:2,cuda:3,cuda:4,cuda:5,cuda:6,cuda:7,cuda:8,cuda:9 bash scripts/e0340_ave_cache_official_midres.sh` |
+| Smoke cmd | `CACHES_DIR=runs/E0340_caches_smoke CACHE_RESOLUTIONS=112,160,192,208,224,320,352 LIMIT_TRAIN=8 LIMIT_VAL=4 LIMIT_TEST=4 CACHE_NUM_WORKERS=1 CACHE_DEVICES=cuda:0 bash scripts/e0340_ave_cache_official_midres.sh` |
+| Full cmd | `bash scripts/e0340_ave_cache_official_midres.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0340_*` |
+| Artifacts | `${CACHES_DIR}/*.{npz,json}` |
+| Results | Smoke: `runs/E0340_cache_smoke_20260205-233035/cache_val/cache_only.json`, `runs/E0340_cache_smoke_20260205-233035/cache_test/cache_only.json`. Full: `runs/E0340_cache_official_midres_20260206-000432/cache_val/cache_only.json` (train=3312, val=401, union=3703) + `runs/E0340_cache_official_midres_20260206-000432/cache_test/cache_only.json` (train=3312, test=402, union=3706). Final caches under `runs/REAL_AVE_OFFICIAL_20260201-124535/caches_112_160_192_208_224_320_352` (unique clip ids=4097). |
+
+
+### E0341: Val402 sweep (candidate_set=ltl_top1med_band_midres_v1) → select best config
+| Field | Value |
+| --- | --- |
+| Objective | Compare an internal baseline (E0224 winner) vs mid-res band-budget variants and select the best config on official val402. |
+| Baseline | `ltltop1med_thr0p6_shift1_base_exact352` (internal), plus the historical E0224 reference for context |
+| Model | `openai/clip-vit-base-patch16` (cached features) + `TemporalConvHead`; Stage-1 = `EVENTNESS=av_clipdiff_mlp` |
+| Weights | HF: CLIP (cached); (no AST required) |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`candidate_set=ltl_top1med_band_midres_v1`), `scripts/e0341_ave_p0_sweep_official_val_ltl_top1med_band_midres_v1.sh` |
+| Params | `SEEDS`, `EPOCHS`, `LIMIT_TRAIN/LIMIT_EVAL`, `TRAIN_DEVICE`, `AUDIO_DEVICE`, `CACHES_DIR`, `EVENTNESS` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Winner is competitive vs the internal baseline; if competitive, promote to E0342 quick test402 (SEEDS=0..2). |
+| VRAM | Head training only (small); Stage-1 is CPU-friendly |
+| Time/epoch | ~minutes |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0341_ave_p0_sweep_official_val_ltl_top1med_band_midres_v1.sh` |
+| Multi-GPU script | Run multiple sweeps with different `SEEDS` in parallel if needed. |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0341_ave_p0_sweep_official_val_ltl_top1med_band_midres_v1.sh` |
+| Full cmd | `SEEDS=0,1,2 bash scripts/e0341_ave_p0_sweep_official_val_ltl_top1med_band_midres_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0341_*` |
+| Artifacts | `runs/E0341_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke: `runs/E0341_smoke_val_midres_20260205-233128/sweep_summary.json`. Full (val402; SEEDS=0..2): `runs/E0341_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_band_midres_v1_20260206-004701/sweep_summary.json` (winner remains baseline `ltltop1med_thr0p6_shift1_base_exact352`, Δ≈+0.00964, p≈0.0331; midres band variants regress). |
+
+
+### E0342: Quick test402 reproduction (SEEDS=0..2) for the E0341 winner
+| Field | Value |
+| --- | --- |
+| Objective | Validate transfer on official test402 with minimal budget: only promote to full SEEDS=0..9 if competitive. |
+| Baseline | Uniform under the selected config; compare Δ vs the historical baseline (E0224) on the same seeds when needed. |
+| Model | Same as E0341 winner |
+| Weights | Same as E0341 |
+| Code path | `scripts/e0342_ave_p0_best_to_test_quick_official_ltl_top1med_band_midres_v1.sh`, `avs/experiments/ave_p0_sweep.py` (`run`) |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0341_*/best_config.json`), `SEEDS=0,1,2`, `CACHES_DIR`, `EVENTNESS` |
+| Metrics (must save) | `metrics.json` (+ optional `diagnose.json` via E0344 helper) |
+| Checks | Δ is competitive vs E0224 on the same seeds; diagnose shows improved 2-high bucket (not strongly negative). |
+| VRAM | Head training only |
+| Time/epoch | ~minutes |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0342_ave_p0_best_to_test_quick_official_ltl_top1med_band_midres_v1.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0342_ave_p0_best_to_test_quick_official_ltl_top1med_band_midres_v1.sh` |
+| Full cmd | `bash scripts/e0342_ave_p0_best_to_test_quick_official_ltl_top1med_band_midres_v1.sh` |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `runs/E0342_*` |
+| Artifacts | `runs/E0342_*/metrics.json` |
+| Results | Winner quick test402 (SEEDS=0..2): `runs/E0342_quick_test402_av_clipdiff_mlp_20260206-005041/metrics.json` (Δ≈+0.01899, p≈0.0429). Follow-ups (still regress vs the baseline quick Δ): midres band dist `runs/E0342_quick_test402_av_clipdiff_mlp_midres320_band_dist_20260206-005345/metrics.json` (Δ≈+0.01003), midres band mixed `runs/E0342_quick_test402_av_clipdiff_mlp_midres320_band_mixed_20260206-005528/metrics.json` (Δ≈+0.01003), midres band bridge `runs/E0342_quick_test402_av_clipdiff_mlp_midres320_band_bridge_20260206-005718/metrics.json` (Δ≈+0.00655), max_high_anchors=1 `runs/E0345_quick_test402_av_clipdiff_mlp_maxhigh1_20260206-010239/metrics.json` (Δ≈+0.01285). Conclusion: midres band-budget does not transfer; do not promote to full. |
+
+
+### E0343: Full test402 reproduction (SEEDS=0..9) for the E0341 winner → attempt to prove C0003
+| Field | Value |
+| --- | --- |
+| Objective | Spend the full official test402 budget (SEEDS=0..9) to attempt to prove C0003 (Δ≥+0.02, p<0.05). |
+| Baseline | `uniform` |
+| Model | Same as E0341 winner |
+| Weights | Same as E0341 |
+| Code path | `scripts/e0343_ave_p0_best_to_test_full_official_ltl_top1med_band_midres_v1.sh`, `avs/experiments/ave_p0_sweep.py` (`run`) |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0341_*/best_config.json`), `SEEDS=0..9`, `CACHES_DIR`, `EVENTNESS` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json` via E0344 helper for failure analysis) |
+| Checks | If Δ≥+0.02 and p<0.05, mark C0003 proven; otherwise update `docs/plan.md` C0003 evidence + failure diagnosis. |
+| VRAM | Head training only |
+| Time/epoch | ~minutes |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0343_ave_p0_best_to_test_full_official_ltl_top1med_band_midres_v1.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `SEEDS=0,1 EPOCHS=1 LIMIT_TRAIN=64 LIMIT_EVAL=32 bash scripts/e0343_ave_p0_best_to_test_full_official_ltl_top1med_band_midres_v1.sh` |
+| Full cmd | `bash scripts/e0343_ave_p0_best_to_test_full_official_ltl_top1med_band_midres_v1.sh` |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `runs/E0343_*` |
+| Artifacts | `runs/E0343_*/metrics.json` |
+| Results | Full test402 (SEEDS=0..9): `runs/E0343_full_test402_av_clipdiff_mlp_20260206-005134/metrics.json` (anchored=0.72383 vs uniform=0.70858, Δ=+0.01525, p≈0.00390). Does not prove C0003 (+2%). Diagnosis: `runs/E0344_ave_p0_diagnose_20260206-005232/diagnose.json` (far-anchor dist∈{2..5} and 2-high buckets remain strongly negative). |
+
+
+### E0344: Diagnostic helper (ave_p0_diagnose) for a given metrics.json
+| Field | Value |
+| --- | --- |
+| Objective | Produce a compact bucketed diagnosis (fallback, 2-high, anchor distance) to explain why Δ improved or regressed. |
+| Baseline | N/A (analysis-only) |
+| Model | N/A |
+| Weights | N/A |
+| Code path | `avs/experiments/ave_p0_diagnose.py`, `scripts/e0344_ave_p0_diagnose.sh` |
+| Params | `IN_METRICS`, `META_DIR` |
+| Metrics (must save) | `diagnose.json` |
+| Checks | `anchor_plan_stats.delta_by_high_count` and `delta_by_anchor_dist` identify whether far-2-high harm is reduced. |
+| VRAM | CPU |
+| Time/epoch | N/A |
+| Total time | minutes |
+| Single-GPU script | `IN_METRICS=runs/E0342_*/metrics.json bash scripts/e0344_ave_p0_diagnose.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `IN_METRICS=runs/E0224_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-135547/metrics.json bash scripts/e0344_ave_p0_diagnose.sh` |
+| Full cmd | `IN_METRICS=runs/E0343_*/metrics.json bash scripts/e0344_ave_p0_diagnose.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0344_*` |
+| Artifacts | `runs/E0344_*/diagnose.json` |
+| Results | Smoke: `runs/E0344_smoke_diag_20260205-233225/diagnose.json`. Quick test diagnosis: `runs/E0344_ave_p0_diagnose_20260206-005134/diagnose.json`. Full test diagnosis: `runs/E0344_ave_p0_diagnose_20260206-005232/diagnose.json` shows the persistent failure mode (fallback≈0.751; `delta_by_high_count[2].mean_delta≈-0.04` with n≈30; `delta_by_anchor_dist[2..5]` strongly negative). |
+
+
+### E0346: Val402 sweep — EVENTNESS=av_clap_clip_agree under ltl_top1med_norm_v1
+| Field | Value |
+| --- | --- |
+| Objective | Try a bolder Stage-1 signal (CLAP audio-text × CLIP image-text semantic agreement) to suppress off-screen audio peaks and improve anchor reliability; select the best deployable config on val402. |
+| Baseline | `uniform` (primary); compare against prior best E0224 (Δ=+0.01525 on full test402) for promotion decisions. |
+| Model | CLIP ViT-B/16 cached vision embeddings + temporal head (same as other AVE-P0 runs). |
+| Weights | N/A (head trained per seed) |
+| Code path | `scripts/e0346_ave_p0_sweep_official_val_ltl_top1med_norm_v1_clapagree.sh`, `avs/audio/clap_probe.py`, `avs/vision/clip_text.py`, `avs/experiments/ave_p0.py`, `avs/experiments/ave_p0_sweep.py` |
+| Params | `EVENTNESS=av_clap_clip_agree`, `CANDIDATE_SET=ltl_top1med_norm_v1`, `SEEDS=0..2`, `AUDIO_DEVICE` (CLAP), `TRAIN_DEVICE` (head) |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Promote only if val402 is competitive and quick test402 (E0347) beats the baseline quick Δ (≈+0.01899). |
+| VRAM | CLAP model on `AUDIO_DEVICE` (large); head training is small. |
+| Time/epoch | ~minutes (head); Stage-1 scoring dominates. |
+| Total time | ~tens of minutes to hours (depends on CLAP speed/device). |
+| Single-GPU script | `bash scripts/e0346_ave_p0_sweep_official_val_ltl_top1med_norm_v1_clapagree.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0346_ave_p0_sweep_official_val_ltl_top1med_norm_v1_clapagree.sh` |
+| Full cmd | `AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0346_ave_p0_sweep_official_val_ltl_top1med_norm_v1_clapagree.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0346_*` |
+| Artifacts | `runs/E0346_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke: `runs/E0346_ave_p0_sweep_official_val_av_clap_clip_agree_ltl_top1med_norm_v1_20260206-020428/sweep_summary.json` (LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1). Full val402 (SEEDS=0..2): `runs/E0346_ave_p0_sweep_official_val_av_clap_clip_agree_ltl_top1med_norm_v1_20260206-020740/sweep_summary.json` (best=`ltltop1medn_thr0p6_shift1`, Δ≈+0.00599, p≈0.373). |
+
+
+### E0347: Quick test402 reproduction (SEEDS=0..2) for the E0346 winner + diagnosis
+| Field | Value |
+| --- | --- |
+| Objective | Sanity-check transfer on test402 with a small seed set and diagnose failure buckets (fallback / far / 2-high) before spending SEEDS=0..9. |
+| Baseline | `uniform` and the baseline quick Δ from E0342 (≈+0.01899 on SEEDS=0..2). |
+| Model | Same as E0346 winner |
+| Weights | Same as E0346 (head trained per seed) |
+| Code path | `scripts/e0347_ave_p0_best_to_test_quick_official_clapagree.sh`, `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0344_ave_p0_diagnose.sh` |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0346_*/best_config.json`), `SEEDS=0..2`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json` via E0344) |
+| Checks | If Δ is competitive vs baseline quick and diagnosis shows reduced harmful buckets, promote to E0348. |
+| VRAM | CLAP on `AUDIO_DEVICE`; head on `TRAIN_DEVICE`. |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0347_ave_p0_best_to_test_quick_official_clapagree.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0347_ave_p0_best_to_test_quick_official_clapagree.sh` |
+| Full cmd | `AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0347_ave_p0_best_to_test_quick_official_clapagree.sh` |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `runs/E0347_*` |
+| Artifacts | `runs/E0347_*/metrics.json` |
+| Results | Quick test402 (SEEDS=0..2): `runs/E0347_quick_test402_av_clap_clip_agree_20260206-024249/metrics.json` (uniform=0.70705, anchored=0.70531, Δ≈-0.00174, p≈0.801). Diagnosis: `runs/E0344_ave_p0_diagnose_20260206-024700/diagnose.json` (fallback_used_frac≈0.149 but far anchors are harmful: dist=4 meanΔ≈-0.0478; 2-high meanΔ≈-0.0111). Decision: not promoted to E0348. |
+
+
+### E0348: Full test402 reproduction (SEEDS=0..9) for the E0346 winner → attempt to prove C0003
+| Field | Value |
+| --- | --- |
+| Objective | Spend the full official test402 evaluation budget (SEEDS=0..9) to attempt to prove C0003 (Δ≥+0.02, p<0.05). |
+| Baseline | `uniform` |
+| Model | Same as E0346 winner |
+| Weights | Same as E0346 (head trained per seed) |
+| Code path | `scripts/e0348_ave_p0_best_to_test_full_official_clapagree.sh`, `avs/experiments/ave_p0_sweep.py` (`run`) |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0346_*/best_config.json`), `SEEDS=0..9`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json` via E0344) |
+| Checks | If Δ≥+0.02 and p<0.05, mark C0003 proven; otherwise update `docs/plan.md` evidence and failure diagnosis. |
+| VRAM | CLAP on `AUDIO_DEVICE`; head on `TRAIN_DEVICE`. |
+| Total time | ~tens of minutes to hours |
+| Single-GPU script | `bash scripts/e0348_ave_p0_best_to_test_full_official_clapagree.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `SEEDS=0,1 EPOCHS=1 LIMIT_TRAIN=64 LIMIT_EVAL=32 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0348_ave_p0_best_to_test_full_official_clapagree.sh` |
+| Full cmd | `AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0348_ave_p0_best_to_test_full_official_clapagree.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0348_*` |
+| Artifacts | `runs/E0348_*/metrics.json` |
+| Results | Skipped: not promoted after E0347 quick test (Δ≈-0.00174 on test402 SEEDS=0..2). |
+
+
+### E0349: Val402 sweep — EVENTNESS=av_clap_clip_agree under ltl_top1med_k1_v1
+| Field | Value |
+| --- | --- |
+| Objective | Salvage `av_clap_clip_agree` by removing the harmful 2-anchor/2-high regime (k=1). Run a k=1 candidate sweep on val402 to see if transfer improves before investing in new Stage-1 signals. |
+| Baseline | `uniform` (primary); compare against prior best E0224/E0343 for promotion decisions. |
+| Model | CLIP ViT-B/16 cached vision embeddings + temporal head (same as other AVE-P0 runs). |
+| Weights | N/A (head trained per seed) |
+| Code path | `scripts/e0349_ave_p0_sweep_official_val_ltl_top1med_k1_v1_clapagree.sh`, `avs/experiments/ave_p0_sweep.py` |
+| Params | `EVENTNESS=av_clap_clip_agree`, `CANDIDATE_SET=ltl_top1med_k1_v1`, `SEEDS=0..2`, optional `BASE_SCORES_JSON` reuse, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Promote only if val402 is clearly positive and quick test402 (E0350) is competitive vs baseline quick. |
+| VRAM | CLAP on `AUDIO_DEVICE`; head on `TRAIN_DEVICE`. |
+| Total time | ~minutes to hours (depends on whether Stage-1 scores are reused). |
+| Single-GPU script | `bash scripts/e0349_ave_p0_sweep_official_val_ltl_top1med_k1_v1_clapagree.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0349_ave_p0_sweep_official_val_ltl_top1med_k1_v1_clapagree.sh` |
+| Full cmd | `AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0349_ave_p0_sweep_official_val_ltl_top1med_k1_v1_clapagree.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0349_*` |
+| Artifacts | `runs/E0349_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke: `runs/E0349_ave_p0_sweep_official_val_av_clap_clip_agree_ltl_top1med_k1_v1_20260206-030057/sweep_summary.json` (LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1; reused E0346 score cache). Full val402 (SEEDS=0..2): `runs/E0349_ave_p0_sweep_official_val_av_clap_clip_agree_ltl_top1med_k1_v1_20260206-030147/sweep_summary.json` (best=`ltltop1medk1_thr0p4_shift0`, Δ≈+0.00939, p≈0.125). |
+
+
+### E0350: Quick test402 reproduction (SEEDS=0..2) for the E0349 winner + diagnosis
+| Field | Value |
+| --- | --- |
+| Objective | Sanity-check transfer on test402 with a small seed set and diagnose failure buckets (fallback / far / 2-high) before spending SEEDS=0..9. |
+| Baseline | `uniform` and the baseline quick Δ from E0342 (≈+0.01899 on SEEDS=0..2). |
+| Model | Same as E0349 winner |
+| Weights | Same as E0349 (head trained per seed) |
+| Code path | `scripts/e0350_ave_p0_best_to_test_quick_official_clapagree_k1.sh`, `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0344_ave_p0_diagnose.sh` |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0349_*/best_config.json`), `SEEDS=0..2`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json` via E0344) |
+| Checks | If Δ is competitive vs baseline quick and diagnosis shows reduced harmful buckets, promote to E0351. |
+| VRAM | CLAP on `AUDIO_DEVICE`; head on `TRAIN_DEVICE`. |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0350_ave_p0_best_to_test_quick_official_clapagree_k1.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0350_ave_p0_best_to_test_quick_official_clapagree_k1.sh` |
+| Full cmd | `AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0350_ave_p0_best_to_test_quick_official_clapagree_k1.sh` |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `runs/E0350_*` |
+| Artifacts | `runs/E0350_*/metrics.json` |
+| Results | Quick test402 (SEEDS=0..2): `runs/E0350_quick_test402_av_clap_clip_agree_k1_20260206-030727/metrics.json` (uniform=0.70705, anchored=0.71169, Δ≈+0.00464, p≈0.00412). Diagnosis: `runs/E0344_ave_p0_diagnose_20260206-030755/diagnose.json` (fallback_used_frac≈0.930). Decision: not promoted to E0351. |
+
+
+### E0351: Full test402 reproduction (SEEDS=0..9) for the E0349 winner → attempt to prove C0003
+| Field | Value |
+| --- | --- |
+| Objective | Spend the full official test402 evaluation budget (SEEDS=0..9) to attempt to prove C0003 (Δ≥+0.02, p<0.05). |
+| Baseline | `uniform` |
+| Model | Same as E0349 winner |
+| Weights | Same as E0349 (head trained per seed) |
+| Code path | `scripts/e0351_ave_p0_best_to_test_full_official_clapagree_k1.sh`, `avs/experiments/ave_p0_sweep.py` (`run`) |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0349_*/best_config.json`), `SEEDS=0..9`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json` via E0344) |
+| Checks | If Δ≥+0.02 and p<0.05, mark C0003 proven; otherwise update `docs/plan.md` evidence and failure diagnosis. |
+| VRAM | CLAP on `AUDIO_DEVICE`; head on `TRAIN_DEVICE`. |
+| Total time | ~tens of minutes to hours |
+| Single-GPU script | `bash scripts/e0351_ave_p0_best_to_test_full_official_clapagree_k1.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `SEEDS=0,1 EPOCHS=1 LIMIT_TRAIN=64 LIMIT_EVAL=32 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0351_ave_p0_best_to_test_full_official_clapagree_k1.sh` |
+| Full cmd | `AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0351_ave_p0_best_to_test_full_official_clapagree_k1.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0351_*` |
+| Artifacts | `runs/E0351_*/metrics.json` |
+| Results | Skipped: not promoted after E0350 quick test (fallback_used_frac≈0.930; Δ≈+0.00464 on test402 SEEDS=0..2). |
+
+
+### E0352: Val402 sweep — EVENTNESS=clap_evt (CLAP audio↔text prompt eventness) under ltl_top1med_norm_v1
+| Field | Value |
+| --- | --- |
+| Objective | Try a bold semantic Stage-1 signal (`clap_evt`: per-second CLAP audio↔class-prompt similarity) and select the best sampling config on official val402 before spending test402 budget. |
+| Baseline | `uniform` (primary); compare against prior best val402 sweep winners for promotion. |
+| Model | CLIP ViT-B/16 cached vision embeddings + temporal head (same AVE-P0 pipeline). |
+| Weights | CLAP pretrained (Stage-1 scoring) + head trained per seed. |
+| Code path | `scripts/e0352_ave_p0_sweep_official_val_ltl_top1med_norm_v1_clapevt.sh`, `avs/audio/clap_probe.py`, `avs/experiments/ave_p0.py`, `avs/experiments/ave_p0_sweep.py` |
+| Params | `EVENTNESS=clap_evt`, `CANDIDATE_SET=ltl_top1med_norm_v1`, `SEEDS=0..2`, `AUDIO_DEVICE` (CLAP), `TRAIN_DEVICE` (head) |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Promote only if val402 is competitive and quick test402 (E0353) is competitive vs the baseline quick Δ (≈+0.01899). |
+| VRAM | CLAP model on `AUDIO_DEVICE` (large); head training is small. |
+| Total time | ~tens of minutes to hours (Stage-1 scoring dominates). |
+| Single-GPU script | `bash scripts/e0352_ave_p0_sweep_official_val_ltl_top1med_norm_v1_clapevt.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0352_ave_p0_sweep_official_val_ltl_top1med_norm_v1_clapevt.sh` |
+| Full cmd | `AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0352_ave_p0_sweep_official_val_ltl_top1med_norm_v1_clapevt.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0352_*` |
+| Artifacts | `runs/E0352_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke: `runs/E0352_ave_p0_sweep_official_val_clap_evt_ltl_top1med_norm_v1_20260206-032925/sweep_summary.json` (LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1). Full val402 (SEEDS=0..2): `runs/E0352_ave_p0_sweep_official_val_clap_evt_ltl_top1med_norm_v1_20260206-033347/sweep_summary.json` (best=`ltltop1medn_thr0p6_shift1`, Δ≈+0.00657, p≈0.202; weak). |
+
+
+### E0353: Quick test402 reproduction (SEEDS=0..2) for the E0352 winner + diagnosis
+| Field | Value |
+| --- | --- |
+| Objective | Sanity-check transfer on test402 with a small seed set and diagnose failure buckets (fallback / far / 2-high) before spending SEEDS=0..9. |
+| Baseline | `uniform` and the baseline quick Δ from E0342 (≈+0.01899 on SEEDS=0..2). |
+| Model | Same as E0352 winner |
+| Weights | Same as E0352 (head trained per seed) |
+| Code path | `scripts/e0353_ave_p0_best_to_test_quick_official_clapevt.sh`, `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0344_ave_p0_diagnose.sh` |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0352_*/best_config.json`), `SEEDS=0..2`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json` via E0344) |
+| Checks | If Δ is competitive vs baseline quick and diagnosis shows reduced harmful buckets, promote to E0354. |
+| VRAM | CLAP on `AUDIO_DEVICE`; head on `TRAIN_DEVICE`. |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0353_ave_p0_best_to_test_quick_official_clapevt.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0353_ave_p0_best_to_test_quick_official_clapevt.sh` |
+| Full cmd | `AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0353_ave_p0_best_to_test_quick_official_clapevt.sh` |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `runs/E0353_*` |
+| Artifacts | `runs/E0353_*/metrics.json` |
+| Results | Quick test402 (SEEDS=0..2): `runs/E0353_quick_test402_clap_evt_20260206-040527/metrics.json` (uniform=0.70705, anchored=0.71517, Δ≈+0.00813, p≈0.457). Diagnosis: `runs/E0344_ave_p0_diagnose_20260206-040943/diagnose.json` (fallback_used_frac≈0.478; 2-high remains net harmful). Decision: not promoted to E0354. |
+
+
+### E0354: Full test402 reproduction (SEEDS=0..9) for the E0352 winner → attempt to prove C0003
+| Field | Value |
+| --- | --- |
+| Objective | Spend the full official test402 evaluation budget (SEEDS=0..9) to attempt to prove C0003 (Δ≥+0.02, p<0.05). |
+| Baseline | `uniform` |
+| Model | Same as E0352 winner |
+| Weights | Same as E0352 (head trained per seed) |
+| Code path | `scripts/e0354_ave_p0_best_to_test_full_official_clapevt.sh`, `avs/experiments/ave_p0_sweep.py` (`run`) |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0352_*/best_config.json`), `SEEDS=0..9`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json` via E0344) |
+| Checks | If Δ≥+0.02 and p<0.05, mark C0003 proven; otherwise update `docs/plan.md` evidence and failure diagnosis. |
+| VRAM | CLAP on `AUDIO_DEVICE`; head on `TRAIN_DEVICE`. |
+| Total time | ~tens of minutes to hours |
+| Single-GPU script | `bash scripts/e0354_ave_p0_best_to_test_full_official_clapevt.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `SEEDS=0,1 EPOCHS=1 LIMIT_TRAIN=64 LIMIT_EVAL=32 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0354_ave_p0_best_to_test_full_official_clapevt.sh` |
+| Full cmd | `AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0354_ave_p0_best_to_test_full_official_clapevt.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0354_*` |
+| Artifacts | `runs/E0354_*/metrics.json` |
+| Results | Skipped: not promoted after E0353 quick test (Δ≈+0.00813, p≈0.457 on test402 SEEDS=0..2). |
+
+
+### E0355: Val402 sweep — EVENTNESS=clap_evt under ltl_top1med_k1_v1 (k=1 salvage)
+| Field | Value |
+| --- | --- |
+| Objective | Salvage `clap_evt` by removing the harmful 2-anchor/2-high regime (k=1). Select the best k=1 config on official val402 before re-testing transfer. |
+| Baseline | `uniform` (primary); compare against E0352 and prior best val402 sweep winners for promotion. |
+| Model | CLIP ViT-B/16 cached vision embeddings + temporal head (same AVE-P0 pipeline). |
+| Weights | Same as E0352 (CLAP pretrained + head trained per seed). |
+| Code path | `scripts/e0355_ave_p0_sweep_official_val_ltl_top1med_k1_v1_clapevt.sh`, `avs/experiments/ave_p0_sweep.py` |
+| Params | `EVENTNESS=clap_evt`, `CANDIDATE_SET=ltl_top1med_k1_v1`, `SEEDS=0..2`, `BASE_SCORES_JSON` (reuse recommended), `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Promote only if val402 is clearly positive and quick test402 (E0356) improves vs E0353 and is competitive vs baseline quick. |
+| Total time | ~minutes (if reusing scores); otherwise Stage-1 scoring dominates. |
+| Single-GPU script | `bash scripts/e0355_ave_p0_sweep_official_val_ltl_top1med_k1_v1_clapevt.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 BASE_SCORES_JSON=$(ls -t runs/E0352_*/eventness_scores.json | head -n 1) AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0355_ave_p0_sweep_official_val_ltl_top1med_k1_v1_clapevt.sh` |
+| Full cmd | `BASE_SCORES_JSON=$(ls -t runs/E0352_*/eventness_scores.json | head -n 1) AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0355_ave_p0_sweep_official_val_ltl_top1med_k1_v1_clapevt.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0355_*` |
+| Artifacts | `runs/E0355_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke: `runs/E0355_ave_p0_sweep_official_val_clap_evt_ltl_top1med_k1_v1_20260206-041756/sweep_summary.json` (LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1; reused E0352 score cache). Full val402 (SEEDS=0..2): `runs/E0355_ave_p0_sweep_official_val_clap_evt_ltl_top1med_k1_v1_20260206-041855/sweep_summary.json` (best=`ltltop1medk1_thr0p6_shift1`, Δ≈+0.00391, p≈0.0315; top-Δ candidate is `thr0p4_shift0` with Δ≈+0.01064, p≈0.135). |
+
+
+### E0356: Quick test402 reproduction (SEEDS=0..2) for the E0355 winner + diagnosis
+| Field | Value |
+| --- | --- |
+| Objective | Sanity-check transfer on test402 with a small seed set and diagnose failure buckets (fallback / far / 2-high) before spending SEEDS=0..9. |
+| Baseline | `uniform` and the baseline quick Δ from E0342 (≈+0.01899 on SEEDS=0..2); also compare against E0353 (same Stage-1, k=2). |
+| Model | Same as E0355 winner |
+| Weights | Same as E0355 (head trained per seed) |
+| Code path | `scripts/e0356_ave_p0_best_to_test_quick_official_clapevt_k1.sh`, `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0344_ave_p0_diagnose.sh` |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0355_*/best_config.json`), `SEEDS=0..2`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json` via E0344) |
+| Checks | If Δ is competitive vs baseline quick and diagnosis shows reduced harmful buckets, promote to E0357. |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0356_ave_p0_best_to_test_quick_official_clapevt_k1.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0356_ave_p0_best_to_test_quick_official_clapevt_k1.sh` |
+| Full cmd | `AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0356_ave_p0_best_to_test_quick_official_clapevt_k1.sh` |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `runs/E0356_*` |
+| Artifacts | `runs/E0356_*/metrics.json` |
+| Results | Quick test402 (SEEDS=0..2; best_config=`ltltop1medk1_thr0p6_shift1`): `runs/E0356_quick_test402_clap_evt_k1_20260206-042339/metrics.json` (Δ≈+0.00489, p≈0.289). Diagnosis: `runs/E0344_ave_p0_diagnose_20260206-042437/diagnose.json` (fallback_used_frac≈0.998; anchors almost never used). Extra diagnostic (top-Δ val candidate `thr0p4_shift0`): `runs/E0356_quick_test402_clap_evt_k1_thr0p4_shift0_20260206-042532/metrics.json` (Δ≈+0.01219, p≈0.183) + diagnosis `runs/E0344_ave_p0_diagnose_20260206-042617/diagnose.json` (fallback_used_frac≈0.913). Decision: not promoted to E0357. |
+
+
+### E0357: Full test402 reproduction (SEEDS=0..9) for the E0355 winner → attempt to prove C0003
+| Field | Value |
+| --- | --- |
+| Objective | Spend the full official test402 evaluation budget (SEEDS=0..9) to attempt to prove C0003 (Δ≥+0.02, p<0.05). |
+| Baseline | `uniform` |
+| Model | Same as E0355 winner |
+| Weights | Same as E0355 (head trained per seed) |
+| Code path | `scripts/e0357_ave_p0_best_to_test_full_official_clapevt_k1.sh`, `avs/experiments/ave_p0_sweep.py` (`run`) |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0355_*/best_config.json`), `SEEDS=0..9`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json` via E0344) |
+| Checks | If Δ≥+0.02 and p<0.05, mark C0003 proven; otherwise update `docs/plan.md` evidence and failure diagnosis. |
+| Total time | ~tens of minutes to hours |
+| Single-GPU script | `bash scripts/e0357_ave_p0_best_to_test_full_official_clapevt_k1.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `SEEDS=0,1 EPOCHS=1 LIMIT_TRAIN=64 LIMIT_EVAL=32 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0357_ave_p0_best_to_test_full_official_clapevt_k1.sh` |
+| Full cmd | `AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0357_ave_p0_best_to_test_full_official_clapevt_k1.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0357_*` |
+| Artifacts | `runs/E0357_*/metrics.json` |
+| Results | Skipped: not promoted after E0356 quick test (fallback collapses to ~1.0 under the k=1 gate). |
+
+
+### E0358: Val402 sweep — EVENTNESS=clap_lr (CLAP-supervised LR calibration) under ltl_top1med_norm_v1
+| Field | Value |
+| --- | --- |
+| Objective | Try a supervised CLAP calibration (`clap_lr`) as a deployable Stage-1 signal and select the best sampling config on official val402 before spending test402 budget. |
+| Baseline | `uniform` (primary); compare against prior best val402 sweep winners for promotion. |
+| Model | CLIP ViT-B/16 cached vision embeddings + temporal head (same AVE-P0 pipeline). |
+| Weights | CLAP pretrained (feature extraction) + 1-layer LR trained on AVE-train (Stage-1 calibration) + head trained per seed. |
+| Code path | `scripts/e0358_ave_p0_sweep_official_val_ltl_top1med_norm_v1_claplr.sh`, `avs/experiments/ave_p0_sweep.py` (score cache; trains `clap_lr`) |
+| Params | `EVENTNESS=clap_lr`, `CANDIDATE_SET=ltl_top1med_norm_v1`, `SEEDS=0..2`, `AUDIO_DEVICE` (CLAP), `TRAIN_DEVICE` (head) |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Promote only if val402 is competitive and quick test402 (E0359) beats the baseline quick Δ (≈+0.01899). |
+| VRAM | CLAP on `AUDIO_DEVICE` (large); head training small. |
+| Total time | ~tens of minutes to hours (Stage-1 CLAP features dominate). |
+| Single-GPU script | `bash scripts/e0358_ave_p0_sweep_official_val_ltl_top1med_norm_v1_claplr.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0358_ave_p0_sweep_official_val_ltl_top1med_norm_v1_claplr.sh` |
+| Full cmd | `AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0358_ave_p0_sweep_official_val_ltl_top1med_norm_v1_claplr.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0358_*` |
+| Artifacts | `runs/E0358_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke: `runs/E0358_ave_p0_sweep_official_val_clap_lr_ltl_top1med_norm_v1_20260206-044924/sweep_summary.json` (LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1). Full val402 (SEEDS=0..2): `runs/E0358_ave_p0_sweep_official_val_clap_lr_ltl_top1med_norm_v1_20260206-045105/sweep_summary.json` (best=`ltltop1medn_thr0p5_shift0`, Δ≈-0.00191, p≈0.625; top3 all negative). Decision: not promoted to test402. |
+
+
+### E0359: Quick test402 reproduction (SEEDS=0..2) for the E0358 winner + diagnosis
+| Field | Value |
+| --- | --- |
+| Objective | Sanity-check transfer on test402 with a small seed set and diagnose failure buckets (fallback / far / 2-high) before spending SEEDS=0..9. |
+| Baseline | `uniform` and the baseline quick Δ from E0342 (≈+0.01899 on SEEDS=0..2). |
+| Model | Same as E0358 winner |
+| Weights | Same as E0358 (clap_lr trained on train split; head trained per seed) |
+| Code path | `scripts/e0359_ave_p0_best_to_test_quick_official_claplr.sh`, `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0344_ave_p0_diagnose.sh` |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0358_*/best_config.json`), `SEEDS=0..2`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json` via E0344) |
+| Checks | If Δ is competitive vs baseline quick and diagnosis shows reduced harmful buckets, promote to E0360. |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0359_ave_p0_best_to_test_quick_official_claplr.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0359_ave_p0_best_to_test_quick_official_claplr.sh` |
+| Full cmd | `AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0359_ave_p0_best_to_test_quick_official_claplr.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0359_*` |
+| Artifacts | `runs/E0359_*/metrics.json` |
+| Results | Skipped: not promoted after E0358 full val402 (best is negative). |
+
+
+### E0360: Full test402 reproduction (SEEDS=0..9) for the E0358 winner → attempt to prove C0003
+| Field | Value |
+| --- | --- |
+| Objective | Spend the full official test402 evaluation budget (SEEDS=0..9) to attempt to prove C0003 (Δ≥+0.02, p<0.05). |
+| Baseline | `uniform` |
+| Model | Same as E0358 winner |
+| Weights | Same as E0358 (clap_lr trained on train split; head trained per seed) |
+| Code path | `scripts/e0360_ave_p0_best_to_test_full_official_claplr.sh`, `avs/experiments/ave_p0_sweep.py` (`run`) |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0358_*/best_config.json`), `SEEDS=0..9`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json` via E0344) |
+| Checks | If Δ≥+0.02 and p<0.05, mark C0003 proven; otherwise update `docs/plan.md` evidence and failure diagnosis. |
+| Total time | ~tens of minutes to hours |
+| Single-GPU script | `bash scripts/e0360_ave_p0_best_to_test_full_official_claplr.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `SEEDS=0,1 EPOCHS=1 LIMIT_TRAIN=64 LIMIT_EVAL=32 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0360_ave_p0_best_to_test_full_official_claplr.sh` |
+| Full cmd | `AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0360_ave_p0_best_to_test_full_official_claplr.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0360_*` |
+| Artifacts | `runs/E0360_*/metrics.json` |
+| Results | Skipped: not promoted after E0358 full val402 (best is negative). |
+
+
+### E0361: Val402 sweep — EVENTNESS=clap_mlp_cls_target (CLAP-embedding supervised multi-class) under ltl_top1med_norm_v1
+| Field | Value |
+| --- | --- |
+| Objective | Try a supervised CLAP-embedding multi-class head (`clap_mlp_cls_target`) as a deployable Stage-1 signal and select the best sampling config on official val402 before spending test402 budget. |
+| Baseline | `uniform` (primary); compare against prior best val402 sweep winners for promotion. |
+| Model | CLIP ViT-B/16 cached vision embeddings + temporal head (same AVE-P0 pipeline). |
+| Weights | CLAP pretrained (feature extraction) + 2-layer MLP trained on AVE-train segment labels (Stage-1 calibration) + head trained per seed. |
+| Code path | `scripts/e0361_ave_p0_sweep_official_val_ltl_top1med_norm_v1_clapmlpcls_target.sh`, `avs/experiments/ave_p0_sweep.py` (score cache; trains `clap_mlp_cls_target`) |
+| Params | `EVENTNESS=clap_mlp_cls_target`, `CANDIDATE_SET=ltl_top1med_norm_v1`, `SEEDS=0..2`, `AUDIO_DEVICE` (CLAP), `TRAIN_DEVICE` (head) |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Promote only if val402 is competitive and quick test402 (E0362) beats the baseline quick Δ (≈+0.01899). |
+| VRAM | CLAP on `AUDIO_DEVICE` (large); head training small. |
+| Total time | ~tens of minutes to hours (Stage-1 CLAP features dominate). |
+| Single-GPU script | `bash scripts/e0361_ave_p0_sweep_official_val_ltl_top1med_norm_v1_clapmlpcls_target.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0361_ave_p0_sweep_official_val_ltl_top1med_norm_v1_clapmlpcls_target.sh` |
+| Full cmd | `AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0361_ave_p0_sweep_official_val_ltl_top1med_norm_v1_clapmlpcls_target.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0361_*` |
+| Artifacts | `runs/E0361_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke: `runs/E0361_ave_p0_sweep_official_val_clap_mlp_cls_target_ltl_top1med_norm_v1_20260206-054731/sweep_summary.json` (LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1). Full val402 (SEEDS=0..2): `runs/E0361_ave_p0_sweep_official_val_clap_mlp_cls_target_ltl_top1med_norm_v1_20260206-054923/sweep_summary.json` (best=`ltltop1medn_thr0p7_shift0`, Δ≈+0.00158, p≈0.284; best_by_pfilter=None). Decision: not promoted to test402. |
+
+
+### E0362: Quick test402 reproduction (SEEDS=0..2) for the E0361 winner + diagnosis
+| Field | Value |
+| --- | --- |
+| Objective | Sanity-check transfer on test402 with a small seed set and diagnose failure buckets (fallback / far / 2-high) before spending SEEDS=0..9. |
+| Baseline | `uniform` and the baseline quick Δ from E0342 (≈+0.01899 on SEEDS=0..2). |
+| Model | Same as E0361 winner |
+| Weights | Same as E0361 (clap_mlp_cls_target trained on train split; head trained per seed) |
+| Code path | `scripts/e0362_ave_p0_best_to_test_quick_official_clapmlpcls_target.sh`, `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0344_ave_p0_diagnose.sh` |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0361_*/best_config.json`), `SEEDS=0..2`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json` via E0344) |
+| Checks | If Δ is competitive vs baseline quick and diagnosis shows reduced harmful buckets, promote to E0363. |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0362_ave_p0_best_to_test_quick_official_clapmlpcls_target.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0362_ave_p0_best_to_test_quick_official_clapmlpcls_target.sh` |
+| Full cmd | `AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0362_ave_p0_best_to_test_quick_official_clapmlpcls_target.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0362_*` |
+| Artifacts | `runs/E0362_*/metrics.json` |
+| Results | Skipped: not promoted after E0361 full val402 (near-0). |
+
+
+### E0363: Full test402 reproduction (SEEDS=0..9) for the E0361 winner → attempt to prove C0003
+| Field | Value |
+| --- | --- |
+| Objective | Spend the full official test402 evaluation budget (SEEDS=0..9) to attempt to prove C0003 (Δ≥+0.02, p<0.05). |
+| Baseline | `uniform` |
+| Model | Same as E0361 winner |
+| Weights | Same as E0361 (clap_mlp_cls_target trained on train split; head trained per seed) |
+| Code path | `scripts/e0363_ave_p0_best_to_test_full_official_clapmlpcls_target.sh`, `avs/experiments/ave_p0_sweep.py` (`run`) |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0361_*/best_config.json`), `SEEDS=0..9`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json` via E0344) |
+| Checks | If Δ≥+0.02 and p<0.05, mark C0003 proven; otherwise update `docs/plan.md` evidence and failure diagnosis. |
+| Total time | ~tens of minutes to hours |
+| Single-GPU script | `bash scripts/e0363_ave_p0_best_to_test_full_official_clapmlpcls_target.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `SEEDS=0,1 EPOCHS=1 LIMIT_TRAIN=64 LIMIT_EVAL=32 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0363_ave_p0_best_to_test_full_official_clapmlpcls_target.sh` |
+| Full cmd | `AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0363_ave_p0_best_to_test_full_official_clapmlpcls_target.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0363_*` |
+| Artifacts | `runs/E0363_*/metrics.json` |
+| Results | Skipped: not promoted after E0361 full val402 (near-0). |
+
+
+### E0364: Val402 sweep — high-set-only base allocation (`*_high`) under adaptive_v3 (ltl_top1med_keepadj_basealloc_highonly_v1)
+| Field | Value |
+| --- | --- |
+| Objective | Test whether the far-anchor / 2-high harm under `adaptive_v3` is caused by **base-slot waste around the demoted anchor2**, by introducing `anchor_base_alloc=*_high` (base allocation uses high-set only) and selecting the best config on official val402. |
+| Baseline | `uniform` (primary); compare against the current best val402 sweep winners for promotion. |
+| Model | CLIP ViT-B/16 cached vision embeddings + temporal head (same AVE-P0 pipeline). |
+| Weights | Same as the current best deployable Stage-1 (`EVENTNESS=av_clipdiff_mlp`); only Stage-2 planning changes. |
+| Code path | `scripts/e0364_ave_p0_sweep_official_val_ltl_top1med_keepadj_basealloc_highonly_v1.sh`, `avs/sampling/plans.py` (`*_high`), `avs/experiments/ave_p0_sweep.py` (candidate set) |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_keepadj_basealloc_highonly_v1`, `SEEDS=0..2`, `TRAIN_DEVICE` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Promote only if val402 is competitive and the selected config is not a p-filter artifact. |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0364_ave_p0_sweep_official_val_ltl_top1med_keepadj_basealloc_highonly_v1.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 TRAIN_DEVICE=cuda:0 bash scripts/e0364_ave_p0_sweep_official_val_ltl_top1med_keepadj_basealloc_highonly_v1.sh` |
+| Full cmd | `TRAIN_DEVICE=cuda:0 bash scripts/e0364_ave_p0_sweep_official_val_ltl_top1med_keepadj_basealloc_highonly_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0364_*` |
+| Artifacts | `runs/E0364_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke: `runs/E0364_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_keepadj_basealloc_highonly_v1_20260206-064816/sweep_summary.json` (LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1). Full val402 (SEEDS=0..2): `runs/E0364_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_keepadj_basealloc_highonly_v1_20260206-064910/sweep_summary.json` (best=`ltltop1med_keepadj_mixed_high`, Δ≈+0.00291, p≈0.167; best_by_pfilter=None). Decision: not promoted to test402. |
+
+
+### E0365: Quick test402 reproduction (SEEDS=0..2) for the E0364 winner + diagnosis
+| Field | Value |
+| --- | --- |
+| Objective | Sanity-check transfer on test402 with a small seed set and diagnose failure buckets (fallback / far / 2-high) before spending SEEDS=0..9. |
+| Baseline | `uniform` and the baseline quick Δ from E0342 (≈+0.01899 on SEEDS=0..2). |
+| Model | Same as E0364 winner |
+| Weights | Same as E0364 (Stage-1 `av_clipdiff_mlp`; head trained per seed) |
+| Code path | `scripts/e0365_ave_p0_best_to_test_quick_official_ltl_top1med_keepadj_basealloc_highonly_v1.sh`, `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0344_ave_p0_diagnose.sh` |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0364_*/best_config.json`), `SEEDS=0..2`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json` via E0344) |
+| Checks | If Δ is competitive vs baseline quick and diagnosis shows reduced harmful buckets, promote to E0366. |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0365_ave_p0_best_to_test_quick_official_ltl_top1med_keepadj_basealloc_highonly_v1.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 TRAIN_DEVICE=cuda:0 bash scripts/e0365_ave_p0_best_to_test_quick_official_ltl_top1med_keepadj_basealloc_highonly_v1.sh` |
+| Full cmd | `TRAIN_DEVICE=cuda:0 bash scripts/e0365_ave_p0_best_to_test_quick_official_ltl_top1med_keepadj_basealloc_highonly_v1.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0365_*` |
+| Artifacts | `runs/E0365_*/metrics.json` |
+| Results | Skipped: not promoted after E0364 full val402 (near-0). |
+
+
+### E0366: Full test402 reproduction (SEEDS=0..9) for the E0364 winner → attempt to prove C0003
+| Field | Value |
+| --- | --- |
+| Objective | Spend the full official test402 evaluation budget (SEEDS=0..9) to attempt to prove C0003 (Δ≥+0.02, p<0.05). |
+| Baseline | `uniform` |
+| Model | Same as E0364 winner |
+| Weights | Same as E0364 (Stage-1 `av_clipdiff_mlp`; head trained per seed) |
+| Code path | `scripts/e0366_ave_p0_best_to_test_full_official_ltl_top1med_keepadj_basealloc_highonly_v1.sh`, `avs/experiments/ave_p0_sweep.py` (`run`) |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0364_*/best_config.json`), `SEEDS=0..9`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json` via E0344) |
+| Checks | If Δ≥+0.02 and p<0.05, mark C0003 proven; otherwise update `docs/plan.md` evidence and failure diagnosis. |
+| Total time | ~tens of minutes to hours |
+| Single-GPU script | `bash scripts/e0366_ave_p0_best_to_test_full_official_ltl_top1med_keepadj_basealloc_highonly_v1.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `SEEDS=0,1 EPOCHS=1 LIMIT_TRAIN=64 LIMIT_EVAL=32 TRAIN_DEVICE=cuda:0 bash scripts/e0366_ave_p0_best_to_test_full_official_ltl_top1med_keepadj_basealloc_highonly_v1.sh` |
+| Full cmd | `TRAIN_DEVICE=cuda:0 bash scripts/e0366_ave_p0_best_to_test_full_official_ltl_top1med_keepadj_basealloc_highonly_v1.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0366_*` |
+| Artifacts | `runs/E0366_*/metrics.json` |
+| Results | Skipped: not promoted after E0364 full val402 (near-0). |
+
+
+### E0367: Val402 sweep — EVENTNESS=av_ast_clipdiff_mlp (AST embeddings + CLIPdiff) under ltl_top1med_norm_v1
+| Field | Value |
+| --- | --- |
+| Objective | Try a bold but deployable Stage-1 scorer: pretrained AST per-second embeddings + cheap CLIPdiff scalar → per-second MLP (`av_ast_clipdiff_mlp`), and select the best sampling config on official val402 before spending test402 budget. |
+| Baseline | `uniform` (primary); compare against prior best val402 sweep winners for promotion. |
+| Model | CLIP ViT-B/16 cached vision embeddings + temporal head (same AVE-P0 pipeline). |
+| Weights | AST pretrained (feature extraction) + small MLP trained on AVE-train (Stage-1) + head trained per seed. |
+| Code path | `scripts/e0367_ave_p0_sweep_official_val_ltl_top1med_norm_v1_av_ast_clipdiff_mlp.sh`, `avs/experiments/ave_p0.py` (`av_ast_clipdiff_mlp`), `avs/experiments/ave_p0_sweep.py` (score cache) |
+| Params | `EVENTNESS=av_ast_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_norm_v1`, `SEEDS=0..2`, `AST_PRETRAINED=1` (auto), `AUDIO_DEVICE` (AST), `TRAIN_DEVICE` (head) |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Promote only if val402 is competitive and quick test402 (E0368) beats the baseline quick Δ (≈+0.01899). |
+| VRAM | AST on `AUDIO_DEVICE` (moderate); head training small. |
+| Total time | ~tens of minutes to hours (AST dominates). |
+| Single-GPU script | `bash scripts/e0367_ave_p0_sweep_official_val_ltl_top1med_norm_v1_av_ast_clipdiff_mlp.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 EVENTNESS=av_ast_clipdiff_mlp CANDIDATE_SET=ltl_top1med_norm_v1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0367_ave_p0_sweep_official_val_ltl_top1med_norm_v1_av_ast_clipdiff_mlp.sh` |
+| Full cmd | `EVENTNESS=av_ast_clipdiff_mlp CANDIDATE_SET=ltl_top1med_norm_v1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0367_ave_p0_sweep_official_val_ltl_top1med_norm_v1_av_ast_clipdiff_mlp.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0367_*` |
+| Artifacts | `runs/E0367_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke: `runs/E0367_ave_p0_sweep_official_val_av_ast_clipdiff_mlp_ltl_top1med_norm_v1_20260206-070549/sweep_summary.json` (LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1). Full val402 (SEEDS=0..2): `runs/E0367_ave_p0_sweep_official_val_av_ast_clipdiff_mlp_ltl_top1med_norm_v1_20260206-070639/sweep_summary.json` (best=`ltltop1medn_thr0p7_shift0`, Δ≈+0.00183, p≈0.853; best_by_pfilter=None). Decision: not promoted to test402. |
+
+
+### E0368: Quick test402 reproduction (SEEDS=0..2) for the E0367 winner + diagnosis
+| Field | Value |
+| --- | --- |
+| Objective | Sanity-check transfer on test402 with a small seed set and diagnose failure buckets (fallback / far / 2-high) before spending SEEDS=0..9. |
+| Baseline | `uniform` and the baseline quick Δ from E0342 (≈+0.01899 on SEEDS=0..2). |
+| Model | Same as E0367 winner |
+| Weights | Same as E0367 (Stage-1 trained on train split; head trained per seed) |
+| Code path | `scripts/e0368_ave_p0_best_to_test_quick_official_av_ast_clipdiff_mlp.sh`, `avs/experiments/ave_p0_sweep.py` (`run`), `scripts/e0344_ave_p0_diagnose.sh` |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0367_*/best_config.json`), `SEEDS=0..2`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json` via E0344) |
+| Checks | If Δ is competitive vs baseline quick and diagnosis shows reduced harmful buckets, promote to E0369. |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0368_ave_p0_best_to_test_quick_official_av_ast_clipdiff_mlp.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 EVENTNESS=av_ast_clipdiff_mlp AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0368_ave_p0_best_to_test_quick_official_av_ast_clipdiff_mlp.sh` |
+| Full cmd | `EVENTNESS=av_ast_clipdiff_mlp AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0368_ave_p0_best_to_test_quick_official_av_ast_clipdiff_mlp.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0368_*` |
+| Artifacts | `runs/E0368_*/metrics.json` |
+| Results | Skipped: not promoted after E0367 full val402 (near-0). |
+
+
+### E0369: Full test402 reproduction (SEEDS=0..9) for the E0367 winner → attempt to prove C0003
+| Field | Value |
+| --- | --- |
+| Objective | Spend the full official test402 evaluation budget (SEEDS=0..9) to attempt to prove C0003 (Δ≥+0.02, p<0.05). |
+| Baseline | `uniform` |
+| Model | Same as E0367 winner |
+| Weights | Same as E0367 (Stage-1 trained on train split; head trained per seed) |
+| Code path | `scripts/e0369_ave_p0_best_to_test_full_official_av_ast_clipdiff_mlp.sh`, `avs/experiments/ave_p0_sweep.py` (`run`) |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0367_*/best_config.json`), `SEEDS=0..9`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json` via E0344) |
+| Checks | If Δ≥+0.02 and p<0.05, mark C0003 proven; otherwise update `docs/plan.md` evidence and failure diagnosis. |
+| Total time | ~tens of minutes to hours |
+| Single-GPU script | `bash scripts/e0369_ave_p0_best_to_test_full_official_av_ast_clipdiff_mlp.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `SEEDS=0,1 EPOCHS=1 LIMIT_TRAIN=64 LIMIT_EVAL=32 EVENTNESS=av_ast_clipdiff_mlp AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0369_ave_p0_best_to_test_full_official_av_ast_clipdiff_mlp.sh` |
+| Full cmd | `EVENTNESS=av_ast_clipdiff_mlp AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0369_ave_p0_best_to_test_full_official_av_ast_clipdiff_mlp.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0369_*` |
+| Artifacts | `runs/E0369_*/metrics.json` |
+| Results | Skipped: not promoted after E0367 full val402 (near-0). |
+
+
+### E0370: Quick test402 transfer triage (SEEDS=0..2) — A/V correspondence anchors (`av_ast_clipalign_bce`, E0318 selection) + diagnosis
+| Field | Value |
+| --- | --- |
+| Objective | Because val→test transfer is unreliable, run a controlled quick test402 (SEEDS=0..2) for the `av_ast_clipalign_bce` winner selected in E0318, and diagnose whether it reduces the harmful far/2-high buckets vs the current best baseline. |
+| Baseline | `uniform` and the baseline quick Δ from E0342 (≈+0.01899 on SEEDS=0..2). |
+| Model | Same AVE-P0 downstream model as E0318 (`temporal_conv` head on frozen CLIP features). |
+| Weights | Uses AST pretrained + learned A/V correspondence projection (trained on train split inside scoring) + head trained per seed. |
+| Code path | `scripts/e0370_quick_test402_av_ast_clipalign_bce.sh`, `scripts/e0344_ave_p0_diagnose.sh`, `avs/experiments/ave_p0_sweep.py` (`run`) |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0318_*/best_config.json` via underlying script), `SEEDS=0..2`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json` via E0344) |
+| Checks | If Δ is competitive vs baseline quick and diagnosis shows reduced harmful buckets, promote to E0371. |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0370_quick_test402_av_ast_clipalign_bce.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0370_quick_test402_av_ast_clipalign_bce.sh` |
+| Full cmd | `SEEDS=0,1,2 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0370_quick_test402_av_ast_clipalign_bce.sh` |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `runs/E0370_*` |
+| Artifacts | `runs/E0370_*/metrics.json` |
+| Results | `runs/E0370_quick_test402_av_ast_clipalign_bce_20260206-072535/metrics.json` (anchored=0.7152 vs uniform=0.7070, Δ≈+0.00813, p≈0.365). Diagnosis: `runs/E0344_ave_p0_diagnose_20260206-073731/diagnose.json` (fallback_used_frac≈0.570; anchored deltas concentrate in fallback/0-high clips; 2-anchor regime ~0). Decision: not promoted; skip E0371. |
+
+
+### E0371: Full test402 reproduction (SEEDS=0..9) — A/V correspondence anchors (`av_ast_clipalign_bce`) → attempt to prove C0003
+| Field | Value |
+| --- | --- |
+| Objective | Spend the full official test402 evaluation budget (SEEDS=0..9) to attempt to prove C0003 (Δ≥+0.02, p<0.05) for `av_ast_clipalign_bce` if promoted by E0370. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Same as E0370 |
+| Code path | `scripts/e0371_full_test402_av_ast_clipalign_bce.sh`, `avs/experiments/ave_p0_sweep.py` (`run`) |
+| Params | `BEST_CONFIG_JSON` (defaults to E0318 best), `SEEDS=0..9`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json` via E0344) |
+| Checks | If Δ≥+0.02 and p<0.05, mark C0003 proven; otherwise update `docs/plan.md` evidence and failure diagnosis. |
+| Total time | ~tens of minutes to hours |
+| Single-GPU script | `bash scripts/e0371_full_test402_av_ast_clipalign_bce.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `SEEDS=0,1 EPOCHS=1 LIMIT_TRAIN=64 LIMIT_EVAL=32 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0371_full_test402_av_ast_clipalign_bce.sh` |
+| Full cmd | `SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0371_full_test402_av_ast_clipalign_bce.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0371_*` |
+| Artifacts | `runs/E0371_*/metrics.json` |
+| Results | Skipped: not promoted after E0370 quick test402 (Δ≈+0.00813, p≈0.365; not competitive). |
+
+
+### E0372: Val402 sweep (SEEDS=0..2) — veto gate on base confidence (`lr_top1hit_all_v1`) to reduce “confident-but-wrong” anchors
+| Field | Value |
+| --- | --- |
+| Objective | Run the standard official val402 sweep for `EVENTNESS=av_clipdiff_mlp` with a new learned clip-level veto gate (trained on all train clips), aiming to reduce harmful anchored clips and improve transfer toward proving C0003. |
+| Baseline | Current best learned-anchor pipeline: E0223/E0224 (`ltltop1med_thr0p6_shift1`) and its quick Δ on test402 SEEDS=0..2 (≈+0.01899). |
+| Model | AVE-P0 `temporal_conv` head on frozen CLIP cache. |
+| Weights | Gate trained on train split; head trained per seed. |
+| Code path | `scripts/e0372_ave_p0_sweep_official_val_ltl_top1med_gate_all_v1.sh`, `avs/experiments/ave_p0.py` (gate), `avs/experiments/ave_p0_sweep.py` (`candidate_set=ltl_top1med_gate_all_v1`) |
+| Params | `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_gate_all_v1`, `SEEDS=0..2`, `TRAIN_DEVICE` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Only promote if the full val402 winner is clearly competitive and the gate meaningfully vetoes clips (debug `gate_vetoed=true`) without collapsing to near-uniform behavior. |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0372_ave_p0_sweep_official_val_ltl_top1med_gate_all_v1.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=200 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 TRAIN_DEVICE=cuda:0 bash scripts/e0372_ave_p0_sweep_official_val_ltl_top1med_gate_all_v1.sh` |
+| Full cmd | `SEEDS=0,1,2 TRAIN_DEVICE=cuda:0 bash scripts/e0372_ave_p0_sweep_official_val_ltl_top1med_gate_all_v1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0372_*` |
+| Artifacts | `runs/E0372_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke: `runs/E0372_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_gate_all_v1_20260206-080613/sweep_summary.json` (LIMIT_TRAIN=200 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1). Full val402: `runs/E0372_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_gate_all_v1_20260206-081233/sweep_summary.json` (best=`ltltop1med_gateall0p4_shift0`, Δ≈+0.00989, p≈0.00344; best_by_pfilter=None). |
+
+
+### E0373: Quick test402 transfer (SEEDS=0..2) — E0372 winner + diagnosis
+| Field | Value |
+| --- | --- |
+| Objective | Run a controlled quick test402 (SEEDS=0..2) for the E0372 winner and diagnose whether the gate reduces harmful buckets vs the current best baseline. |
+| Baseline | `uniform` and E0224 quick Δ baseline (≈+0.01899 on SEEDS=0..2). |
+| Model | Same as E0372 selected config |
+| Weights | Same as E0372 |
+| Code path | `scripts/e0373_ave_p0_best_to_test_quick_official_ltl_top1med_gate_all_v1.sh`, `scripts/e0344_ave_p0_diagnose.sh` |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0372_*/best_config.json`), `SEEDS=0..2`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json` via E0344) |
+| Checks | Promote to E0374 only if quick Δ is competitive vs baseline and diagnosis shows reduced harmful buckets without collapsing to fallback≈1. |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0373_ave_p0_best_to_test_quick_official_ltl_top1med_gate_all_v1.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 TRAIN_DEVICE=cuda:0 bash scripts/e0373_ave_p0_best_to_test_quick_official_ltl_top1med_gate_all_v1.sh` |
+| Full cmd | `SEEDS=0,1,2 TRAIN_DEVICE=cuda:0 bash scripts/e0373_ave_p0_best_to_test_quick_official_ltl_top1med_gate_all_v1.sh` |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `runs/E0373_*` |
+| Artifacts | `runs/E0373_*/metrics.json` |
+| Results | `runs/E0373_quick_test402_av_clipdiff_mlp_ltl_top1med_gate_all_v1_20260206-081728/metrics.json` (anchored=0.7179 vs uniform=0.7070, Δ≈+0.01086, p≈0.1165). Diagnosis: `runs/E0344_ave_p0_diagnose_20260206-081835/diagnose.json` (fallback_used_frac≈0.751; 2-high bucket remains harmful). Decision: not promoted; skip E0374. |
+
+
+### E0374: Full test402 reproduction (SEEDS=0..9) — E0372 winner → attempt to prove C0003
+| Field | Value |
+| --- | --- |
+| Objective | Spend the full official test402 budget (SEEDS=0..9) to attempt to prove C0003 (Δ≥+0.02, p<0.05), using the config selected in E0372 and promoted by E0373. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Same as E0372 |
+| Code path | `scripts/e0374_ave_p0_best_to_test_full_official_ltl_top1med_gate_all_v1.sh`, `avs/experiments/ave_p0_sweep.py` (`run`) |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0372_*/best_config.json`), `SEEDS=0..9`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json` via E0344) |
+| Checks | If Δ≥+0.02 and p<0.05, mark C0003 proven; otherwise update `docs/plan.md` with decisive failure analysis. |
+| Total time | ~tens of minutes to hours |
+| Single-GPU script | `bash scripts/e0374_ave_p0_best_to_test_full_official_ltl_top1med_gate_all_v1.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `SEEDS=0,1 EPOCHS=1 LIMIT_TRAIN=64 LIMIT_EVAL=32 TRAIN_DEVICE=cuda:0 bash scripts/e0374_ave_p0_best_to_test_full_official_ltl_top1med_gate_all_v1.sh` |
+| Full cmd | `SEEDS=0,1,2,3,4,5,6,7,8,9 TRAIN_DEVICE=cuda:0 bash scripts/e0374_ave_p0_best_to_test_full_official_ltl_top1med_gate_all_v1.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0374_*` |
+| Artifacts | `runs/E0374_*/metrics.json` |
+| Results | Skipped: not promoted after E0373 quick test402 was not competitive (Δ≈+0.01086, p≈0.1165). |
+
+
+### E0375: Val402 sweep (SEEDS=0..2) — strong cheap-visual control (`vision_binary_mlp`) under scale-invariant top1-med gate
+| Field | Value |
+| --- | --- |
+| Objective | As a strong cheap-visual control, train a supervised per-second binary visual eventness model on frozen CLIP low-res features (`EVENTNESS=vision_binary_mlp`) and run the standard val402 sweep (`candidate_set=ltl_top1med_norm_v1`). If this direction is strong, it indicates the C0003 plateau is primarily due to Stage-1 anchor quality; otherwise it suggests the equal-budget triad hurts even with stronger visual proposals. |
+| Baseline | Standard learned-anchor pipeline baselines (E0223/E0224). |
+| Model | AVE-P0 `temporal_conv` head on frozen CLIP cache. |
+| Weights | Visual eventness trained on train split (CPU); head trained per seed. |
+| Code path | `scripts/e0375_ave_p0_sweep_official_val_ltl_top1med_norm_v1_vision_binary_mlp.sh`, `avs/experiments/ave_p0.py` (`eventness_method=vision_binary_mlp`), `avs/experiments/ave_p0_sweep.py` (`candidate_set=ltl_top1med_norm_v1`) |
+| Params | `EVENTNESS=vision_binary_mlp`, `CANDIDATE_SET=ltl_top1med_norm_v1`, `SEEDS=0..2`, `TRAIN_DEVICE` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Promote only if val402 winner is clearly positive and competitive; otherwise stop before any test402 runs. |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0375_ave_p0_sweep_official_val_ltl_top1med_norm_v1_vision_binary_mlp.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=200 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 TRAIN_DEVICE=cuda:0 bash scripts/e0375_ave_p0_sweep_official_val_ltl_top1med_norm_v1_vision_binary_mlp.sh` |
+| Full cmd | `SEEDS=0,1,2 TRAIN_DEVICE=cuda:0 bash scripts/e0375_ave_p0_sweep_official_val_ltl_top1med_norm_v1_vision_binary_mlp.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0375_*` |
+| Artifacts | `runs/E0375_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke: `runs/E0375_ave_p0_sweep_official_val_vision_binary_mlp_ltl_top1med_norm_v1_20260206-082121/sweep_summary.json` (LIMIT_TRAIN=200 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1). Full val402: `runs/E0375_ave_p0_sweep_official_val_vision_binary_mlp_ltl_top1med_norm_v1_20260206-082152/sweep_summary.json` (best Δ≈-0.00175, p≈0.0938). Decision: not promoted; skip E0376/E0377. |
+
+
+### E0376: Quick test402 transfer (SEEDS=0..2) — E0375 winner + diagnosis
+| Field | Value |
+| --- | --- |
+| Objective | Run quick test402 for the E0375 winner (only if promoted by val). |
+| Baseline | `uniform` |
+| Model | Same as E0375 selected config |
+| Weights | Same as E0375 |
+| Code path | `scripts/e0376_ave_p0_best_to_test_quick_official_vision_binary_mlp.sh`, `scripts/e0344_ave_p0_diagnose.sh` |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0375_*/best_config.json`), `SEEDS=0..2`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json` via E0344) |
+| Checks | Promote to E0377 only if quick Δ is competitive. |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0376_ave_p0_best_to_test_quick_official_vision_binary_mlp.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 TRAIN_DEVICE=cuda:0 bash scripts/e0376_ave_p0_best_to_test_quick_official_vision_binary_mlp.sh` |
+| Full cmd | `SEEDS=0,1,2 TRAIN_DEVICE=cuda:0 bash scripts/e0376_ave_p0_best_to_test_quick_official_vision_binary_mlp.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0376_*` |
+| Artifacts | `runs/E0376_*/metrics.json` |
+| Results | Skipped: E0375 regresses on val402 (Δ≈-0.00175); stop before test402. |
+
+
+### E0377: Full test402 reproduction (SEEDS=0..9) — E0375 winner → attempt to prove C0003
+| Field | Value |
+| --- | --- |
+| Objective | Spend full test402 budget (SEEDS=0..9) for the E0375 winner if promoted. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Same as E0375 |
+| Code path | `scripts/e0377_ave_p0_best_to_test_full_official_vision_binary_mlp.sh`, `avs/experiments/ave_p0_sweep.py` (`run`) |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0375_*/best_config.json`), `SEEDS=0..9`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json` via E0344) |
+| Checks | If Δ≥+0.02 and p<0.05, mark C0003 proven. |
+| Total time | ~tens of minutes to hours |
+| Single-GPU script | `bash scripts/e0377_ave_p0_best_to_test_full_official_vision_binary_mlp.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `SEEDS=0,1 EPOCHS=1 LIMIT_TRAIN=64 LIMIT_EVAL=32 TRAIN_DEVICE=cuda:0 bash scripts/e0377_ave_p0_best_to_test_full_official_vision_binary_mlp.sh` |
+| Full cmd | `SEEDS=0,1,2,3,4,5,6,7,8,9 TRAIN_DEVICE=cuda:0 bash scripts/e0377_ave_p0_best_to_test_full_official_vision_binary_mlp.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0377_*` |
+| Artifacts | `runs/E0377_*/metrics.json` |
+| Results | Skipped: E0375 regresses on val402; stop before test402. |
+
+
+### E0378: Val402 sweep (SEEDS=0..2) — pretrained PANNs (AudioSet) eventness anchors (`panns`) under scale-invariant top1-med gate
+| Field | Value |
+| --- | --- |
+| Objective | Try a bold new Stage-1 signal: pretrained **PANNs Cnn14 (AudioSet)** per-second eventness (`EVENTNESS=panns`). Run the standard val402 sweep under `candidate_set=ltl_top1med_norm_v1` to find a competitive anchored configuration, targeting C0003 (+2% on test402). |
+| Baseline | Current best learned-anchor pipeline baseline (E0223/E0224 / E0341 winner). |
+| Model | AVE-P0 `temporal_conv` head on frozen CLIP cache. |
+| Weights | PANNs checkpoint (explicit path or default `~/panns_data/Cnn14_mAP=0.431.pth`); head trained per seed. |
+| Code path | `scripts/e0378_ave_p0_sweep_official_val_ltl_top1med_norm_v1_panns.sh`, `avs/audio/panns_probe.py`, `avs/experiments/ave_p0.py` (`eventness_method=panns`), `avs/experiments/ave_p0_sweep.py` (`candidate_set=ltl_top1med_norm_v1`) |
+| Params | `EVENTNESS=panns`, `CANDIDATE_SET=ltl_top1med_norm_v1`, `SEEDS=0..2`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Promote only if val402 winner is clearly positive and competitive vs baseline val winners (E0223/E0224). |
+| Total time | ~tens of minutes to hours (PANNs scoring can dominate if run on CPU) |
+| Single-GPU script | `bash scripts/e0378_ave_p0_sweep_official_val_ltl_top1med_norm_v1_panns.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0378_ave_p0_sweep_official_val_ltl_top1med_norm_v1_panns.sh` |
+| Full cmd | `SEEDS=0,1,2 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0378_ave_p0_sweep_official_val_ltl_top1med_norm_v1_panns.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0378_*` |
+| Artifacts | `runs/E0378_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke: `runs/E0378_ave_p0_sweep_official_val_panns_ltl_top1med_norm_v1_20260206-090624/sweep_summary.json` (LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1). Full val402: `runs/E0378_ave_p0_sweep_official_val_panns_ltl_top1med_norm_v1_20260206-090736/sweep_summary.json` (best=`ltltop1medn_thr0p6_shift1`, Δ≈+0.00998, p≈0.01367) + `runs/E0378_ave_p0_sweep_official_val_panns_ltl_top1med_norm_v1_20260206-090736/best_config.json`. Decision: not promoted to test402 (val winner not competitive vs baseline val winners). |
+
+
+### E0379: Quick test402 transfer (SEEDS=0..2) — E0378 winner + diagnosis
+| Field | Value |
+| --- | --- |
+| Objective | Run quick test402 for the E0378 winner (SEEDS=0..2) and diagnose buckets (E0344). |
+| Baseline | `uniform` |
+| Model | Same as E0378 selected config |
+| Weights | Same as E0378 |
+| Code path | `scripts/e0379_ave_p0_best_to_test_quick_official_panns.sh`, `scripts/e0344_ave_p0_diagnose.sh` |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0378_*/best_config.json`), `SEEDS=0..2`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json`) |
+| Checks | Promote to E0380 only if quick Δ is competitive vs baseline quick (≈+0.01899). |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0379_ave_p0_best_to_test_quick_official_panns.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0379_ave_p0_best_to_test_quick_official_panns.sh` |
+| Full cmd | `SEEDS=0,1,2 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0379_ave_p0_best_to_test_quick_official_panns.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0379_*`, `runs/E0344_*` |
+| Artifacts | `runs/E0379_*/metrics.json`, `runs/E0344_*/diagnose.json` |
+| Results | Skipped: E0378 val402 winner is not competitive (Δ≈+0.00998); stop before test402. |
+
+
+### E0380: Full test402 reproduction (SEEDS=0..9) — E0378 winner → attempt to prove C0003
+| Field | Value |
+| --- | --- |
+| Objective | Spend full test402 budget (SEEDS=0..9) for the E0378 winner if promoted, and attempt to prove C0003. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Same as E0378 |
+| Code path | `scripts/e0380_ave_p0_best_to_test_full_official_panns.sh`, `scripts/e0344_ave_p0_diagnose.sh` |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0378_*/best_config.json`), `SEEDS=0..9`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json`) |
+| Checks | If Δ≥+0.02 and paired `p<0.05`, mark C0003 proven; otherwise update `docs/plan.md` with decisive failure analysis. |
+| Total time | ~tens of minutes to hours |
+| Single-GPU script | `bash scripts/e0380_ave_p0_best_to_test_full_official_panns.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `SEEDS=0,1 EPOCHS=1 LIMIT_TRAIN=64 LIMIT_EVAL=32 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0380_ave_p0_best_to_test_full_official_panns.sh` |
+| Full cmd | `SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0380_ave_p0_best_to_test_full_official_panns.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0380_*`, `runs/E0344_*` |
+| Artifacts | `runs/E0380_*/metrics.json`, `runs/E0344_*/diagnose.json` |
+| Results | Skipped: not promoted after E0378 val402 sweep was not competitive (Δ≈+0.00998). |
+
+
+### E0381: Val402 sweep (SEEDS=0..2) — supervised calibration on PANNs outputs (`panns_lr`) under scale-invariant top1-med gate
+| Field | Value |
+| --- | --- |
+| Objective | Upgrade the raw PANNs heuristic (`EVENTNESS=panns`) with a supervised calibration: train a logistic regression on pretrained PANNs per-second **clipwise outputs** to predict event vs background on the train split, then use per-second logits as Stage-1 eventness (`EVENTNESS=panns_lr`). Run the standard val402 sweep under `candidate_set=ltl_top1med_norm_v1` to find a competitive anchored config targeting C0003 (+2% on test402). |
+| Baseline | Current best learned-anchor pipeline baseline (E0223/E0224 / E0341 winner). |
+| Model | AVE-P0 `temporal_conv` head on frozen CLIP cache. |
+| Weights | PANNs checkpoint (explicit path or default `~/panns_data/Cnn14_mAP=0.431.pth`); `panns_lr` calibrator trained on train split only; head trained per seed. |
+| Code path | `scripts/e0381_ave_p0_sweep_official_val_ltl_top1med_norm_v1_panns_lr.sh`, `avs/audio/panns_probe.py`, `avs/experiments/ave_p0_sweep.py` (`eventness_method=panns_lr`) |
+| Params | `EVENTNESS=panns_lr`, `CANDIDATE_SET=ltl_top1med_norm_v1`, `SEEDS=0..2`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Promote only if val402 winner is clearly positive and competitive vs baseline val winners (E0223/E0224). |
+| Total time | ~tens of minutes to hours |
+| Single-GPU script | `bash scripts/e0381_ave_p0_sweep_official_val_ltl_top1med_norm_v1_panns_lr.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0381_ave_p0_sweep_official_val_ltl_top1med_norm_v1_panns_lr.sh` |
+| Full cmd | `SEEDS=0,1,2 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0381_ave_p0_sweep_official_val_ltl_top1med_norm_v1_panns_lr.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0381_*` |
+| Artifacts | `runs/E0381_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke: `runs/E0381_ave_p0_sweep_official_val_panns_lr_ltl_top1med_norm_v1_20260206-092930/sweep_summary.json` (LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1; best=`ltltop1medn_thr0p5_shift0`, Δ≈+0.00156). Full val402: `runs/E0381_ave_p0_sweep_official_val_panns_lr_ltl_top1med_norm_v1_20260206-093023/sweep_summary.json` (best=`ltltop1medn_thr0p6_shift0`, Δ≈-0.00224, p≈0.728). Decision: not promoted; skip E0382/E0383. |
+
+
+### E0382: Quick test402 transfer (SEEDS=0..2) — E0381 winner + diagnosis
+| Field | Value |
+| --- | --- |
+| Objective | Run quick test402 for the E0381 winner (SEEDS=0..2) and diagnose buckets (E0344). |
+| Baseline | `uniform` |
+| Model | Same as E0381 selected config |
+| Weights | Same as E0381 |
+| Code path | `scripts/e0382_ave_p0_best_to_test_quick_official_panns_lr.sh`, `scripts/e0344_ave_p0_diagnose.sh` |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0381_*/best_config.json`), `SEEDS=0..2`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json`) |
+| Checks | Promote to E0383 only if quick Δ is competitive vs baseline quick (≈+0.01899). |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0382_ave_p0_best_to_test_quick_official_panns_lr.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0382_ave_p0_best_to_test_quick_official_panns_lr.sh` |
+| Full cmd | `SEEDS=0,1,2 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0382_ave_p0_best_to_test_quick_official_panns_lr.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0382_*`, `runs/E0344_*` |
+| Artifacts | `runs/E0382_*/metrics.json`, `runs/E0344_*/diagnose.json` |
+| Results | Skipped: E0381 val402 regresses (best Δ≈-0.00224); stop before test402. |
+
+
+### E0383: Full test402 reproduction (SEEDS=0..9) — E0381 winner → attempt to prove C0003
+| Field | Value |
+| --- | --- |
+| Objective | Spend full test402 budget (SEEDS=0..9) for the E0381 winner if promoted, and attempt to prove C0003. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Same as E0381 |
+| Code path | `scripts/e0383_ave_p0_best_to_test_full_official_panns_lr.sh`, `scripts/e0344_ave_p0_diagnose.sh` |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0381_*/best_config.json`), `SEEDS=0..9`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json`) |
+| Checks | If Δ≥+0.02 and paired `p<0.05`, mark C0003 proven; otherwise update `docs/plan.md` with decisive failure analysis. |
+| Total time | ~tens of minutes to hours |
+| Single-GPU script | `bash scripts/e0383_ave_p0_best_to_test_full_official_panns_lr.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `SEEDS=0,1 EPOCHS=1 LIMIT_TRAIN=64 LIMIT_EVAL=32 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0383_ave_p0_best_to_test_full_official_panns_lr.sh` |
+| Full cmd | `SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0383_ave_p0_best_to_test_full_official_panns_lr.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0383_*`, `runs/E0344_*` |
+| Artifacts | `runs/E0383_*/metrics.json`, `runs/E0344_*/diagnose.json` |
+| Results | Skipped: E0381 val402 regresses (best Δ≈-0.00224); stop before test402. |
+
+
+### E0384: Val402 sweep (SEEDS=0..2) — supervised calibration on PANNs embeddings (`panns_embed_lr`) under scale-invariant top1-med gate
+| Field | Value |
+| --- | --- |
+| Objective | Upgrade the failed `panns_lr` by calibrating on pretrained PANNs **embeddings** (2048-d) instead of post-sigmoid class probabilities: train a logistic regression on per-second embeddings to predict event vs background on the train split, then use per-second logits as Stage-1 eventness (`EVENTNESS=panns_embed_lr`). Run the standard val402 sweep under `candidate_set=ltl_top1med_norm_v1` to find a competitive anchored config targeting C0003 (+2% on test402). |
+| Baseline | Current best learned-anchor pipeline baseline (E0223/E0224 / E0341 winner). |
+| Model | AVE-P0 `temporal_conv` head on frozen CLIP cache. |
+| Weights | PANNs checkpoint (explicit path or default `~/panns_data/Cnn14_mAP=0.431.pth`); `panns_embed_lr` calibrator trained on train split only; head trained per seed. |
+| Code path | `scripts/e0384_ave_p0_sweep_official_val_ltl_top1med_norm_v1_panns_embed_lr.sh`, `avs/audio/panns_probe.py`, `avs/experiments/ave_p0_sweep.py` (`eventness_method=panns_embed_lr`) |
+| Params | `EVENTNESS=panns_embed_lr`, `CANDIDATE_SET=ltl_top1med_norm_v1`, `SEEDS=0..2`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Promote only if val402 winner is clearly positive and competitive vs baseline val winners (E0223/E0224). |
+| Total time | ~tens of minutes to hours |
+| Single-GPU script | `bash scripts/e0384_ave_p0_sweep_official_val_ltl_top1med_norm_v1_panns_embed_lr.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0384_ave_p0_sweep_official_val_ltl_top1med_norm_v1_panns_embed_lr.sh` |
+| Full cmd | `SEEDS=0,1,2 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0384_ave_p0_sweep_official_val_ltl_top1med_norm_v1_panns_embed_lr.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0384_*` |
+| Artifacts | `runs/E0384_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke: `runs/E0384_ave_p0_sweep_official_val_panns_embed_lr_ltl_top1med_norm_v1_20260206-094359/sweep_summary.json` (LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1; best=`ltltop1medn_thr0p7_shift0`, Δ≈+0.00469). Full val402: `runs/E0384_ave_p0_sweep_official_val_panns_embed_lr_ltl_top1med_norm_v1_20260206-094428/sweep_summary.json` (best=`ltltop1medn_thr0p5_shift0`, Δ≈+0.00865, p≈0.110). Decision: not promoted; skip E0385/E0386. |
+
+
+### E0385: Quick test402 transfer (SEEDS=0..2) — E0384 winner + diagnosis
+| Field | Value |
+| --- | --- |
+| Objective | Run quick test402 for the E0384 winner (SEEDS=0..2) and diagnose buckets (E0344). |
+| Baseline | `uniform` |
+| Model | Same as E0384 selected config |
+| Weights | Same as E0384 |
+| Code path | `scripts/e0385_ave_p0_best_to_test_quick_official_panns_embed_lr.sh`, `scripts/e0344_ave_p0_diagnose.sh` |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0384_*/best_config.json`), `SEEDS=0..2`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json`) |
+| Checks | Promote to E0386 only if quick Δ is competitive vs baseline quick (≈+0.01899). |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0385_ave_p0_best_to_test_quick_official_panns_embed_lr.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0385_ave_p0_best_to_test_quick_official_panns_embed_lr.sh` |
+| Full cmd | `SEEDS=0,1,2 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0385_ave_p0_best_to_test_quick_official_panns_embed_lr.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0385_*`, `runs/E0344_*` |
+| Artifacts | `runs/E0385_*/metrics.json`, `runs/E0344_*/diagnose.json` |
+| Results | Skipped: E0384 val402 not competitive vs baseline val winners (best Δ≈+0.00865); stop before test402. |
+
+
+### E0386: Full test402 reproduction (SEEDS=0..9) — E0384 winner → attempt to prove C0003
+| Field | Value |
+| --- | --- |
+| Objective | Spend full test402 budget (SEEDS=0..9) for the E0384 winner if promoted, and attempt to prove C0003. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Same as E0384 |
+| Code path | `scripts/e0386_ave_p0_best_to_test_full_official_panns_embed_lr.sh`, `scripts/e0344_ave_p0_diagnose.sh` |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0384_*/best_config.json`), `SEEDS=0..9`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json`) |
+| Checks | If Δ≥+0.02 and paired `p<0.05`, mark C0003 proven; otherwise update `docs/plan.md` with decisive failure analysis. |
+| Total time | ~tens of minutes to hours |
+| Single-GPU script | `bash scripts/e0386_ave_p0_best_to_test_full_official_panns_embed_lr.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `SEEDS=0,1 EPOCHS=1 LIMIT_TRAIN=64 LIMIT_EVAL=32 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0386_ave_p0_best_to_test_full_official_panns_embed_lr.sh` |
+| Full cmd | `SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0386_ave_p0_best_to_test_full_official_panns_embed_lr.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0386_*`, `runs/E0344_*` |
+| Artifacts | `runs/E0386_*/metrics.json`, `runs/E0344_*/diagnose.json` |
+| Results | Skipped: E0384 val402 not competitive vs baseline val winners (best Δ≈+0.00865); stop before test402. |
+
+
+### E0387: Val402 sweep (SEEDS=0..2) — supervised calibration on PANNs embeddings with a tiny MLP (`panns_embed_mlp`) under scale-invariant top1-med gate
+| Field | Value |
+| --- | --- |
+| Objective | Upgrade `panns_embed_lr` by using a tiny nonlinear calibrator: train a 2-layer MLP on pretrained PANNs per-second embeddings to predict event vs background on the train split, then use per-second logits as Stage-1 eventness (`EVENTNESS=panns_embed_mlp`). Run the standard val402 sweep under `candidate_set=ltl_top1med_norm_v1` to find a competitive anchored config targeting C0003 (+2% on test402). |
+| Baseline | Current best learned-anchor pipeline baseline (E0223/E0224 / E0341 winner). |
+| Model | AVE-P0 `temporal_conv` head on frozen CLIP cache. |
+| Weights | PANNs checkpoint (explicit path or default `~/panns_data/Cnn14_mAP=0.431.pth`); `panns_embed_mlp` calibrator trained on train split only; head trained per seed. |
+| Code path | `scripts/e0387_ave_p0_sweep_official_val_ltl_top1med_norm_v1_panns_embed_mlp.sh`, `avs/audio/panns_probe.py`, `avs/experiments/ave_p0_sweep.py` (`eventness_method=panns_embed_mlp`) |
+| Params | `EVENTNESS=panns_embed_mlp`, `CANDIDATE_SET=ltl_top1med_norm_v1`, `SEEDS=0..2`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Promote only if val402 winner is clearly positive and competitive vs baseline val winners (E0223/E0224). |
+| Total time | ~tens of minutes to hours |
+| Single-GPU script | `bash scripts/e0387_ave_p0_sweep_official_val_ltl_top1med_norm_v1_panns_embed_mlp.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0387_ave_p0_sweep_official_val_ltl_top1med_norm_v1_panns_embed_mlp.sh` |
+| Full cmd | `SEEDS=0,1,2 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0387_ave_p0_sweep_official_val_ltl_top1med_norm_v1_panns_embed_mlp.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0387_*` |
+| Artifacts | `runs/E0387_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke: `runs/E0387_ave_p0_sweep_official_val_panns_embed_mlp_ltl_top1med_norm_v1_20260206-095420/sweep_summary.json` (LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1; best Δ≈+0.00469). Full val402: `runs/E0387_ave_p0_sweep_official_val_panns_embed_mlp_ltl_top1med_norm_v1_20260206-095447/sweep_summary.json` (best=`ltltop1medn_thr0p6_shift0`, Δ≈+0.00208, p≈0.785). Decision: not promoted; skip E0388/E0389. |
+
+
+### E0388: Quick test402 transfer (SEEDS=0..2) — E0387 winner + diagnosis
+| Field | Value |
+| --- | --- |
+| Objective | Run quick test402 for the E0387 winner (SEEDS=0..2) and diagnose buckets (E0344). |
+| Baseline | `uniform` |
+| Model | Same as E0387 selected config |
+| Weights | Same as E0387 |
+| Code path | `scripts/e0388_ave_p0_best_to_test_quick_official_panns_embed_mlp.sh`, `scripts/e0344_ave_p0_diagnose.sh` |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0387_*/best_config.json`), `SEEDS=0..2`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json`) |
+| Checks | Promote to E0389 only if quick Δ is competitive vs baseline quick (≈+0.01899). |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0388_ave_p0_best_to_test_quick_official_panns_embed_mlp.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0388_ave_p0_best_to_test_quick_official_panns_embed_mlp.sh` |
+| Full cmd | `SEEDS=0,1,2 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0388_ave_p0_best_to_test_quick_official_panns_embed_mlp.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0388_*`, `runs/E0344_*` |
+| Artifacts | `runs/E0388_*/metrics.json`, `runs/E0344_*/diagnose.json` |
+| Results | Skipped: E0387 val402 is not competitive (best Δ≈+0.00208); stop before test402. |
+
+
+### E0389: Full test402 reproduction (SEEDS=0..9) — E0387 winner → attempt to prove C0003
+| Field | Value |
+| --- | --- |
+| Objective | Spend full test402 budget (SEEDS=0..9) for the E0387 winner if promoted, and attempt to prove C0003. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Same as E0387 |
+| Code path | `scripts/e0389_ave_p0_best_to_test_full_official_panns_embed_mlp.sh`, `scripts/e0344_ave_p0_diagnose.sh` |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0387_*/best_config.json`), `SEEDS=0..9`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json`) |
+| Checks | If Δ≥+0.02 and paired `p<0.05`, mark C0003 proven; otherwise update `docs/plan.md` with decisive failure analysis. |
+| Total time | ~tens of minutes to hours |
+| Single-GPU script | `bash scripts/e0389_ave_p0_best_to_test_full_official_panns_embed_mlp.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `SEEDS=0,1 EPOCHS=1 LIMIT_TRAIN=64 LIMIT_EVAL=32 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0389_ave_p0_best_to_test_full_official_panns_embed_mlp.sh` |
+| Full cmd | `SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0389_ave_p0_best_to_test_full_official_panns_embed_mlp.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0389_*`, `runs/E0344_*` |
+| Artifacts | `runs/E0389_*/metrics.json`, `runs/E0344_*/diagnose.json` |
+| Results | Skipped: E0387 val402 is not competitive (best Δ≈+0.00208); stop before test402. |
+
+
+### E0390: Val402 sweep (SEEDS=0..2) — PANNs-embeddings × CLIPdiff supervised anchors (`av_panns_embed_clipdiff_mlp`) under scale-invariant top1-med gate
+| Field | Value |
+| --- | --- |
+| Objective | Try a bolder audio×cheap-visual Stage-1: train a tiny per-second MLP on pretrained PANNs embeddings + cheap CLIP feature diff scalar to predict event vs background on train split, then use per-second logits as Stage-1 scores (`EVENTNESS=av_panns_embed_clipdiff_mlp`). Run the standard val402 sweep under `candidate_set=ltl_top1med_norm_v1` to find a competitive anchored config targeting C0003 (+2% on test402). |
+| Baseline | Current best learned-anchor pipeline baseline (E0223/E0224 / E0341 winner). |
+| Model | AVE-P0 `temporal_conv` head on frozen CLIP cache. |
+| Weights | PANNs checkpoint (explicit path or default `~/panns_data/Cnn14_mAP=0.431.pth`); CLIP caches already present; head trained per seed. |
+| Code path | `scripts/e0390_ave_p0_sweep_official_val_ltl_top1med_norm_v1_av_panns_embed_clipdiff_mlp.sh`, `avs/audio/panns_probe.py`, `avs/experiments/ave_p0_sweep.py` (`eventness_method=av_panns_embed_clipdiff_mlp`) |
+| Params | `EVENTNESS=av_panns_embed_clipdiff_mlp`, `CANDIDATE_SET=ltl_top1med_norm_v1`, `SEEDS=0..2`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Promote only if val402 winner is clearly positive and competitive vs baseline val winners (E0223/E0224). |
+| Total time | ~tens of minutes to hours |
+| Single-GPU script | `bash scripts/e0390_ave_p0_sweep_official_val_ltl_top1med_norm_v1_av_panns_embed_clipdiff_mlp.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0390_ave_p0_sweep_official_val_ltl_top1med_norm_v1_av_panns_embed_clipdiff_mlp.sh` |
+| Full cmd | `SEEDS=0,1,2 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0390_ave_p0_sweep_official_val_ltl_top1med_norm_v1_av_panns_embed_clipdiff_mlp.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0390_*` |
+| Artifacts | `runs/E0390_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke: `runs/E0390_ave_p0_sweep_official_val_av_panns_embed_clipdiff_mlp_ltl_top1med_norm_v1_20260206-102211/sweep_summary.json` (LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1; best Δ≈+0.00469). Full val402: `runs/E0390_ave_p0_sweep_official_val_av_panns_embed_clipdiff_mlp_ltl_top1med_norm_v1_20260206-102257/sweep_summary.json` (best=`ltltop1medn_thr0p7_shift1`, Δ≈+0.00374, p≈0.542) + `runs/E0390_ave_p0_sweep_official_val_av_panns_embed_clipdiff_mlp_ltl_top1med_norm_v1_20260206-102257/best_config.json`. Decision: not promoted to test402. |
+
+
+### E0391: Quick test402 transfer (SEEDS=0..2) — E0390 winner + diagnosis
+| Field | Value |
+| --- | --- |
+| Objective | Run quick test402 for the E0390 winner (SEEDS=0..2) and diagnose buckets (E0344). |
+| Baseline | `uniform` |
+| Model | Same as E0390 selected config |
+| Weights | Same as E0390 |
+| Code path | `scripts/e0391_ave_p0_best_to_test_quick_official_av_panns_embed_clipdiff_mlp.sh`, `scripts/e0344_ave_p0_diagnose.sh` |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0390_*/best_config.json`), `SEEDS=0..2`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json`) |
+| Checks | Promote to E0392 only if quick Δ is competitive vs baseline quick (≈+0.01899). |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0391_ave_p0_best_to_test_quick_official_av_panns_embed_clipdiff_mlp.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0391_ave_p0_best_to_test_quick_official_av_panns_embed_clipdiff_mlp.sh` |
+| Full cmd | `SEEDS=0,1,2 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0391_ave_p0_best_to_test_quick_official_av_panns_embed_clipdiff_mlp.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0391_*`, `runs/E0344_*` |
+| Artifacts | `runs/E0391_*/metrics.json`, `runs/E0344_*/diagnose.json` |
+| Results | Skipped: E0390 val402 is not competitive (best Δ≈+0.00374); stop before test402. Evidence: `runs/E0390_ave_p0_sweep_official_val_av_panns_embed_clipdiff_mlp_ltl_top1med_norm_v1_20260206-102257/sweep_summary.json`. |
+
+
+### E0392: Full test402 reproduction (SEEDS=0..9) — E0390 winner → attempt to prove C0003
+| Field | Value |
+| --- | --- |
+| Objective | Spend full test402 budget (SEEDS=0..9) for the E0390 winner if promoted, and attempt to prove C0003. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Same as E0390 |
+| Code path | `scripts/e0392_ave_p0_best_to_test_full_official_av_panns_embed_clipdiff_mlp.sh`, `scripts/e0344_ave_p0_diagnose.sh` |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0390_*/best_config.json`), `SEEDS=0..9`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json`) |
+| Checks | If Δ≥+0.02 and paired `p<0.05`, mark C0003 proven; otherwise update `docs/plan.md` with decisive failure analysis. |
+| Total time | ~tens of minutes to hours |
+| Single-GPU script | `bash scripts/e0392_ave_p0_best_to_test_full_official_av_panns_embed_clipdiff_mlp.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `SEEDS=0,1 EPOCHS=1 LIMIT_TRAIN=64 LIMIT_EVAL=32 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0392_ave_p0_best_to_test_full_official_av_panns_embed_clipdiff_mlp.sh` |
+| Full cmd | `SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0392_ave_p0_best_to_test_full_official_av_panns_embed_clipdiff_mlp.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0392_*`, `runs/E0344_*` |
+| Artifacts | `runs/E0392_*/metrics.json`, `runs/E0344_*/diagnose.json` |
+| Results | Skipped: E0390 val402 is not competitive (best Δ≈+0.00374); stop before test402. Evidence: `runs/E0390_ave_p0_sweep_official_val_av_panns_embed_clipdiff_mlp_ltl_top1med_norm_v1_20260206-102257/sweep_summary.json`. |
+
+
+### E0393: Val402 sweep (SEEDS=0..2) — optical-flow augmented supervised anchors (`av_clipdiff_flow_mlp`) under scale-invariant top1-med gate
+| Field | Value |
+| --- | --- |
+| Objective | Try a new cheap-visual Stage-1 signal: Farneback optical-flow magnitude computed from per-second frames, concatenated with the existing `(audio basic + CLIPdiff scalar)` features. Train a tiny per-second MLP to predict event-vs-background on train split, then sweep anchored configs on official val402 under `candidate_set=ltl_top1med_norm_v1`. |
+| Baseline | Current best learned-anchor pipeline baseline (E0223/E0224 / E0341 winner). |
+| Model | AVE-P0 `temporal_conv` head on frozen CLIP cache. |
+| Weights | CLIP caches already present; no extra pretrained weights required beyond existing setup. |
+| Code path | `scripts/e0393_ave_p0_sweep_official_val_ltl_top1med_norm_v1_av_clipdiff_flow_mlp.sh`, `avs/vision/cheap_eventness.py`, `avs/experiments/ave_p0_sweep.py` (`eventness_method=av_clipdiff_flow_mlp`) |
+| Params | `EVENTNESS=av_clipdiff_flow_mlp`, `CANDIDATE_SET=ltl_top1med_norm_v1`, `SEEDS=0..2`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Promote only if val402 winner is clearly positive and competitive vs baseline val winners (E0223/E0224). |
+| Total time | ~tens of minutes to hours |
+| Single-GPU script | `bash scripts/e0393_ave_p0_sweep_official_val_ltl_top1med_norm_v1_av_clipdiff_flow_mlp.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0393_ave_p0_sweep_official_val_ltl_top1med_norm_v1_av_clipdiff_flow_mlp.sh` |
+| Full cmd | `SEEDS=0,1,2 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0393_ave_p0_sweep_official_val_ltl_top1med_norm_v1_av_clipdiff_flow_mlp.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0393_*` |
+| Artifacts | `runs/E0393_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke: `runs/E0393_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_ltl_top1med_norm_v1_20260206-104337/sweep_summary.json` (LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1; best Δ≈+0.00156). Full val402: `runs/E0393_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_ltl_top1med_norm_v1_20260206-104413/sweep_summary.json` (best=`ltltop1medn_thr0p6_shift1`, Δ≈+0.00881, p≈0.0971) + `runs/E0393_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_ltl_top1med_norm_v1_20260206-104413/best_config.json`. Decision: not promoted to test402. |
+
+
+### E0394: Quick test402 transfer (SEEDS=0..2) — E0393 winner + diagnosis
+| Field | Value |
+| --- | --- |
+| Objective | Run quick test402 for the E0393 winner (SEEDS=0..2) and diagnose buckets (E0344). |
+| Baseline | `uniform` |
+| Model | Same as E0393 selected config |
+| Weights | Same as E0393 |
+| Code path | `scripts/e0394_ave_p0_best_to_test_quick_official_av_clipdiff_flow_mlp.sh`, `scripts/e0344_ave_p0_diagnose.sh` |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0393_*/best_config.json`), `SEEDS=0..2`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json`) |
+| Checks | Promote to E0395 only if quick Δ is competitive vs baseline quick (≈+0.01899). |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0394_ave_p0_best_to_test_quick_official_av_clipdiff_flow_mlp.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0394_ave_p0_best_to_test_quick_official_av_clipdiff_flow_mlp.sh` |
+| Full cmd | `SEEDS=0,1,2 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0394_ave_p0_best_to_test_quick_official_av_clipdiff_flow_mlp.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0394_*`, `runs/E0344_*` |
+| Artifacts | `runs/E0394_*/metrics.json`, `runs/E0344_*/diagnose.json` |
+| Results | Skipped: E0393 val402 does not beat the baseline val winner (best Δ≈+0.00881, p≈0.0971); stop before test402. Evidence: `runs/E0393_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_ltl_top1med_norm_v1_20260206-104413/sweep_summary.json`. |
+
+
+### E0395: Full test402 reproduction (SEEDS=0..9) — E0393 winner → attempt to prove C0003
+| Field | Value |
+| --- | --- |
+| Objective | Spend full test402 budget (SEEDS=0..9) for the E0393 winner if promoted, and attempt to prove C0003. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Same as E0393 |
+| Code path | `scripts/e0395_ave_p0_best_to_test_full_official_av_clipdiff_flow_mlp.sh`, `scripts/e0344_ave_p0_diagnose.sh` |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0393_*/best_config.json`), `SEEDS=0..9`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json`) |
+| Checks | If Δ≥+0.02 and paired `p<0.05`, mark C0003 proven; otherwise update `docs/plan.md` with decisive failure analysis. |
+| Total time | ~tens of minutes to hours |
+| Single-GPU script | `bash scripts/e0395_ave_p0_best_to_test_full_official_av_clipdiff_flow_mlp.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `SEEDS=0,1 EPOCHS=1 LIMIT_TRAIN=64 LIMIT_EVAL=32 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0395_ave_p0_best_to_test_full_official_av_clipdiff_flow_mlp.sh` |
+| Full cmd | `SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0395_ave_p0_best_to_test_full_official_av_clipdiff_flow_mlp.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0395_*`, `runs/E0344_*` |
+| Artifacts | `runs/E0395_*/metrics.json`, `runs/E0344_*/diagnose.json` |
+| Results | Skipped: E0393 val402 does not beat the baseline val winner (best Δ≈+0.00881, p≈0.0971); stop before test402. Evidence: `runs/E0393_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_ltl_top1med_norm_v1_20260206-104413/sweep_summary.json`. |
+
+
+### E0396: Val402 sweep (SEEDS=0..2) — fixed flow Stage-1 + dynamic-K extreme Stage-2 (`ltl_top1med_k1_extreme_v1`)
+| Field | Value |
+| --- | --- |
+| Objective | Keep Stage-1 fixed as `EVENTNESS=av_clipdiff_flow_mlp` (from E0393), and aggressively search Stage-2 with `candidate_set=ltl_top1med_k1_extreme_v1` to suppress known 2-high harm. |
+| Baseline | E0223/E0224 val winner and E0393 winner. |
+| Model | AVE-P0 `temporal_conv` head on frozen CLIP cache. |
+| Weights | Reuse latest E0393 `eventness_scores.json` by default; no extra pretrained weights. |
+| Code path | `scripts/e0396_ave_p0_sweep_official_val_ltl_top1med_k1_extreme_v1_av_clipdiff_flow_mlp.sh`, `avs/experiments/ave_p0_sweep.py` |
+| Params | `EVENTNESS=av_clipdiff_flow_mlp`, `CANDIDATE_SET=ltl_top1med_k1_extreme_v1`, `SEEDS=0..2`, `AUDIO_DEVICE`, `TRAIN_DEVICE`, optional `SCORES_JSON` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Promote only if val402 winner is clearly competitive vs baseline val winners. |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0396_ave_p0_sweep_official_val_ltl_top1med_k1_extreme_v1_av_clipdiff_flow_mlp.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0396_ave_p0_sweep_official_val_ltl_top1med_k1_extreme_v1_av_clipdiff_flow_mlp.sh` |
+| Full cmd | `SEEDS=0,1,2 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0396_ave_p0_sweep_official_val_ltl_top1med_k1_extreme_v1_av_clipdiff_flow_mlp.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0396_*` |
+| Artifacts | `runs/E0396_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | Smoke: `runs/E0396_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_ltl_top1med_k1_extreme_v1_20260206-130029/sweep_summary.json` (LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1; best Δ≈+0.00781). Full val402: `runs/E0396_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_ltl_top1med_k1_extreme_v1_20260206-130114/sweep_summary.json` (best=`ltltop1medk1ext_thr0p6_shift1_score`, Δ≈-0.00125, p≈0.924) + `runs/E0396_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_ltl_top1med_k1_extreme_v1_20260206-130114/best_config.json`. Decision: not promoted to test402. |
+
+
+### E0397: Quick test402 transfer (SEEDS=0..2) — E0396 winner + diagnosis
+| Field | Value |
+| --- | --- |
+| Objective | Run quick test402 for the E0396 winner (SEEDS=0..2) and diagnose buckets (E0344). |
+| Baseline | `uniform` |
+| Model | Same as E0396 selected config |
+| Weights | Same as E0396 |
+| Code path | `scripts/e0397_ave_p0_best_to_test_quick_official_av_clipdiff_flow_mlp_k1ext.sh`, `scripts/e0344_ave_p0_diagnose.sh` |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0396_*/best_config.json`), `SEEDS=0..2`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json`) |
+| Checks | Promote to E0398 only if quick Δ is competitive vs baseline quick (≈+0.01899). |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0397_ave_p0_best_to_test_quick_official_av_clipdiff_flow_mlp_k1ext.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0397_ave_p0_best_to_test_quick_official_av_clipdiff_flow_mlp_k1ext.sh` |
+| Full cmd | `SEEDS=0,1,2 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0397_ave_p0_best_to_test_quick_official_av_clipdiff_flow_mlp_k1ext.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0397_*`, `runs/E0344_*` |
+| Artifacts | `runs/E0397_*/metrics.json`, `runs/E0344_*/diagnose.json` |
+| Results | Skipped: E0396 val402 regresses (best Δ≈-0.00125, p≈0.924); stop before test402. Evidence: `runs/E0396_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_ltl_top1med_k1_extreme_v1_20260206-130114/sweep_summary.json`. |
+
+
+### E0398: Full test402 reproduction (SEEDS=0..9) — E0396 winner → attempt to prove C0003
+| Field | Value |
+| --- | --- |
+| Objective | Spend full test402 budget (SEEDS=0..9) for the E0396 winner if promoted, and attempt to prove C0003. |
+| Baseline | `uniform` |
+| Model | Same as the selected config |
+| Weights | Same as E0396 |
+| Code path | `scripts/e0398_ave_p0_best_to_test_full_official_av_clipdiff_flow_mlp_k1ext.sh`, `scripts/e0344_ave_p0_diagnose.sh` |
+| Params | `BEST_CONFIG_JSON` (defaults to latest `runs/E0396_*/best_config.json`), `SEEDS=0..9`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json` (+ `diagnose.json`) |
+| Checks | If Δ≥+0.02 and paired `p<0.05`, mark C0003 proven; otherwise update `docs/plan.md` with decisive failure analysis. |
+| Total time | ~tens of minutes to hours |
+| Single-GPU script | `bash scripts/e0398_ave_p0_best_to_test_full_official_av_clipdiff_flow_mlp_k1ext.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `SEEDS=0,1 EPOCHS=1 LIMIT_TRAIN=64 LIMIT_EVAL=32 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0398_ave_p0_best_to_test_full_official_av_clipdiff_flow_mlp_k1ext.sh` |
+| Full cmd | `SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0398_ave_p0_best_to_test_full_official_av_clipdiff_flow_mlp_k1ext.sh` |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `runs/E0398_*`, `runs/E0344_*` |
+| Artifacts | `runs/E0398_*/metrics.json`, `runs/E0344_*/diagnose.json` |
+| Results | Skipped: E0396 val402 regresses (best Δ≈-0.00125, p≈0.924); stop before test402. Evidence: `runs/E0396_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_ltl_top1med_k1_extreme_v1_20260206-130114/sweep_summary.json`. |
+
+
+### E0399: Smoke val sweep (SEEDS=0..1) — dense-stride Stage-1 (`av_clipdiff_flow_mlp_stride`) + `ltl_top1med_k1_extreme_v1`
+| Field | Value |
+| --- | --- |
+| Objective | Smoke-verify the new dense-stride Stage-1 scorer (`EVENTNESS=av_clipdiff_flow_mlp_stride`) with strict candidate set `ltl_top1med_k1_extreme_v1` on official val split. |
+| Baseline | E0396 smoke and prior `av_clipdiff_flow_mlp` Stage-1 sweeps. |
+| Model | AVE-P0 `temporal_conv` head on frozen CLIP cache. |
+| Weights | Reuse official CLIP caches; Stage-1 MLP trained from AVE train split. |
+| Code path | `scripts/e0399_ave_p0_sweep_official_val_smoke_ltl_top1med_k1_extreme_v1_av_clipdiff_flow_mlp_stride.sh`, `avs/experiments/ave_p0_sweep.py`, `avs/utils/scores.py` |
+| Params | `EVENTNESS=av_clipdiff_flow_mlp_stride`, `SEEDS=0,1`, `EPOCHS=1`, `LIMIT_TRAIN=64`, `LIMIT_EVAL=32` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | End-to-end smoke passes and emits a valid best config under the new Stage-1 method. |
+| Total time | ~minutes |
+| Single-GPU script | `bash scripts/e0399_ave_p0_sweep_official_val_smoke_ltl_top1med_k1_extreme_v1_av_clipdiff_flow_mlp_stride.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `bash scripts/e0399_ave_p0_sweep_official_val_smoke_ltl_top1med_k1_extreme_v1_av_clipdiff_flow_mlp_stride.sh` |
+| Full cmd | `SEEDS=0,1,2 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0400_ave_p0_sweep_official_val_ltl_top1med_k1_extreme_v1_av_clipdiff_flow_mlp_stride.sh` |
+| Smoke | [x] |
+| Full | [ ] |
+| Logs | `runs/E0399_*` |
+| Artifacts | `runs/E0399_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
+| Results | `runs/E0399_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_stride_ltl_top1med_k1_extreme_v1_20260206-131751/sweep_summary.json` (best Δ≈+0.00156, p≈0.500). |
+
+
+### E0400: Full val402 sweep (SEEDS=0..2) — dense-stride Stage-1 (`av_clipdiff_flow_mlp_stride`) strict gate sets
+| Field | Value |
+| --- | --- |
+| Objective | Run official val402 sweeps for dense-stride Stage-1 with strict Stage-2 sets (`k1_extreme`, `top1med_norm`, `top1med_v1`) and determine promotion to test402. |
+| Baseline | E0223/E0224 val winners and E0393/E0396 family. |
+| Model | AVE-P0 `temporal_conv` head on frozen CLIP cache. |
+| Weights | Reuse official CLIP caches; Stage-1 MLP trained per run from AVE train split. |
+| Code path | `scripts/e0400_ave_p0_sweep_official_val_ltl_top1med_k1_extreme_v1_av_clipdiff_flow_mlp_stride.sh` |
+| Params | `EVENTNESS=av_clipdiff_flow_mlp_stride`, `SEEDS=0,1,2`, `LIMIT_TRAIN=3339`, `LIMIT_EVAL=402` |
+| Metrics (must save) | `sweep_summary.json`, `best_config.json`, `eventness_scores.json` |
+| Checks | Promote only if val402 winner is competitive against current best val winners; otherwise stop before test402. |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0400_ave_p0_sweep_official_val_ltl_top1med_k1_extreme_v1_av_clipdiff_flow_mlp_stride.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0399_ave_p0_sweep_official_val_smoke_ltl_top1med_k1_extreme_v1_av_clipdiff_flow_mlp_stride.sh` |
+| Full cmd | `SEEDS=0,1,2 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0400_ave_p0_sweep_official_val_ltl_top1med_k1_extreme_v1_av_clipdiff_flow_mlp_stride.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0400_*`, `runs/E0400b_*`, `runs/E0400c_*` |
+| Artifacts | `runs/E0400_*/sweep_summary.json`, `runs/E0400b_*/sweep_summary.json`, `runs/E0400c_*/sweep_summary.json` |
+| Results | E0400 (`k1_extreme`): `runs/E0400_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_stride_ltl_top1med_k1_extreme_v1_20260206-131825/sweep_summary.json` (best Δ≈+0.00723, p≈0.412). E0400b (`top1med_norm`): `runs/E0400b_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_stride_ltl_top1med_norm_v1_20260206-132936/sweep_summary.json` (best Δ≈+0.00607, p≈0.08999). E0400c (`top1med_v1`): `runs/E0400c_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_stride_ltl_top1med_v1_20260206-133240/sweep_summary.json` (best Δ≈+0.00357, p≈0.0487). Decision: not competitive for test402 promotion. |
+
+
+### E0401: Quick test402 transfer (SEEDS=0..2) — dense-stride winner + diagnosis
+| Field | Value |
+| --- | --- |
+| Objective | Run quick test402 for the selected dense-stride candidate and generate bucket diagnosis (`E0344`) for transfer quality. |
+| Baseline | `uniform` |
+| Model | Same as selected E0400* config |
+| Weights | Same as E0400* |
+| Code path | `scripts/e0401_ave_p0_best_to_test_quick_official_av_clipdiff_flow_mlp_stride.sh`, `scripts/e0344_ave_p0_diagnose.sh` |
+| Params | `BEST_CONFIG_JSON`, `SEEDS=0,1,2`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json`, `diagnose.json` |
+| Checks | If quick is competitive and diagnosis improves harmful buckets, promote to full test402. |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0401_ave_p0_best_to_test_quick_official_av_clipdiff_flow_mlp_stride.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `SEEDS=0,1 EPOCHS=1 LIMIT_TRAIN=64 LIMIT_EVAL=32 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0401_ave_p0_best_to_test_quick_official_av_clipdiff_flow_mlp_stride.sh` |
+| Full cmd | `SEEDS=0,1,2 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0401_ave_p0_best_to_test_quick_official_av_clipdiff_flow_mlp_stride.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0401_*`, `runs/E0344_*` |
+| Artifacts | `runs/E0401_*/metrics.json`, `runs/E0344_*/diagnose.json` |
+| Results | Baseline quick (SEEDS=0,1,2): `runs/E0401_quick_test402_av_clipdiff_flow_mlp_stride_20260206-140425/metrics.json` + `runs/E0401_quick_test402_av_clipdiff_flow_mlp_stride_20260206-140425/diagnose.json` (`Δ=+0.00771`, `p=0.331`, `fallback_used_frac≈0.8607`). Alternative quick reruns: `runs/E0401_quick_test402_av_clipdiff_flow_mlp_stride_alt_top1med_thr0p5_20260206-150837/metrics.json` + `.../diagnose.json` (`Δ=+0.01153`, `p=0.0661`, `fallback_used_frac≈0.5622`); `runs/E0401_quick_test402_av_clipdiff_flow_mlp_stride_alt_top1medn_thr0p6_20260206-151412/metrics.json` + `.../diagnose.json` (`Δ=+0.00746`, `p=0.436`). |
+
+
+### E0402: Full test402 reproduction (SEEDS=0..9) — dense-stride winner → attempt C0003
+| Field | Value |
+| --- | --- |
+| Objective | Run full test402 with SEEDS=0..9 for the selected dense-stride candidate and attempt to prove C0003. |
+| Baseline | `uniform` |
+| Model | Same as selected E0400* config |
+| Weights | Same as E0400* |
+| Code path | `scripts/e0402_ave_p0_best_to_test_full_official_av_clipdiff_flow_mlp_stride.sh`, `scripts/e0344_ave_p0_diagnose.sh` |
+| Params | `BEST_CONFIG_JSON`, `SEEDS=0..9`, `AUDIO_DEVICE`, `TRAIN_DEVICE` |
+| Metrics (must save) | `metrics.json`, `diagnose.json` |
+| Checks | C0003 gate: `Δ>=+0.02` and paired `p<0.05`. |
+| Total time | ~tens of minutes to hours |
+| Single-GPU script | `bash scripts/e0402_ave_p0_best_to_test_full_official_av_clipdiff_flow_mlp_stride.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `SEEDS=0,1 EPOCHS=1 LIMIT_TRAIN=64 LIMIT_EVAL=32 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0402_ave_p0_best_to_test_full_official_av_clipdiff_flow_mlp_stride.sh` |
+| Full cmd | `SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0402_ave_p0_best_to_test_full_official_av_clipdiff_flow_mlp_stride.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0402_*`, `runs/E0344_*` |
+| Artifacts | `runs/E0402_*/metrics.json`, `runs/E0344_*/diagnose.json` |
+| Results | Baseline full (SEEDS=0..9): `runs/E0402_full_test402_av_clipdiff_flow_mlp_stride_20260206-141020/metrics.json` + `runs/E0402_full_test402_av_clipdiff_flow_mlp_stride_20260206-141020/diagnose.json` (`Δ=+0.01037`, `p=0.00489`, `fallback_used_frac≈0.8607`). Promoted alternative full (from quick winner `top1_med thr0.5`): `runs/E0402_full_test402_av_clipdiff_flow_mlp_stride_alt_top1med_thr0p5_20260206-152012/metrics.json` + `.../diagnose.json` (`anchored=0.720995`, `uniform=0.708582`, `Δ=+0.01241`, `p=0.00302`, `fallback_used_frac≈0.5622`); still below C0003 target `Δ>=+0.02`. |
+
+
+### E0403: Oracle→Predicted report (`E0201` protocol) — dense-stride Stage-1
+| Field | Value |
+| --- | --- |
+| Objective | Re-run mechanism evidence for dense-stride Stage-1 and measure Oracle–Predicted gap vs existing deployable baseline. |
+| Baseline | Prior deployable Stage-1 reports under E0201. |
+| Model | `avs.experiments.mde_ltl oracle_vs_predicted` harness. |
+| Weights | Same official caches and head-training protocol as E0201. |
+| Code path | `scripts/e0403_oracle_vs_predicted_official_av_clipdiff_flow_mlp_stride.sh`, `scripts/e0201_oracle_vs_predicted_official.sh` |
+| Params | `EVENTNESS=av_clipdiff_flow_mlp_stride`, `SEEDS`, `LIMIT_TRAIN`, `LIMIT_EVAL` |
+| Metrics (must save) | `oracle_vs_predicted.json` |
+| Checks | Report Oracle–Pred gap and predicted-vs-uniform delta under equal budget. |
+| Total time | ~tens of minutes to hours |
+| Single-GPU script | `bash scripts/e0403_oracle_vs_predicted_official_av_clipdiff_flow_mlp_stride.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `SEEDS=0,1 LIMIT_TRAIN=64 LIMIT_EVAL=32 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0403_oracle_vs_predicted_official_av_clipdiff_flow_mlp_stride.sh` |
+| Full cmd | `SEEDS=0,1,2 LIMIT_TRAIN=3339 LIMIT_EVAL=402 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0403_oracle_vs_predicted_official_av_clipdiff_flow_mlp_stride.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0403_*` |
+| Artifacts | `runs/E0403_*/oracle_vs_predicted.json` |
+| Results | Baseline full (`SEEDS=0,1,2`): `runs/E0403_oracle_vs_predicted_av_clipdiff_flow_mlp_stride_20260206-141804/oracle_vs_predicted.json` (`predicted Δ=-0.00547`, `p=0.03399`, `oracle_minus_predicted=0.04187`). Alternative-config rerun (aligned with promoted `top1_med thr0.5` config): `runs/E0403_oracle_vs_predicted_av_clipdiff_flow_mlp_stride_alt_top1med_thr0p5_20260206-152658/oracle_vs_predicted.json` (`predicted Δ=+0.01153`, `p=0.0661`; `oracle_minus_predicted=0.02488`; `cheap_visual Δ=+0.00415`). Gap shrinks substantially but still does not pass a strict `p<0.05` deployable proof gate. |
+
+
+### E0404: Degradation suite (`E0203` protocol) — dense-stride Stage-1
+| Field | Value |
+| --- | --- |
+| Objective | Re-run robustness evidence (shift/noise/silence × α) for dense-stride Stage-1 and compare against baseline degradation behavior. |
+| Baseline | Prior E0203/E0331 degradation artifacts. |
+| Model | `avs.experiments.degradation_suite` harness. |
+| Weights | Same official data/caches setup as E0203. |
+| Code path | `scripts/e0404_degradation_suite_official_av_clipdiff_flow_mlp_stride.sh`, `scripts/e0203_degradation_suite_official.sh` |
+| Params | `EVENTNESS=av_clipdiff_flow_mlp_stride`, `SHIFT_GRID`, `SNR_GRID`, `SILENCE_GRID`, `DELTAS` |
+| Metrics (must save) | `degradation_suite.json` (+ plots if generated by harness) |
+| Checks | Verify no catastrophic drop below α-baseline pattern under perturbations. |
+| Total time | ~tens of minutes |
+| Single-GPU script | `bash scripts/e0404_degradation_suite_official_av_clipdiff_flow_mlp_stride.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SHIFT_GRID='0' SNR_GRID='20' SILENCE_GRID='0' AUDIO_DEVICE=cuda:0 bash scripts/e0404_degradation_suite_official_av_clipdiff_flow_mlp_stride.sh` |
+| Full cmd | `LIMIT_TRAIN=3339 LIMIT_EVAL=402 SHIFT_GRID='-0.5,0,0.5' SNR_GRID='20,10,0' SILENCE_GRID='0,0.5' AUDIO_DEVICE=cuda:0 bash scripts/e0404_degradation_suite_official_av_clipdiff_flow_mlp_stride.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0404_*` |
+| Artifacts | `runs/E0404_*/degradation_suite.json` |
+| Results | Full: `runs/E0404_degradation_av_clipdiff_flow_mlp_stride_20260206-142817/degradation_suite.json` (18 rows, official test402; mean Recall@K `Δ0≈0.21308`, `Δ1≈0.38001`, `Δ2≈0.51741`). Compared to prior deployable baseline `runs/E0203_degradation_av_clipdiff_mlp_20260204-215831/degradation_suite.json`, dense-stride is slightly higher on strict `Δ0` (`+0.00147`) but clearly worse on relaxed windows (`Δ1/Δ2`). |
+
+
+### E0405: Quick test402 transfer grid (SEEDS=0..2) — dense-stride top candidates from E0400b/E0400c
+| Field | Value |
+| --- | --- |
+| Objective | Exhaustively run quick test402 transfer for all high-priority `top1_med` / `top1_med_norm` candidates from dense-stride val sweeps, then select the best transferable config before any new full test402 spend. |
+| Baseline | Prior quick winner `top1_med thr0.5 shift1` (`Δ≈+0.01153`). |
+| Model | AVE-P0 `temporal_conv` head + `EVENTNESS=av_clipdiff_flow_mlp_stride`. |
+| Weights | Same official caches/training protocol as E0401/E0402. |
+| Code path | `scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh` |
+| Params | `SEEDS=0,1,2`; shared score cache `runs/E0405_shared_scores_av_clipdiff_flow_mlp_stride_test402.json`; candidate configs from `runs/E0400b_*` and `runs/E0400c_*`. |
+| Metrics (must save) | `metrics.json` per candidate run (plus ranking summary). |
+| Checks | Promote only the best quick-transfer config to full test402 (E0406). |
+| VRAM | ~27GB (GPU5 observed). |
+| Total time | ~minutes per candidate after shared scores are filled. |
+| Single-GPU script | `BEST_CONFIG_JSON=<candidate>/config.json SCORES_JSON=runs/E0405_shared_scores_av_clipdiff_flow_mlp_stride_test402.json EVENTNESS=av_clipdiff_flow_mlp_stride SEEDS=0,1,2 AUDIO_DEVICE=cuda:5 TRAIN_DEVICE=cuda:5 OUT_DIR=runs/E0405_quick_test402_av_clipdiff_flow_mlp_stride_<name>_<ts> bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `BEST_CONFIG_JSON=runs/E0400c_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_stride_ltl_top1med_v1_20260206-133240/ltltop1med_thr0p8_shift1/config.json SCORES_JSON=runs/E0405_shared_scores_av_clipdiff_flow_mlp_stride_test402.json EVENTNESS=av_clipdiff_flow_mlp_stride SEEDS=0,1,2 AUDIO_DEVICE=cuda:5 TRAIN_DEVICE=cuda:5 OUT_DIR=runs/E0405_quick_test402_av_clipdiff_flow_mlp_stride_top1med_thr0p8_shift1_<ts> bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh` |
+| Full cmd | `for cfg in <E0400b/E0400c selected configs>; do BEST_CONFIG_JSON="$cfg" SCORES_JSON=runs/E0405_shared_scores_av_clipdiff_flow_mlp_stride_test402.json EVENTNESS=av_clipdiff_flow_mlp_stride SEEDS=0,1,2 AUDIO_DEVICE=cuda:5 TRAIN_DEVICE=cuda:5 OUT_DIR=runs/E0405_quick_test402_av_clipdiff_flow_mlp_stride_<name>_<ts> bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh; done` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0405_quick_test402_*` |
+| Artifacts | `runs/E0405_quick_test402_*/metrics.json`, `runs/E0405_shared_scores_av_clipdiff_flow_mlp_stride_test402.json` |
+| Results | Best quick candidate is `top1medn_thr0p6_shift0`: `runs/E0405_quick_test402_av_clipdiff_flow_mlp_stride_top1medn_thr0p6_shift0_20260206-161028/metrics.json` (`Δ≈+0.01335`, `p≈0.0956`). Other key runs: `...top1med_thr0p7_shift1_20260206-154502/metrics.json` (`Δ≈+0.00755`), `...top1med_thr0p8_shift1_20260206-155825/metrics.json` (`Δ≈+0.00771`), `...top1med_thr0p6_shift1_20260206-160834/metrics.json` (`Δ≈+0.00771`), `...top1medn_thr0p6_shift1_20260206-161107/metrics.json` (`Δ≈+0.00746`), `...top1medn_thr0p5_shift1_20260206-161214/metrics.json` (`Δ≈+0.00647`). Promoted `top1medn_thr0p6_shift0` to E0406. |
+
+
+### E0406: Full test402 reproduction (SEEDS=0..9) — E0405 quick winner (`top1medn_thr0p6_shift0`)
+| Field | Value |
+| --- | --- |
+| Objective | Validate whether the E0405 quick winner transfers under full official test402 (SEEDS=0..9) and can beat the prior dense-stride best (`E0402 alt`). |
+| Baseline | `runs/E0402_full_test402_av_clipdiff_flow_mlp_stride_alt_top1med_thr0p5_20260206-152012/metrics.json` (`Δ≈+0.01241`). |
+| Model | AVE-P0 `temporal_conv` head + `EVENTNESS=av_clipdiff_flow_mlp_stride`. |
+| Weights | Same official caches/training protocol; reuse E0405 shared score cache. |
+| Code path | `scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`, `scripts/e0344_ave_p0_diagnose.sh` |
+| Params | `BEST_CONFIG_JSON=.../ltltop1medn_thr0p6_shift0/config.json`, `SEEDS=0..9`, `SCORES_JSON=runs/E0405_shared_scores_av_clipdiff_flow_mlp_stride_test402.json`. |
+| Metrics (must save) | `metrics.json`, `diagnose.json`. |
+| Checks | If better than prior full best, update C0003 evidence and promote for mechanism reruns; otherwise keep as negative evidence. |
+| Single-GPU script | `BEST_CONFIG_JSON=.../ltltop1medn_thr0p6_shift0/config.json SCORES_JSON=runs/E0405_shared_scores_av_clipdiff_flow_mlp_stride_test402.json EVENTNESS=av_clipdiff_flow_mlp_stride SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cuda:5 TRAIN_DEVICE=cuda:5 OUT_DIR=runs/E0406_full_test402_av_clipdiff_flow_mlp_stride_top1medn_thr0p6_shift0_<ts> bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `BEST_CONFIG_JSON=.../ltltop1medn_thr0p6_shift0/config.json SCORES_JSON=runs/E0405_shared_scores_av_clipdiff_flow_mlp_stride_test402.json EVENTNESS=av_clipdiff_flow_mlp_stride SEEDS=0,1 AUDIO_DEVICE=cuda:5 TRAIN_DEVICE=cuda:5 OUT_DIR=runs/E0406_smoke_test402_av_clipdiff_flow_mlp_stride_top1medn_thr0p6_shift0_<ts> bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh` |
+| Full cmd | `BEST_CONFIG_JSON=.../ltltop1medn_thr0p6_shift0/config.json SCORES_JSON=runs/E0405_shared_scores_av_clipdiff_flow_mlp_stride_test402.json EVENTNESS=av_clipdiff_flow_mlp_stride SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cuda:5 TRAIN_DEVICE=cuda:5 OUT_DIR=runs/E0406_full_test402_av_clipdiff_flow_mlp_stride_top1medn_thr0p6_shift0_<ts> bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0406_*`, `runs/E0344_*` |
+| Artifacts | `runs/E0406_full_test402_av_clipdiff_flow_mlp_stride_top1medn_thr0p6_shift0_20260206-161349/metrics.json`, `runs/E0344_ave_p0_diagnose_20260206-161548/diagnose.json` |
+| Results | Full test402 result regresses vs prior dense-stride best: `runs/E0406_full_test402_av_clipdiff_flow_mlp_stride_top1medn_thr0p6_shift0_20260206-161349/metrics.json` (`anchored≈0.71629`, `uniform≈0.70858`, `Δ≈+0.00771`, `p≈0.0442`). Decision: do not replace E0402 alt winner (`Δ≈+0.01241`). |
+
+
+### E0407: Oracle→Predicted full rerun (SEEDS=0..9) — aligned with promoted dense-stride config (`top1_med thr0.5`)
+| Field | Value |
+| --- | --- |
+| Objective | Strengthen C0007 evidence by rerunning Oracle→Predicted with full seeds and the same promoted dense-stride config used by E0402 alt (`top1_med thr0.5`, shift=1). |
+| Baseline | E0403 alt (`SEEDS=0..2`) and E0201/E0330 prior mechanism evidence. |
+| Model | `avs.experiments.mde_ltl oracle_vs_predicted` |
+| Weights | Same official caches/training protocol as E0201; cheap-visual control included. |
+| Code path | `avs/experiments/mde_ltl.py` |
+| Params | `SEEDS=0..9`, `EVENTNESS=av_clipdiff_flow_mlp_stride`, `k=2`, triad=`160/224/352`, `anchor_conf_metric=top1_med`, `anchor_conf_threshold=0.5`, `anchor_shift=1`, `anchor_base_alloc=distance`, `anchor_high_policy=adaptive_v1`. |
+| Metrics (must save) | `oracle_vs_predicted.json`, `metrics_predicted.json`, `metrics_cheap_visual.json`. |
+| Checks | Require predicted-vs-uniform significance and reduced Oracle–Pred gap vs previous dense-stride reports. |
+| Single-GPU script | `python -m avs.experiments.mde_ltl oracle_vs_predicted --mode ave_official --out-dir runs/E0407_oracle_vs_predicted_av_clipdiff_flow_mlp_stride_top1med_thr0p5_s0-9_<ts> --meta-dir data/AVE/meta --processed-dir runs/REAL_AVE_OFFICIAL_20260201-124535/processed --caches-dir runs/REAL_AVE_OFFICIAL_20260201-124535/caches_112_160_224_352_448 --allow-missing --split-train train --split-eval test --train-ids-file data/AVE/meta/download_ok_train_official.txt --eval-ids-file data/AVE/meta/download_ok_test_official.txt --limit-train 3339 --limit-eval 402 --seeds 0,1,2,3,4,5,6,7,8,9 --epochs 5 --batch-size 16 --lr 0.002 --weight-decay 0.0 --train-device cuda:5 --audio-device cuda:5 --eventness-method av_clipdiff_flow_mlp_stride --include-cheap-visual --k 2 --low-res 160 --base-res 224 --high-res 352 --anchor-shift 1 --anchor-conf-metric top1_med --anchor-conf-threshold 0.5 --anchor-select topk --anchor-nms-radius 2 --anchor-nms-strong-gap 0.6 --anchor-window 3 --anchor-base-alloc distance --anchor-high-policy adaptive_v1 --anchor-high-adjacent-dist 1 --anchor-high-gap-threshold 0 --temporal-kernel-size 3` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `SEEDS=0,1,2 ... (same config)` |
+| Full cmd | `SEEDS=0,1,2,3,4,5,6,7,8,9 ... (same config)` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0407_*` |
+| Artifacts | `runs/E0407_oracle_vs_predicted_av_clipdiff_flow_mlp_stride_top1med_thr0p5_s0-9_20260206-161749/oracle_vs_predicted.json`, `runs/E0407_oracle_vs_predicted_av_clipdiff_flow_mlp_stride_top1med_thr0p5_s0-9_20260206-161749/metrics_predicted.json`, `runs/E0407_oracle_vs_predicted_av_clipdiff_flow_mlp_stride_top1med_thr0p5_s0-9_20260206-161749/metrics_cheap_visual.json` |
+| Results | Full seeds (`0..9`) now make predicted gain significant: `predicted Δ≈+0.01241` with `p≈0.00302`; `oracle_minus_predicted≈0.02900` (improves vs E0403 baseline `0.04187`, but still above the stricter “small-gap” target implied by C0007). Cheap-visual control also improves over uniform (`Δ≈+0.00791`, `p≈0.0307`) but remains below predicted. |
+
+
+### E0408: Vision efficiency benchmark (tokens/FLOPs/latency calibration)
+| Field | Value |
+| --- | --- |
+| Objective | Fill oral-control gap by producing explicit per-resolution token/FLOPs/latency measurements for the CLIP vision encoder used in AVE-P0. |
+| Baseline | N/A (calibration run). |
+| Model | `avs.experiments.vision_efficiency` |
+| Weights | Random-input benchmark (no HF download; `--vision-pretrained` disabled). |
+| Code path | `avs/experiments/vision_efficiency.py`, `avs/vision/vit_flops.py` |
+| Params | `resolutions=112,160,224,352,448`, `batch_size=8`, `iters=20`, `device=cuda:5`, `dtype=float16`. |
+| Metrics (must save) | `vision_efficiency.json` with `tokens_per_image`, `approx_flops_per_image`, `ms_per_image`. |
+| Checks | Ensure FLOPs/tokens rise with resolution and attach artifact to oral checklist / plan evidence. |
+| Single-GPU script | `python -m avs.experiments.vision_efficiency --resolutions 112,160,224,352,448 --batch-size 8 --warmup 2 --iters 20 --device cuda:5 --dtype float16 --out-dir runs/E0408_vision_efficiency_<ts>` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `python -m avs.experiments.vision_efficiency --resolutions 112,224 --batch-size 2 --warmup 1 --iters 5 --device cuda:5 --dtype float16 --out-dir runs/E0408_smoke_vision_efficiency_<ts>` |
+| Full cmd | `python -m avs.experiments.vision_efficiency --resolutions 112,160,224,352,448 --batch-size 8 --warmup 2 --iters 20 --device cuda:5 --dtype float16 --out-dir runs/E0408_vision_efficiency_<ts>` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0408_vision_efficiency_*` |
+| Artifacts | `runs/E0408_vision_efficiency_20260206-161610/vision_efficiency.json` |
+| Results | `runs/E0408_vision_efficiency_20260206-161610/vision_efficiency.json`: per-resolution tokens/FLOPs are explicitly reported and monotonic (`49→100→196→484→784` tokens/image; `3.84e7→8.31e7→1.82e8→5.90e8→1.20e9` FLOPs/image). |
+
+
+### E0409: Multi-budget Pareto rerun (SEEDS=0..9) — aligned with dense-stride `top1_med thr0.5`
+| Field | Value |
+| --- | --- |
+| Objective | Recompute Oracle/Predicted/Random/Cheap-visual Pareto under the promoted dense-stride config across triads (`112/160/224`, `160/224/352`, `224/352/448`) to judge C0007 on the exact “across budgets” criterion. |
+| Baseline | E0330 full (`EVENTNESS=av_clipdiff_mlp`, base `E0223` config). |
+| Model | `avs.experiments.mde_ltl pareto_grid` |
+| Weights | Official AVE caches; shared dense-stride score cache: `runs/E0405_shared_scores_av_clipdiff_flow_mlp_stride_test402.json`. |
+| Code path | `scripts/e0330_mde_pareto_grid_official.sh`, `avs/experiments/mde_ltl.py` |
+| Params | `EVENTNESS=av_clipdiff_flow_mlp_stride`, `BASE_CONFIG_JSON=.../ltltop1med_thr0p5_shift1/config.json`, `SEEDS=0..9`, `BUDGET_MODE=auto`, `INCLUDE_CHEAP_VISUAL=1`. |
+| Metrics (must save) | `pareto_report.json`, `pareto.png`, per-budget `metrics_*.json`. |
+| Checks | Compare `oracle_minus_predicted` profile vs E0330 baseline and test C0007’s cross-budget gap requirement. |
+| Smoke cmd | `BASE_CONFIG_JSON=.../ltltop1med_thr0p5_shift1/config.json SCORES_JSON=runs/E0405_shared_scores_av_clipdiff_flow_mlp_stride_test402.json EVENTNESS=av_clipdiff_flow_mlp_stride SEEDS=0,1,2 TRAIN_DEVICE=cuda:5 AUDIO_DEVICE=cuda:5 OUT_DIR=runs/E0409_smoke_pareto_grid_<ts> bash scripts/e0330_mde_pareto_grid_official.sh` |
+| Full cmd | `BASE_CONFIG_JSON=.../ltltop1med_thr0p5_shift1/config.json SCORES_JSON=runs/E0405_shared_scores_av_clipdiff_flow_mlp_stride_test402.json EVENTNESS=av_clipdiff_flow_mlp_stride SEEDS=0,1,2,3,4,5,6,7,8,9 TRAIN_DEVICE=cuda:5 AUDIO_DEVICE=cuda:5 OUT_DIR=runs/E0409_pareto_grid_av_clipdiff_flow_mlp_stride_top1med_thr0p5_s0-9_<ts> bash scripts/e0330_mde_pareto_grid_official.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0409_*` |
+| Artifacts | `runs/E0409_pareto_grid_av_clipdiff_flow_mlp_stride_top1med_thr0p5_s0-9_20260206-163941/*` |
+| Results | Full completed: `runs/E0409_pareto_grid_av_clipdiff_flow_mlp_stride_top1med_thr0p5_s0-9_20260206-163941/pareto_report.json` + `.../pareto.png`. Per-budget predicted-vs-uniform: `112_160_224` (`Δ≈-0.00025`, `p≈0.938`), `160_224_352` (`Δ≈+0.01241`, `p≈0.00302`), `224_352_448` (`Δ≈-0.00674`, `p≈0.099`). Oracle–Pred gaps are `0.02142`, `0.02900`, `0.03012` (mean `≈0.02685`), so this aligned rerun improves mid-budget significance but does not tighten high-budget gaps. |
+
+
+### E0410: Fusion confirm rerun on dense-stride winner (`audio_concat_uniform` vs `audio_concat_anchored_top2`)
+| Field | Value |
+| --- | --- |
+| Objective | Re-check C0004 on the current best dense-stride config (`E0402 alt`, `top1_med thr0.5`) using official test402 full seeds. |
+| Baseline | `audio_concat_uniform` under the same sampling plan and budget. |
+| Model | `avs.experiments.ave_p0_fusion_confirm` |
+| Weights | Official AVE cache + temporal head training (`SEEDS=0..9`). |
+| Code path | `scripts/e0013_ave_fusion_confirm_official.sh`, `avs/experiments/ave_p0_fusion_confirm.py` |
+| Params | `BEST_CONFIG_JSON=.../ltltop1med_thr0p5_shift1/config.json`, `SEEDS=0..9`, strict official split ids. |
+| Metrics (must save) | `metrics.json` with `audio_concat_uniform`, `audio_concat_anchored_top2`, paired tests. |
+| Checks | C0004 gate: `audio_concat_anchored_top2 - audio_concat_uniform >= +0.01` and `p<0.05`. |
+| Single-GPU script | `BEST_CONFIG_JSON=<E0402-alt-config> EVENTNESS=energy_stride_max SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cuda:5 TRAIN_DEVICE=cuda:5 OUT_DIR=runs/E0410_fusion_confirm_energy_stride_max_top1med_thr0p5_<ts> bash scripts/e0013_ave_fusion_confirm_official.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `BEST_CONFIG_JSON=<E0402-alt-config> EVENTNESS=energy_stride_max SEEDS=0,1 LIMIT_TRAIN=64 LIMIT_EVAL=32 AUDIO_DEVICE=cuda:5 TRAIN_DEVICE=cuda:5 OUT_DIR=runs/E0410_smoke_fusion_confirm_energy_stride_max_top1med_thr0p5_<ts> bash scripts/e0013_ave_fusion_confirm_official.sh` |
+| Full cmd | `BEST_CONFIG_JSON=<E0402-alt-config> EVENTNESS=energy_stride_max SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cuda:5 TRAIN_DEVICE=cuda:5 OUT_DIR=runs/E0410_fusion_confirm_energy_stride_max_top1med_thr0p5_<ts> bash scripts/e0013_ave_fusion_confirm_official.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0410_*` |
+| Artifacts | `runs/E0410_fusion_confirm_energy_stride_max_top1med_thr0p5_20260206-180945/metrics.json` |
+| Results | C0004 remains unproven: `audio_concat_uniform≈0.71231`, `audio_concat_anchored_top2≈0.70978`, `Δ≈-0.00254`; paired `p≈0.36759` (`paired_ttest.audio_concat_anchored_vs_audio_concat_uniform.p`). |
+
+
+### E0411: Evidence-alignment rerun on promoted dense-stride config (`E0402 alt`)
+| Field | Value |
+| --- | --- |
+| Objective | Recompute Cov@τ and downstream correlation on the promoted dense-stride config and refresh C0008 evidence. |
+| Baseline | Prior E0202 report (`av_clipdiff_mlp`). |
+| Model | `avs.experiments.evidence_alignment_report` |
+| Weights | Reuse `E0402 alt` full test402 `metrics.json` debug outputs. |
+| Code path | `avs/experiments/evidence_alignment_report.py` |
+| Params | `in_metrics=runs/E0402_full_test402_av_clipdiff_flow_mlp_stride_alt_top1med_thr0p5_20260206-152012/metrics.json`, `tau_grid=0.3,0.5,0.7`, `delta_s=0`, `top_n=25`. |
+| Metrics (must save) | `evidence_alignment.json` with `cov_by_tau` + `corr_by_tau` + top improve/degrade clips. |
+| Checks | Keep report schema stable and expose correlation keys for oral failure-bucket linkage. |
+| Single-GPU script | `python -m avs.experiments.evidence_alignment_report --in-metrics runs/E0402_full_test402_av_clipdiff_flow_mlp_stride_alt_top1med_thr0p5_20260206-152012/metrics.json --meta-dir data/AVE/meta --out-dir runs/E0411_evidence_alignment_av_clipdiff_flow_mlp_stride_top1med_thr0p5_<ts> --tau-grid 0.3,0.5,0.7 --delta-s 0 --top-n 25` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `python -m avs.experiments.evidence_alignment_report --in-metrics runs/E0401_quick_test402_av_clipdiff_flow_mlp_stride_alt_top1med_thr0p5_20260206-150837/metrics.json --meta-dir data/AVE/meta --out-dir runs/E0411_smoke_evidence_alignment_<ts>` |
+| Full cmd | `python -m avs.experiments.evidence_alignment_report --in-metrics runs/E0402_full_test402_av_clipdiff_flow_mlp_stride_alt_top1med_thr0p5_20260206-152012/metrics.json --meta-dir data/AVE/meta --out-dir runs/E0411_evidence_alignment_av_clipdiff_flow_mlp_stride_top1med_thr0p5_<ts> --tau-grid 0.3,0.5,0.7 --delta-s 0 --top-n 25` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0411_*` |
+| Artifacts | `runs/E0411_evidence_alignment_av_clipdiff_flow_mlp_stride_top1med_thr0p5_20260206-182007/evidence_alignment.json` |
+| Results | Cov@τ is still low (`mean≈0.0935` for τ=`0.3/0.5/0.7`); downstream correlation remains weak (`pearson≈0.0498`, `spearman≈-0.0029` in `corr_by_tau`), so C0008 is still not proven. |
+
+
+### E0412: Degradation-accuracy rerun on dense-stride promoted config (shift/noise/silence × α, SEEDS=0..9)
+| Field | Value |
+| --- | --- |
+| Objective | Re-run downstream robustness suite on the promoted dense-stride config and explicitly validate the α lower-bound check in output JSON. |
+| Baseline | Prior E0331 full (`av_clipdiff_mlp`). |
+| Model | `avs.experiments.degradation_accuracy` |
+| Weights | Official AVE cache + promoted config (`top1_med thr0.5`) with dense-stride score cache. |
+| Code path | `avs/experiments/degradation_accuracy.py`, `scripts/e0331_degradation_accuracy_official.sh` |
+| Params | `EVENTNESS_METHOD=av_clipdiff_flow_mlp_stride`, `SEEDS=0..9`, grid `shift={-0.5,0,0.5}`, `snr={20,10,0}`, `silence={0,0.5}`, `alpha={0,0.5,1}`. |
+| Metrics (must save) | `degradation_accuracy.json` with `rows` and `alpha_floor_checks`, plus heatmap plots. |
+| Checks | No catastrophic drop below α floor and stable anchored-vs-uniform behavior under perturbation grid. |
+| Single-GPU script | `BEST_CONFIG_JSON=.../ltltop1med_thr0p5_shift1/config.json SCORES_JSON=runs/E0405_shared_scores_av_clipdiff_flow_mlp_stride_test402.json EVENTNESS_METHOD=av_clipdiff_flow_mlp_stride SEEDS=0,1,2,3,4,5,6,7,8,9 TRAIN_DEVICE=cuda:5 OUT_DIR=runs/E0412_degradation_accuracy_av_clipdiff_flow_mlp_stride_top1med_thr0p5_s0-9_<ts> bash scripts/e0331_degradation_accuracy_official.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `BEST_CONFIG_JSON=.../ltltop1med_thr0p5_shift1/config.json SCORES_JSON=runs/E0405_shared_scores_av_clipdiff_flow_mlp_stride_test402.json EVENTNESS_METHOD=av_clipdiff_flow_mlp_stride SEEDS=0,1 LIMIT_TRAIN=64 LIMIT_EVAL=32 EPOCHS=1 TRAIN_DEVICE=cuda:5 OUT_DIR=runs/E0412_smoke_degradation_accuracy_<ts> bash scripts/e0331_degradation_accuracy_official.sh` |
+| Full cmd | `BEST_CONFIG_JSON=.../ltltop1med_thr0p5_shift1/config.json SCORES_JSON=runs/E0405_shared_scores_av_clipdiff_flow_mlp_stride_test402.json EVENTNESS_METHOD=av_clipdiff_flow_mlp_stride SEEDS=0,1,2,3,4,5,6,7,8,9 TRAIN_DEVICE=cuda:5 OUT_DIR=runs/E0412_degradation_accuracy_av_clipdiff_flow_mlp_stride_top1med_thr0p5_s0-9_<ts> bash scripts/e0331_degradation_accuracy_official.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0412_*` |
+| Artifacts | `runs/E0412_degradation_accuracy_av_clipdiff_flow_mlp_stride_top1med_thr0p5_s0-9_20260206-182443/degradation_accuracy.json`, `runs/E0412_degradation_accuracy_av_clipdiff_flow_mlp_stride_top1med_thr0p5_s0-9_20260206-182443/degradation_plots/*.png` |
+| Results | Full grid complete (`rows=54`). `alpha_floor_checks`: `num_pass=54`, `num_fail=0`, `min_margin≈+0.01766` under rule `anchored_top2_mean >= alpha * uniform_mean`. Mean `anchored-uniform` across perturbations is positive for all α (`α=0:≈+0.00766`, `α=0.5:≈+0.01300`, `α=1:≈+0.01766`). |
+
+
+### E0413: EPIC-SOUNDS downstream rerun (real local videos, strict equal-budget)
+| Field | Value |
+| --- | --- |
+| Objective | Execute C0005-required EPIC-SOUNDS downstream validation under strict equal-budget setup and report mAP/macro-F1 deltas. |
+| Baseline | `uniform` and `random` under the same `max_steps × base_res` budget. |
+| Model | `avs.experiments.epic_sounds_video_cls` via `scripts/e0100_epic_video_cls_local.sh` |
+| Weights | Local CLIP encoder + lightweight multi-label head. |
+| Code path | `scripts/e0100_epic_video_cls_local.sh`, `avs/experiments/epic_sounds_video_cls.py` |
+| Params | `SELECTION in {audio_anchored,uniform,random}`, `EVENTNESS=energy`, `ALLOW_MISSING_VIDEOS=1`, `MAX_SECONDS=120` (with fixed `max_steps=120` budget). |
+| Metrics (must save) | `metrics.json` with `mAP`/`macro_f1` and baseline deltas. |
+| Checks | Must run on real EPIC-SOUNDS val videos (not synthetic smoke). |
+| Single-GPU script | `SELECTION=audio_anchored EVENTNESS=energy MAX_SECONDS=120 ALLOW_MISSING_VIDEOS=1 LIMIT_TRAIN_VIDEOS=495 LIMIT_VAL_VIDEOS=137 MIN_TRAIN_VIDEOS=16 MIN_VAL_VIDEOS=16 TRAIN_DEVICE=cuda:0 CLIP_DEVICE=cuda:0 OUT_DIR=runs/E0413_epic_video_cls_local_audio_anchored_full_ms120_<ts> bash scripts/e0100_epic_video_cls_local.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `python -m avs.smoke epic_sounds_video_cls_synth` |
+| Full cmd | `SELECTION in {audio_anchored,uniform,random} EVENTNESS=energy MAX_SECONDS=120 ALLOW_MISSING_VIDEOS=1 LIMIT_TRAIN_VIDEOS=495 LIMIT_VAL_VIDEOS=137 MIN_TRAIN_VIDEOS=16 MIN_VAL_VIDEOS=16 bash scripts/e0100_epic_video_cls_local.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/smoke_20260206-184253/smoke.json`, `runs/E0413_epic_video_cls_local_*_full_ms120_*/metrics.json` |
+| Artifacts | `runs/smoke_20260206-184253/epic_sounds_video_cls_synth/metrics.json`, `runs/E0413_epic_video_cls_local_audio_anchored_full_ms120_20260207-171637/metrics.json`, `runs/E0413_epic_video_cls_local_uniform_full_ms120_20260207-172545/metrics.json`, `runs/E0413_epic_video_cls_local_random_full_ms120_20260207-173208/metrics.json` |
+| Results | Real local run completed on available EPIC videos (`num_train_videos=17`, `num_val_videos=16`, `mp4_count=33`, budget `max_steps=120`, `max_seconds=120`). Metrics: anchored (`mAP≈0.4450`, `macro_f1≈0.3023`), uniform (`mAP≈0.4672`, `macro_f1≈0.3141`), random (`mAP≈0.4105`, `macro_f1≈0.3382`). Deltas: anchored-uniform `mAP≈-0.0221`, `macro_f1≈-0.0118`; anchored-random `mAP≈+0.0346`, `macro_f1≈-0.0359`. |
+
+
+### E0501: Dataset integrity audit (AVE/EPIC probe+decode health)
+| Field | Value |
+| --- | --- |
+| Objective | Add a reproducible data-integrity gate to explain/avoid silent decode corruption before concluding method failure. |
+| Baseline | Existing dataset presence check (`scripts/datasets/verify_all.sh`) without decode/probe quality signals. |
+| Model | `avs.experiments.dataset_integrity_audit` |
+| Weights | N/A |
+| Code path | `avs/experiments/dataset_integrity_audit.py`, `scripts/e0501_dataset_integrity_audit.sh` |
+| Params | `pattern=*.mp4`, `decode_check in {none,sampled,full}`, `limit`, `decode_limit`. |
+| Metrics (must save) | `dataset_integrity_audit.json` with `probe_ok`, `probe_failed`, `decode_failed`, `corrupted_files`, per-file errors. |
+| Checks | Catch broken/corrupted files before training/eval; keep an auditable artifact. |
+| Single-GPU script | `LIMIT=8 DECODE_CHECK=none bash scripts/e0501_dataset_integrity_audit.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `python -m avs.smoke dataset_integrity_audit` |
+| Full cmd | `DECODE_CHECK=sampled DECODE_LIMIT=64 bash scripts/e0501_dataset_integrity_audit.sh` |
+| Smoke | [x] |
+| Full | [ ] |
+| Logs | `runs/smoke_20260207-151400/*`, `runs/E0501_dataset_integrity_*/*` |
+| Artifacts | `runs/smoke_20260207-151400/dataset_integrity_audit/dataset_integrity_audit.json`, `runs/E0501_dataset_integrity_20260207-151719/index.json` |
+| Results | Smoke correctly flags a corrupted sample (`corrupted_files=1`). Local probe-only audit (`LIMIT=8`) reports both AVE and EPIC samples are probe-readable (`probe_ok=8/8`) with no corruption under `decode_check=none`. |
+
+
+### E0502: Root-cause aggregation report (unproven-claim diagnosis)
+| Field | Value |
+| --- | --- |
+| Objective | Produce a single machine-readable diagnosis artifact explaining why current claim is still unproven and mapping each failure mode to concrete fix directions. |
+| Baseline | Manual reading across `metrics.json` / `oracle_vs_predicted.json` / evidence / degradation artifacts. |
+| Model | `avs.experiments.root_cause_report` |
+| Weights | N/A |
+| Code path | `avs/experiments/root_cause_report.py`, `scripts/e0502_root_cause_report.sh` |
+| Params | `target_delta`, `target_p`, `oracle_gap_threshold`, `fallback_threshold`, `coverage_threshold`, `corr_threshold`. |
+| Metrics (must save) | `root_cause_report.json` (`reasons`, `priority_queue`, `solution_pool`, `proven`). |
+| Checks | Reasons must be deterministic from artifacts; includes actionable solution list by bucket. |
+| Single-GPU script | `bash scripts/e0502_root_cause_report.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `python -m avs.smoke root_cause_report` |
+| Full cmd | `METRICS_JSON=<metrics.json> ORACLE_JSON=<oracle_vs_predicted.json> EVIDENCE_JSON=<evidence_alignment.json> DEGRADATION_JSON=<degradation_accuracy.json> bash scripts/e0502_root_cause_report.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/smoke_20260207-151416/*`, `runs/E0502_root_cause_report_*/*` |
+| Artifacts | `runs/smoke_20260207-151416/root_cause_report/root_cause_report.json`, `runs/E0502_root_cause_report_20260207-151428/root_cause_report.json` |
+| Results | Real report marks claim as unproven and surfaces root causes `R_TARGET_DELTA`, `R_ORACLE_GAP`, `R_ALIGNMENT_WEAK`, `R_EPIC_DOWNSTREAM` with prioritized solution pool. |
+
+
+### E0503: Dense-stride gate sweep (val-only, pre-registered gate selection)
+| Field | Value |
+| --- | --- |
+| Objective | Select and freeze one confidence gate on val for dense-stride Stage-1, avoiding tune-on-test. |
+| Baseline | Fixed gate from prior runs (`top1_med thr0.5`) without current-val re-selection. |
+| Model | `avs.experiments.mde_ltl gate_sweep` |
+| Weights | Official AVE caches + standard P0 training head. |
+| Code path | `scripts/e0503_gate_sweep_dense_stride.sh`, `avs/experiments/mde_ltl.py` |
+| Params | `eventness=av_clipdiff_flow_mlp_stride`, `gate_metric`, `gate_thresholds`, `SEEDS`, `limit_train/eval`. |
+| Metrics (must save) | `gate_sweep.json`, `best_gate.json`, per-threshold `metrics_gate_*.json`. |
+| Checks | Select gate by deterministic rule `max(delta_mean), tie-break by min(p)`. |
+| Single-GPU script | `SEEDS=0,1,2 LIMIT_TRAIN=3339 LIMIT_EVAL=402 bash scripts/e0503_gate_sweep_dense_stride.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 GATE_THRESHOLDS=0.5 bash scripts/e0503_gate_sweep_dense_stride.sh` |
+| Full cmd | `SEEDS=0,1,2,3,4,5,6,7,8,9 LIMIT_TRAIN=3339 LIMIT_EVAL=402 GATE_THRESHOLDS=0.4,0.5,0.6,0.7 bash scripts/e0503_gate_sweep_dense_stride.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0503_gate_sweep_dense_stride_*/*` |
+| Artifacts | `runs/E0503_gate_sweep_dense_stride_smoke_20260207-151733/gate_sweep.json`, `runs/E0503_gate_sweep_dense_stride_smoke_20260207-151733/best_gate.json`, `runs/E0503_gate_sweep_dense_stride_full_20260207-153210/gate_sweep.json`, `runs/E0503_gate_sweep_dense_stride_full_20260207-153210/best_gate.json` |
+| Results | Full val402 gate sweep completed (`rows=4`, thresholds=`0.4/0.5/0.6/0.7`). Selected gate is stable at `top1_med@0.5`: `anchored≈0.74526` vs `uniform≈0.73214` (`Δ≈+0.01312`, `p≈0.0174`), `oracle_minus_predicted≈0.03746`, `fallback_used_frac≈0.5835`. |
+
+
+### E0504: Dense-stride Oracle→Predicted multi-budget gap grid
+| Field | Value |
+| --- | --- |
+| Objective | Recompute cross-budget Oracle→Predicted gap under dense-stride defaults for C0007 tightening. |
+| Baseline | Earlier E0409 aligned run; this entry standardizes a dedicated rerunnable wrapper. |
+| Model | `avs.experiments.mde_ltl pareto_grid` |
+| Weights | Official AVE caches + base config from E0400c/E0400b. |
+| Code path | `scripts/e0504_oracle_pred_gap_grid_dense_stride.sh`, `scripts/e0330_mde_pareto_grid_official.sh` |
+| Params | `TRIADS`, `SEEDS`, `BUDGET_MODE`, `INCLUDE_CHEAP_VISUAL`, `BASE_CONFIG_JSON`, `SCORES_JSON`. |
+| Metrics (must save) | `pareto_report.json`, `pareto.png`, `metrics_predicted_*`, `metrics_cheap_visual_*`. |
+| Checks | Must report triad-wise predicted/oracle points under equal-budget protocol. |
+| Single-GPU script | `SEEDS=0,1,2 LIMIT_TRAIN=3339 LIMIT_EVAL=402 bash scripts/e0504_oracle_pred_gap_grid_dense_stride.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 TRIADS='112,160,224;160,224,352' bash scripts/e0504_oracle_pred_gap_grid_dense_stride.sh` |
+| Full cmd | `SEEDS=0,1,2,3,4,5,6,7,8,9 LIMIT_TRAIN=3339 LIMIT_EVAL=402 TRIADS='112,160,224;160,224,352;224,352,448' bash scripts/e0504_oracle_pred_gap_grid_dense_stride.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0504_oracle_pred_gap_grid_dense_stride_*/*` |
+| Artifacts | `runs/E0504_oracle_pred_gap_grid_dense_stride_smoke_20260207-151822/pareto_report.json`, `runs/E0504_oracle_pred_gap_grid_dense_stride_smoke_20260207-151822/pareto.png`, `runs/E0504_oracle_pred_gap_grid_dense_stride_full_20260207-155721/pareto_report.json`, `runs/E0504_oracle_pred_gap_grid_dense_stride_full_20260207-155721/pareto.png` |
+| Results | Full triad+seed rerun completed (`SEEDS=0..9`). Predicted-vs-uniform by triad: `112_160_224: Δ≈-0.00025 (p≈0.938)`, `160_224_352: Δ≈+0.01241 (p≈0.00302)`, `224_352_448: Δ≈-0.00674 (p≈0.099)`. Oracle-predicted gaps: `0.02142`, `0.02900`, `0.03012` (mean `≈0.02685`), confirming remaining Stage-1 reliability gap. |
+
+
+### E0505: Dense-stride degradation-accuracy rerun wrapper
+| Field | Value |
+| --- | --- |
+| Objective | Standardize rerunnable downstream degradation-accuracy execution for dense-stride promoted config. |
+| Baseline | Earlier E0412 one-off command chain. |
+| Model | `avs.experiments.degradation_accuracy` via `scripts/e0331_degradation_accuracy_official.sh` |
+| Weights | Official AVE caches + dense-stride base config + shared score cache. |
+| Code path | `scripts/e0505_degradation_accuracy_dense_stride.sh`, `scripts/e0331_degradation_accuracy_official.sh` |
+| Params | `SEEDS`, `SHIFT_GRID`, `SNR_GRID`, `SILENCE_GRID`, `ALPHA_GRID`, `BEST_CONFIG_JSON`, `SCORES_JSON`. |
+| Metrics (must save) | `degradation_accuracy.json` + optional plots. |
+| Checks | Include `alpha_floor_checks` and row-wise deltas for robustness audit trail. |
+| Single-GPU script | `SEEDS=0,1,2 LIMIT_TRAIN=3339 LIMIT_EVAL=402 bash scripts/e0505_degradation_accuracy_dense_stride.sh` |
+| Multi-GPU script | N/A |
+| Smoke cmd | `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 SHIFT_GRID='0' SNR_GRID='20' SILENCE_GRID='0' ALPHA_GRID='0,0.5' bash scripts/e0505_degradation_accuracy_dense_stride.sh` |
+| Full cmd | `SEEDS=0,1,2,3,4,5,6,7,8,9 LIMIT_TRAIN=3339 LIMIT_EVAL=402 SHIFT_GRID='-0.5,0,0.5' SNR_GRID='20,10,0' SILENCE_GRID='0,0.5' ALPHA_GRID='0,0.5,1' bash scripts/e0505_degradation_accuracy_dense_stride.sh` |
+| Smoke | [x] |
+| Full | [x] |
+| Logs | `runs/E0505_degradation_accuracy_dense_stride_*/*` |
+| Artifacts | `runs/E0505_degradation_accuracy_dense_stride_smoke_20260207-151846/degradation_accuracy.json`, `runs/E0505_degradation_accuracy_dense_stride_full_20260207-161213/degradation_accuracy.json`, `runs/E0505_degradation_accuracy_dense_stride_full_20260207-161213/degradation_plots/*.png` |
+| Results | Full perturbation grid completed (`rows=54`, `shift∈{-0.5,0,0.5}`, `snr∈{20,10,0}`, `silence∈{0,0.5}`, `alpha∈{0,0.5,1}`). `alpha_floor_checks`: `num_fail=0`, `min_margin≈+0.01766` (rule `anchored_top2_mean >= alpha * uniform_mean`). Mean `anchored-uniform` by alpha: `α=0:≈+0.00766`, `α=0.5:≈+0.01300`, `α=1:≈+0.01766`. |

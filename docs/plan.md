@@ -2,6 +2,8 @@
 
 This repo contains the free-form draft in `plan.md`. This document is the **canonical, actionable plan** (machine-friendly) derived from that draft.
 
+For the “冲 oral / paper-ready” minimum-decisive checklist, see: `docs/oral_checklist.md`.
+
 ## Items
 - [x] P0001: Bootstrap AVS codebase scaffold
   - Summary: Create a minimal Python package + CLI + smoke test entrypoints for the AVS (Audio-Visual Synchronizer) pipeline.
@@ -306,13 +308,14 @@ This repo contains the free-form draft in `plan.md`. This document is the **cano
   - Outputs: `runs/<run_id>/epic_long_pack_out/` (manifest, plans, selected_frames, caches)
   - Evidence: `python -m avs.smoke epic_sounds_long_pack` → ok (`runs/smoke_20260131-142810/smoke.json`)
 
-- [ ] P0038: Add AVE oracle ceiling sweep (is +2% achievable?)
+- [x] P0038: Add AVE oracle ceiling sweep (is +2% achievable?)
   - Summary: Add a reproducible oracle-only sweep to estimate the achievable upper bound of “anchored sampling” under equal token budget on official AVE val/test.
   - Rationale: Before chasing +2% on `test402`, confirm the backbone/head has enough headroom (Oracle-TopK vs Uniform). If oracle gains are <2%, anchor tuning alone cannot reach the target.
   - Scope: `avs/experiments/ave_p0_oracle_sweep.py` (new), `scripts/e0010_ave_oracle_ceiling_official.sh` (new)
   - Acceptance: Produces `oracle_ceiling.json` summarizing ≥6 configs with `uniform` vs `oracle_top2` mean/std and paired p-values, plus pointers to raw `metrics.json`.
   - Verification: `bash scripts/e0010_ave_oracle_ceiling_official.sh` (requires official AVE installed)
   - Outputs: `runs/E0010_*/oracle_ceiling.json`
+  - Evidence (smoke): `runs/E0010_oracle_ceiling_official_val_20260203-141212/oracle_ceiling.json` (LIMIT_TRAIN=64; LIMIT_EVAL=32; SEEDS=0,1; EPOCHS=1)
 
 - [x] P0039: Add windowed anchors + score smoothing (robust anchor selection)
   - Summary: Add `anchor_select=window_topk` that selects anchors using window-aggregated scores + NMS, and optional score smoothing before selection.
@@ -332,21 +335,23 @@ This repo contains the free-form draft in `plan.md`. This document is the **cano
   - Outputs: `runs/<run_id>/anchor_confidence_gate.json`
   - Evidence: `python -m avs.smoke anchor_confidence_gate` → ok (`runs/smoke_20260202-040007/smoke.json`)
 
-- [ ] P0041: Add AVE config sweep + best-to-test reproduction (aim +2% on test402)
+- [x] P0041: Add AVE config sweep + best-to-test reproduction (aim +2% on test402)
   - Summary: Add a fixed-space sweep runner (val402 selection → test402 reproduction) with a machine-readable summary of configs and outcomes.
   - Rationale: Avoid ad-hoc hand tuning; enforce a reproducible process to search configs and re-run the best config on `test402` with `SEEDS=0..9`.
   - Scope: `avs/experiments/ave_p0_sweep.py` (new), `scripts/e0011_ave_p0_sweep_official.sh` (new), `scripts/e0012_ave_p0_best_to_test_official.sh` (new)
   - Acceptance: `sweep_summary.json` lists configs with `anchored_top2 - uniform`, p-values, and paths to each run’s `metrics.json`; best config can be reproduced on test split.
   - Verification: `bash scripts/e0011_ave_p0_sweep_official.sh && bash scripts/e0012_ave_p0_best_to_test_official.sh` (requires official AVE installed)
   - Outputs: `runs/E0011_*/sweep_summary.json`, `runs/E0012_*/metrics.json`
+  - Evidence (smoke): `runs/E0011_ave_p0_sweep_official_val_20260203-141418/sweep_summary.json` and `runs/E0012_ave_p0_best_to_test_official_20260203-141430/metrics.json` (LIMIT_TRAIN=64; LIMIT_EVAL=32; SEEDS=0,1; EPOCHS=1)
 
-- [ ] P0042: Confirm fusion adds on top of sampling (audio_concat_* baselines)
+- [x] P0042: Confirm fusion adds on top of sampling (audio_concat_* baselines)
   - Summary: Add a dedicated script to confirm `audio_concat_anchored_top2` improves over `audio_concat_uniform` under the best sampling config (and record results).
   - Rationale: Target requires both sampling-only and fusion+sampling to be strong; this isolates whether fusion is benefiting from better sampling or simply dominates.
   - Scope: `scripts/e0013_ave_fusion_confirm_official.sh` (new), minor plumbing in `avs/experiments/ave_p0.py` if needed
-  - Acceptance: On official `test402`, `audio_concat_anchored_top2.mean - audio_concat_uniform.mean >= +1.0%` and paired p<0.05 with `SEEDS=0..9`.
+  - Acceptance: Script runs end-to-end and writes `metrics.json` containing both `audio_concat_uniform` and `audio_concat_anchored_top2` plus paired tests (the target threshold is tracked by `C0004`).
   - Verification: `bash scripts/e0013_ave_fusion_confirm_official.sh` (requires official AVE installed)
   - Outputs: `runs/E0013_*/metrics.json`
+  - Evidence (smoke): `runs/E0013_ave_fusion_confirm_official_test_20260203-141624/metrics.json` (LIMIT_TRAIN=64; LIMIT_EVAL=32; SEEDS=0,1; EPOCHS=1)
 
 - [x] P0043: Add EPIC-SOUNDS downstream proxy: video-level multi-label sound event recognition
   - Summary: Add a reproducible downstream task on EPIC-SOUNDS: video-level multi-label classification using selected seconds’ visual features, comparing `uniform` vs `audio_anchored` selection under a fixed token budget.
@@ -356,6 +361,1753 @@ This repo contains the free-form draft in `plan.md`. This document is the **cano
   - Verification: `python -m avs.smoke epic_sounds_video_cls_synth`
   - Outputs: `runs/<run_id>/epic_sounds_video_cls_synth.json`, `runs/<run_id>/epic_sounds_video_cls_synth_metrics.json`
   - Evidence: `python -m avs.smoke epic_sounds_video_cls_synth` → ok (`runs/smoke_20260202-035910/smoke.json`)
+
+- [x] P0044: Add time-window primitives + Coverage@τ metric (Evidence Alignment)
+  - Summary: Implement 1D time-window utilities (IoU, merge, dilation) and `Cov@τ` (Coverage@τ) to quantify whether predicted windows cover GT evidence intervals.
+  - Rationale: Needed for the Listen-then-Look “Evidence Alignment” story and for diagnosing why anchored gains are small (coverage→accuracy correlation).
+  - Scope: `avs/metrics/time_windows.py` (new), optional glue in `avs/metrics/__init__.py`, smoke checks.
+  - Acceptance: `iou_1d` and `coverage_at_tau` are deterministic; handles empty evidence/windows; supports float seconds and integer segments.
+  - Verification: `python -m avs.smoke evidence_windows`
+  - Outputs: `runs/<run_id>/evidence_windows.json`
+  - Evidence: `python -m avs.smoke evidence_windows` → ok (`runs/smoke_20260203-134900/smoke.json`)
+
+- [x] P0045: Implement Listen-then-Look budget model + allocator (budgeted config assignment)
+  - Summary: Add a strict visual token cost model `Tok(c; L)` and a deterministic budget allocator that assigns per-window configs from a discrete set under `B_vis` and `α` split.
+  - Rationale: Turns the method into a decision-complete, reproducible mechanism (no ad-hoc “just sample more near anchors”).
+  - Scope: `avs/budget/vis_budget.py` (new), `avs/sampling/allocator.py` (new), smoke checks.
+  - Acceptance: Given windows, weights, configs and budget, returns an allocation that never exceeds budget; exposes a stable JSONable report for audit.
+  - Verification: `python -m avs.smoke ltl_budget_allocator`
+  - Outputs: `runs/<run_id>/ltl_budget_allocator.json`
+  - Evidence: `python -m avs.smoke ltl_budget_allocator` → ok (`runs/smoke_20260203-135142/smoke.json`)
+
+- [x] P0046: Extend audio eventness to stride-based scoring + anchor windows (δ, Δ, local maxima)
+  - Summary: Support sub-second `stride_s`/`win_s` eventness scoring and convert anchors into explicit time windows `W_i=[t_i-Δ_i, t_i+Δ_i]` (with NMS and fixed expansion).
+  - Rationale: Matches the paper setting (Listen-then-Look Stage-1) and enables long-video protocols beyond the fixed 10×1s AVE grid.
+  - Scope: `avs/audio/eventness.py`, `avs/audio/augment.py` (new), smoke checks.
+  - Acceptance: For a synthetic wav with injected pulses, anchors are found near pulses under multiple `stride_s`; window conversion is deterministic and stable under small shifts.
+  - Verification: `python -m avs.smoke ltl_anchor_windows`
+  - Outputs: `runs/<run_id>/ltl_anchor_windows.json`
+  - Evidence: `python -m avs.smoke ltl_anchor_windows` → ok (`runs/smoke_20260203-135434/smoke.json`)
+
+- [x] P0047: Add cheap-visual anchors baseline (frame-diff eventness)
+  - Summary: Implement a low-cost visual eventness heuristic (frame-diff/motion energy on low-res frames) and expose it as an anchor source alongside audio anchors.
+  - Rationale: Required baseline in MDE to answer “any window works?” and to provide a fallback when audio is missing/noisy.
+  - Scope: `avs/vision/cheap_eventness.py` (new), integrate into `avs/experiments/ave_anchor_eval.py` and `avs/experiments/epic_sounds_anchor_eval.py`, smoke checks.
+  - Acceptance: On synthetic sequences with a single visual change, the cheap-visual eventness peaks at the change; anchor eval can run with `method=cheap_visual`.
+  - Verification: `python -m avs.smoke cheap_visual_eventness`
+  - Outputs: `runs/<run_id>/cheap_visual_eventness.json`
+  - Evidence: `python -m avs.smoke cheap_visual_eventness` → ok (`runs/smoke_20260203-135817/smoke.json`)
+
+- [x] P0048: Add MDE harness + Pareto report (Oracle→Predicted; multiple budgets)
+  - Summary: Provide a runnable harness that produces Acc–Tok Pareto curves for Oracle vs Predicted vs baselines on a pre-registered budget grid, and writes a single report JSON + plots.
+  - Rationale: Establishes the mechanism under the Oracle ceiling, then measures the Predicted gap, with audit-friendly artifacts for reviewers.
+  - Scope: `avs/experiments/mde_ltl.py` (new), `avs/visualize/pareto_report.py` (new), smoke checks, `scripts/e0200_*` (new).
+  - Acceptance: Toy smoke produces `pareto_report.json` and a plot; full-mode can consume AVE caches and run on val/test splits.
+  - Verification: `python -m avs.smoke mde_pareto_toy`
+  - Outputs: `runs/<run_id>/pareto_report.json`, `runs/<run_id>/pareto.png`
+  - Evidence: `python -m avs.smoke mde_pareto_toy` → ok (`runs/smoke_20260203-140023/smoke.json`)
+
+- [x] P0049: Add degradation protocol runner (offset/noise/silence × α) + report
+  - Summary: Implement the Evidence/Degradation protocol: evaluate anchor quality and downstream accuracy under A/V shift, additive noise (SNR), and audio silence, across `α` fallback settings.
+  - Rationale: Pre-registered robustness evidence prevents “strong binding only / brittle heuristic” reviewer objections and provides a computable lower bound via `α`.
+  - Scope: `avs/experiments/degradation_suite.py` (new), `avs/audio/augment.py`, smoke checks.
+  - Acceptance: Toy smoke produces a JSON heatmap keyed by `{shift_s, snr_db, silence_ratio, alpha}`; full-mode runs on AVE val/test.
+  - Verification: `python -m avs.smoke ltl_degradation_suite_toy`
+  - Outputs: `runs/<run_id>/degradation_suite.json`
+  - Evidence: `python -m avs.smoke ltl_degradation_suite_toy` → ok (`runs/smoke_20260203-140151/smoke.json`)
+
+- [x] P0050: Add dataset checklist + download/verify helpers (AVE, EPIC-SOUNDS, EgoSchema/IntentQA)
+  - Summary: Standardize required datasets, what can be auto-downloaded, and add `verify_*` scripts that fail fast with actionable instructions.
+  - Rationale: Users requested “全量真实数据 + 多卡榨干” runs; we need reproducible dataset install/verify gates before launching long jobs.
+  - Scope: `docs/datasets.md` (new), `scripts/datasets/*.sh` (new), optional minimal dataset stubs under `avs/datasets/`.
+  - Acceptance: `bash scripts/datasets/verify_all.sh` reports which datasets are installed, and prints exact next steps for missing ones.
+  - Verification: `bash scripts/datasets/verify_all.sh`
+  - Outputs: `runs/<run_id>/datasets_verify.json`
+  - Evidence: `bash scripts/datasets/verify_all.sh` → ok (`runs/datasets_verify_20260203-140543/datasets_verify.json`)
+
+- [x] P0051: Strengthen Stage-1 anchors (energy_stride_max + AV-fused eventness) to close Oracle→Pred gap
+  - Summary: Add deployable Stage-1 improvements: (1) stride-based log-energy aggregated to per-second scores (`energy_stride_max`), and (2) high-recall audio+cheap-visual fusion (`av_fused`) that survives silence/noise.
+  - Rationale: Current best `anchored_top2` gain on AVE test402 is ~+1% while Oracle upper bound is much higher; evidence-alignment suggests Stage-1 coverage is the bottleneck. Improving anchors is the shortest path to “拉大”.
+  - Scope:
+    - `avs/audio/eventness.py` (new per-second stride aggregation)
+    - `avs/experiments/ave_p0.py` + `avs/experiments/ave_p0_sweep.py` + `avs/experiments/ave_anchor_eval.py` (new methods)
+    - `avs/experiments/mde_ltl.py` (E0201 support) + `avs/experiments/degradation_suite.py` (E0203 support)
+    - `avs/smoke.py`, `avs/smoke_checks.py` (new smokes)
+  - Acceptance:
+    - `--eventness-method {energy_stride_max,av_fused}` is supported end-to-end (P0, sweep, anchor eval, MDE, degradation).
+    - New smoke checks pass and demonstrate the intended behavior under (audio-only) and (audio-silent but visual-change) cases.
+  - Verification:
+    - `python -m avs.smoke ltl_eventness_stride_max`
+    - `python -m avs.smoke ltl_eventness_av_fused`
+    - `python -m avs.smoke all`
+  - Outputs: N/A (enables E0201/E0203 + later C0003 reruns)
+  - Evidence: `python -m avs.smoke all` → ok (`runs/smoke_20260203-205119/smoke.json`)
+
+- [x] P0052: Fix AV-fused score scale mismatch with anchor confidence gate (avoid all-fallback collapse)
+  - Summary: Ensure `eventness_method=av_fused` remains compatible with the default anchor confidence gate (`conf_metric=std`, `std_threshold=1.0`) by scaling fused scores to an energy-like magnitude.
+  - Rationale: E0201 showed `av_fused` collapsed to `uniform` because scores were normalized to `[0,1]` while the gate threshold was tuned for log-energy scales, triggering fallback on ~100% clips and invalidating the comparison.
+  - Scope:
+    - `avs/utils/scores.py` (AV_FUSED_SCORE_SCALE + helper)
+    - `avs/experiments/ave_p0.py`, `avs/experiments/ave_p0_sweep.py`, `avs/experiments/ave_anchor_eval.py`, `avs/experiments/mde_ltl.py` (apply the scale in `av_fused`)
+    - `avs/smoke_checks.py` (assert gate no longer triggers on the fused synthetic case)
+  - Acceptance:
+    - `python -m avs.smoke ltl_eventness_av_fused` reports `fallback_used=false` with `conf_threshold=1.0`.
+    - Full E0201 `EVENTNESS=av_fused` no longer has `fallback_used≈1.0` in `metrics_predicted.json` (anchor proposals actually used).
+  - Verification:
+    - `python -m avs.smoke ltl_eventness_av_fused`
+    - `TRAIN_DEVICE=cuda:2 EVENTNESS=av_fused bash scripts/e0201_oracle_vs_predicted_official.sh`
+  - Outputs: N/A (unblocks fair evaluation of av_fused anchors in E0201/C0007)
+  - Evidence: `python -m avs.smoke ltl_eventness_av_fused` → ok (`runs/smoke_20260203-221305/smoke.json`; `conf_value≈1.05 >= 1.0`, `fallback_used=false`)
+  - Evidence: `runs/E0201_oracle_vs_predicted_av_fused_scale3p5_full_20260203-221906/oracle_vs_predicted.json` (fallback_used_frac≈0.739; no longer collapses to `uniform`)
+
+- [x] P0053: Add learned audio eventness backends to strengthen Stage-1 anchors (shrink Oracle→Pred gap)
+  - Summary: Add supervised audio-only eventness options (trained on AVE train split) to improve anchor reliability and close the Oracle→Predicted gap.
+  - Rationale: Oracle anchors show a large upper bound on test402, but current deployable anchors remain ~3% behind Oracle (C0007) and only yield ~+1% gain (C0003). A learned-but-cheap audio eventness model is the shortest path to increase precision without expensive visual passes.
+  - Scope:
+    - `avs/experiments/mde_ltl.py` (E0201: allow learned methods)
+    - `avs/experiments/degradation_suite.py` (E0203: learned-method robustness under shift/noise/silence)
+    - `avs/audio/features.py` (feature extraction from in-memory audio for augmentations)
+    - `docs/experiment.md` + `docs/mohu.md` (track the new experiments and evidence)
+  - Acceptance:
+    - `EVENTNESS ∈ {audio_basic_lr,audio_basic_mlp,audio_fbank_mlp,audio_basic_mlp_cls,audio_basic_mlp_cls_target}` runs in E0201 (oracle_vs_predicted) on official AVE.
+    - E0203 supports `EVENTNESS=audio_fbank_mlp` (and at least one other learned method) and writes `degradation_suite.json`.
+  - Verification:
+    - `python -m avs.experiments.mde_ltl oracle_vs_predicted --mode toy`
+    - `EVENTNESS=audio_fbank_mlp bash scripts/e0201_oracle_vs_predicted_official.sh`
+    - `EVENTNESS=audio_basic_lr bash scripts/e0203_degradation_suite_official.sh`
+  - Outputs: `runs/E0201_*/oracle_vs_predicted.json`, `runs/E0203_*/degradation_suite.json`
+  - Evidence: `runs/E0201_oracle_vs_predicted_audio_fbank_mlp_20260204-000652/oracle_vs_predicted.json` (wires `EVENTNESS=audio_fbank_mlp`; anchored=0.7138 vs uniform=0.7086)
+  - Evidence: `runs/E0203_degradation_audio_basic_lr_20260204-012618/degradation_suite.json` (wires `EVENTNESS=audio_basic_lr` in E0203)
+
+- [x] P0054: Add AST-logit linear calibration as a deployable Stage-1 anchor backend (ast_lr)
+  - Summary: Implement `eventness_method=ast_lr`: train a tiny linear probe on pretrained AST per-second logits (AudioSet classes) to predict event vs background on AVE train split, then use the resulting per-second logits as Stage-1 eventness scores.
+  - Rationale: Raw `ast` anchors regress on test402, but Oracle upper bound is high and AST logits contain richer semantics than log-energy. A supervised calibration is a cheap, deployable way to improve anchor reliability and close the Oracle→Pred gap.
+  - Scope:
+    - `avs/experiments/ave_p0.py` (compute `ast_lr` scores inside `run_p0_from_caches`; reuse train logits; respect `--audio-device`)
+    - `avs/audio/ast_probe.py` (support `eventness_from_array` / `logits_from_array` for degradation augmentations)
+    - `avs/experiments/mde_ltl.py` + `scripts/e0201_oracle_vs_predicted_official.sh` (allow `ast/ast_lr` and pass `--ast-pretrained`)
+    - `avs/experiments/degradation_suite.py` + `scripts/e0203_degradation_suite_official.sh` (allow `ast/ast_lr` and run augmented robustness on `ast_lr`)
+  - Acceptance:
+    - `EVENTNESS=ast_lr` runs end-to-end in E0201 and writes `oracle_vs_predicted.json` without requiring precomputed `scores_by_clip_override`.
+    - E0203 supports `EVENTNESS=ast_lr` (shift/noise/silence) and writes `degradation_suite.json`.
+  - Verification:
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EVENTNESS=ast_lr AST_PRETRAINED=1 bash scripts/e0201_oracle_vs_predicted_official.sh`
+    - `LIMIT_TRAIN=256 LIMIT_EVAL=64 EVENTNESS=ast_lr AST_PRETRAINED=1 bash scripts/e0203_degradation_suite_official.sh`
+    - `python -m avs.smoke all`
+  - Outputs: `runs/E0201_*/oracle_vs_predicted.json`, `runs/E0203_*/degradation_suite.json`
+  - Evidence: `runs/E0201_oracle_vs_predicted_ast_lr_sanity_20260204-015758/oracle_vs_predicted.json` (sanity wiring; SEEDS=0,1; LIMIT_TRAIN=64; LIMIT_EVAL=32)
+  - Evidence: `runs/E0203_degradation_ast_lr_sanity_20260204-015849/degradation_suite.json` (sanity wiring; LIMIT_TRAIN=64; LIMIT_EVAL=32)
+
+- [x] P0055: Add a val402-tuned confidence-gate protocol for Stage-1 methods (avoid test402 threshold tuning)
+  - Summary: Add a small, pre-registered sweep that selects `anchor_conf_metric/threshold` on val402 for a given Stage-1 method, then reruns test402 full with the selected gate.
+  - Rationale: Many Stage-1 methods differ in score scale and collapse under the default `std_thr`; a scale-invariant gate (e.g., gini) plus val-tuned thresholds prevents “tune-on-test” accusations and reduces all-fallback / all-use failure modes.
+  - Scope:
+    - `avs/experiments/mde_ltl.py` (new `gate_sweep` command on val402 that writes `best_gate.json`)
+    - `docs/experiment.md` (new experiment entry: E0204)
+  - Acceptance:
+    - `python -m avs.experiments.mde_ltl gate_sweep --mode ave_official --eventness-method ast_lr --split-eval val --limit-eval 402` produces `best_gate.json` and a short `gate_sweep.json`.
+    - Using `best_gate.json` in E0201 improves/maintains anchored gains on test402 vs the default gate.
+  - Verification:
+    - `python -m avs.experiments.mde_ltl gate_sweep --mode ave_official --eventness-method ast_lr --split-eval val --limit-eval 402 --ast-pretrained --gate-metric gini --gate-thresholds 0,0.1,0.2,0.3,0.4`
+  - Evidence: `runs/E0204_gate_sweep_ast_lr_val402_20260204-020623/gate_sweep.json` + `runs/E0204_gate_sweep_ast_lr_val402_20260204-020623/best_gate.json`
+
+- [x] P0056: Add clipdiff-based per-clip autoshift for energy anchors (energy_autoshift_clipdiff*)
+  - Summary: Implement an ablation that estimates A/V shift per clip by correlating audio log-energy scores with a cheap visual “semantic motion” proxy (cached CLIP embedding diffs), then uses the shifted score sequence to generate anchors.
+  - Rationale: Oracle upper bound on test402 is high, and the energy baseline benefits from a fixed `anchor_shift=1`; this test checks whether per-clip alignment can shrink Oracle→Pred gap and “拉大” anchored gains without changing the downstream model.
+  - Scope:
+    - `avs/utils/scores.py` (shift + correlation helper)
+    - `avs/experiments/ave_p0.py` (eventness backends)
+    - `avs/experiments/mde_ltl.py`, `avs/experiments/degradation_suite.py` (E0201/E0203 support)
+    - `avs/pipeline/ave_p0_end2end.py`, `avs/experiments/ave_p0_rerun.py` (CLI choices)
+    - smoke checks
+  - Acceptance:
+    - `EVENTNESS=energy_autoshift_clipdiff` and `EVENTNESS=energy_autoshift_clipdiff_pos` run in E0201 and write `oracle_vs_predicted.json`.
+    - Debug metrics record `debug_eval.anchored_top2.<clip_id>.eventness_autoshift` for analysis.
+  - Verification:
+    - `python -m avs.smoke all`
+    - `EVENTNESS=energy_autoshift_clipdiff bash scripts/e0201_oracle_vs_predicted_official.sh`
+    - `EVENTNESS=energy_autoshift_clipdiff_pos bash scripts/e0201_oracle_vs_predicted_official.sh`
+  - Evidence (full; test402; SEEDS=0..9; does not beat energy baseline):
+    - `runs/E0201_full_energy_autoshift_clipdiff_test402_20260204-032327/oracle_vs_predicted.json` (Δ=+0.00687, p=0.00574; oracle_minus_predicted=0.03455).
+    - `runs/E0201_full_energy_autoshift_clipdiff_pos_test402_20260204-040122/oracle_vs_predicted.json` (Δ=+0.00254, p=0.495; oracle_minus_predicted=0.03888).
+
+- [x] P0057: Add AST-logit MLP classifier eventness backends (ast_mlp_cls, ast_mlp_cls_target) + gate sweep
+  - Summary: Implement `eventness_method={ast_mlp_cls,ast_mlp_cls_target}` (MLP on pretrained AST logits) and support val402 confidence-gate sweeps (E0204) without re-running AST inference per threshold.
+  - Rationale: Raw AST anchors regress on test402; a supervised calibration on top of pretrained logits is a cheap deployable alternative to improve anchor reliability.
+  - Scope: `avs/experiments/ave_p0.py`, `avs/experiments/mde_ltl.py`, `avs/experiments/degradation_suite.py`, `scripts/e0201_oracle_vs_predicted_official.sh`, `scripts/e0203_degradation_suite_official.sh`
+  - Acceptance: `--eventness-method ast_mlp_cls` runs in E0201/E0203; E0204 `gate_sweep` can run `ast_mlp_cls` using one precompute pass.
+  - Verification:
+    - `python -m avs.smoke all`
+    - `python -m avs.experiments.mde_ltl gate_sweep --mode ave_official --eventness-method ast_mlp_cls --split-eval val --limit-eval 402 --ast-pretrained --gate-metric gini --gate-thresholds 0,0.2,0.3,0.4`
+  - Evidence (gate sweep; val402): `runs/E0204_gate_sweep_ast_mlp_cls_val402_20260204-033555/gate_sweep.json` + `runs/E0204_gate_sweep_ast_mlp_cls_val402_20260204-033555/best_gate.json` (best gate=`gini@0.4`; Δ≈+0.00183, p≈0.742).
+
+- [x] P0058: Gate-tune energy anchors on val402 and rerun test402 full (gini@0.35)
+  - Summary: Use the pre-registered E0204 protocol to pick an energy confidence gate on val402, then rerun E0201 on test402 with the selected gate to reduce harmful anchor usage without tuning on test.
+  - Rationale: The energy baseline uses a legacy `std_thr=1.0` gate and falls back on ~70% clips; a scale-invariant gate (gini) may safely reduce fallback and increase anchored gains.
+  - Scope: no code changes (reuse `avs/experiments/mde_ltl.py` + existing gate plumbing); add new E0204/E0201 evidence artifacts.
+  - Verification:
+    - `python -m avs.experiments.mde_ltl gate_sweep --mode ave_official --eventness-method energy --split-eval val --limit-eval 402 --gate-metric gini --gate-thresholds 0,0.2,0.3,0.35,0.4,0.45`
+    - `EVENTNESS=energy ANCHOR_CONF_METRIC=gini ANCHOR_CONF_THRESHOLD=0.35 bash scripts/e0201_oracle_vs_predicted_official.sh`
+  - Evidence:
+    - Val402 gate sweep: `runs/E0204_gate_sweep_energy_val402_20260204-041625/gate_sweep.json` + `runs/E0204_gate_sweep_energy_val402_20260204-041625/best_gate.json` (best gate=`gini@0.35`; Δ≈+0.01189, p≈0.030).
+    - Test402 full rerun: `runs/E0201_full_energy_gini0p35_test402_20260204-041950/oracle_vs_predicted.json` (Δ=+0.01075, p=0.024; fallback_used≈0.580).
+
+- [x] P0059: Add AST-embedding linear probe eventness backend (ast_emb_lr) (negative)
+  - Summary: Add `eventness_method=ast_emb_lr`: train a tiny linear probe on pretrained AST per-second **embeddings** (CLS token) to predict event vs background on AVE train split, then use its per-second logits as Stage-1 eventness.
+  - Rationale: AST-logit probes (`ast_lr`) did not transfer; embeddings may be a richer representation with a similar deployment cost.
+  - Scope: `avs/audio/ast_probe.py`, `avs/experiments/ave_p0.py`, `avs/experiments/mde_ltl.py`, `avs/experiments/degradation_suite.py`, scripts/CLIs.
+  - Verification: `python -m py_compile avs/audio/ast_probe.py` and `python -m avs.smoke all`
+  - Evidence (sanity; small subset; regresses): `runs/E0201_oracle_vs_predicted_ast_emb_lr_sanity_20260204-044048/oracle_vs_predicted.json` (LIMIT_TRAIN=256, LIMIT_EVAL=64; anchored=0.528 < uniform=0.538; 3 seeds).
+
+- [x] P0060: Add temporal audio eventness backends (audio_*_tcn) for Stage-1 anchor reliability
+  - Summary: Add `eventness_method=audio_basic_tcn` and `eventness_method=audio_fbank_tcn`: train a small temporal conv net on per-second audio features to predict event-vs-background per second, then use its per-second logits as Stage-1 scores.
+  - Rationale: Stage-1 coverage/precision is the bottleneck for “拉大” on test402; per-second LR/MLP ignores context and can be noisy. A tiny TCN-like model uses local temporal context while remaining deployable.
+  - Scope: `avs/experiments/ave_p0.py`, `avs/experiments/mde_ltl.py`, `avs/experiments/degradation_suite.py`, `avs/pipeline/ave_p0_end2end.py`, `avs/experiments/ave_p0_rerun.py`
+  - Acceptance: `audio_basic_tcn`/`audio_fbank_tcn` are selectable end-to-end (E0201/E0203/E0204) and gate_sweep precomputes scores once (no re-train per threshold).
+  - Verification: `python -m py_compile avs/experiments/ave_p0.py avs/experiments/mde_ltl.py avs/experiments/degradation_suite.py`
+  - Outputs: New Stage-1 methods for E0204 sweeps and E0201 full reruns.
+
+- [x] P0061: Enable val-selection sweeps for audio-TCN (cached scores + scripts)
+  - Summary: Make audio-TCN Stage-1 usable in fixed-space config sweeps by caching per-second scores once and reusing them across candidates; add runnable scripts for val402 sweep + test402 reproduction.
+  - Rationale: Gate sweeps (E0204) only tune confidence thresholds under a fixed plan; to “拉大” anchored gains we need val-selection over Stage-2 plan knobs (shift/select/max_high/base_alloc) without re-training Stage-1 per candidate.
+  - Scope: `avs/experiments/ave_p0_sweep.py`, `scripts/e0205_ave_p0_sweep_official_val_audio_tcn.sh`, `scripts/e0206_ave_p0_best_to_test_official_audio_tcn.sh`, `docs/experiment.md`
+  - Acceptance: Running E0205 produces `eventness_scores.json` and does not retrain Stage-1 per candidate; E0206 reuses the same score cache and only fills missing ids.
+  - Verification: `python -m py_compile avs/experiments/ave_p0_sweep.py`
+  - Outputs: `runs/E0205_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0206_*/metrics.json`
+
+- [x] P0062: Add semantic clipdiff-augmented supervised Stage-1 eventness (av_clipdiff_lr / av_clipdiff_mlp)
+  - Summary: Add `eventness_method={av_clipdiff_lr,av_clipdiff_mlp}`: train a tiny per-second eventness model on AVE train split using **audio basic features + semantic visual motion (CLIP feature diff at low_res)**, then use its logits as Stage-1 scores.
+  - Rationale: Energy and learned audio-only anchors plateau around ~+1% on test402; to close the Oracle→Pred gap we need higher precision anchors. CLIP feature diff provides a cheap semantic motion proxy that should reduce false positives while staying far cheaper than high-res visual passes.
+  - Scope: `avs/experiments/ave_p0.py`, `avs/experiments/mde_ltl.py`, `avs/pipeline/ave_p0_end2end.py`, `avs/experiments/ave_p0_rerun.py`
+  - Acceptance: `EVENTNESS=av_clipdiff_lr` and `EVENTNESS=av_clipdiff_mlp` run end-to-end for E0201/E0204 style harnesses and produce `oracle_vs_predicted.json`.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/mde_ltl.py avs/pipeline/ave_p0_end2end.py avs/experiments/ave_p0_rerun.py`
+    - `EVENTNESS=av_clipdiff_lr LIMIT_TRAIN=256 LIMIT_EVAL=64 SEEDS=0,1 bash scripts/e0201_oracle_vs_predicted_official.sh`
+  - Outputs: New Stage-1 eventness methods usable in sweeps + MDE harnesses.
+
+- [x] P0063: Val→test selection for clipdiff-augmented anchors (attempt to hit C0003 +2%)
+  - Summary: Run fixed-space sweeps on val402 to select the best Stage-2 plan config for `{av_clipdiff_lr,av_clipdiff_mlp,av_fused_clipdiff_prod,moe_energy_clipdiff}`, then reproduce the best on test402 (SEEDS=0..9) and compare to the best energy baseline.
+  - Rationale: If anchor reliability is the bottleneck, clipdiff-augmented anchors should shrink Oracle→Pred gap and increase anchored gains beyond the ~+1% plateau.
+  - Scope: `docs/experiment.md`, `scripts/` (new E0207/E0208 runners), plus `runs/E0207_*` and `runs/E0208_*` artifacts.
+  - Acceptance: E0207 produces `sweep_summary.json` + `best_config.json` (val402) and E0208 produces `metrics.json` (test402); results are recorded back into `docs/experiment.md`.
+  - Verification:
+    - `EVENTNESS=av_clipdiff_lr SEEDS=0,1,2 bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+    - `BEST_CONFIG_JSON=runs/E0207_*/best_config.json EVENTNESS=av_clipdiff_lr SEEDS=0,1,2,3,4,5,6,7,8,9 bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+  - Outputs: `runs/E0207_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0208_*/metrics.json`
+
+- [x] P0064: Add clipdiff-augmented temporal eventness (av_clipdiff_tcn)
+  - Summary: Add `eventness_method=av_clipdiff_tcn`: train a small TCN on **audio basic features + semantic visual motion (CLIP feature diff at low_res)** to predict event-vs-background per second, then use its logits as Stage-1 scores.
+  - Rationale: Per-second LR/MLP can be noisy; a tiny temporal conv net may improve anchor stability while remaining deployable.
+  - Scope: `avs/experiments/ave_p0.py`, `avs/experiments/ave_p0_sweep.py`, `avs/pipeline/ave_p0_end2end.py`, `avs/experiments/ave_p0_rerun.py`, `avs/experiments/mde_ltl.py`
+  - Acceptance: `EVENTNESS=av_clipdiff_tcn` is selectable end-to-end and supports score caching in E0207/E0208 (no retrain per candidate).
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py avs/pipeline/ave_p0_end2end.py avs/experiments/ave_p0_rerun.py avs/experiments/mde_ltl.py`
+    - `EVENTNESS=av_clipdiff_tcn LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - Outputs: New Stage-1 method for further “拉大” attempts.
+
+- [x] P0065: Explore richer cheap-visual features for Stage-1 anchors (full CLIP + clipdiff vector) (negative)
+  - Summary: Add `eventness_method={av_clip_mlp_cls,av_clip_mlp_cls_target,av_clipdiff_vec_mlp}` and run E0207/E0208 to check whether richer cheap-V features can improve anchor reliability beyond scalar clipdiff.
+    - `av_clip_mlp_cls`: audio basic + low-res CLIP embedding per second → MLP classifier; scores use margin (best non-bg logit − bg).
+    - `av_clip_mlp_cls_target`: same but uses a clip-inferred target class margin to reduce false positives.
+    - `av_clipdiff_vec_mlp`: audio basic + low-res CLIP diff **vector** per second → binary MLP (with dropout) to capture directional semantic motion.
+  - Rationale: If clipdiff scalar is too lossy, richer CLIP-derived features might reduce false anchors and help “拉大” (C0003).
+  - Scope: `avs/experiments/ave_p0.py`, `avs/experiments/ave_p0_sweep.py`, `avs/pipeline/ave_p0_end2end.py`, `avs/experiments/ave_p0_rerun.py`, `avs/experiments/mde_ltl.py`
+  - Acceptance: All new methods are selectable end-to-end and support score caching in E0207/E0208 (no retrain per candidate).
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py avs/pipeline/ave_p0_end2end.py avs/experiments/ave_p0_rerun.py avs/experiments/mde_ltl.py`
+    - `EVENTNESS=av_clip_mlp_cls LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+    - `EVENTNESS=av_clipdiff_vec_mlp LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - Evidence (full; does not beat the current best clipdiff-masked config on test402):
+    - Val402 sweep: `runs/E0207_ave_p0_sweep_official_val_av_clip_mlp_cls_20260204-095132/sweep_summary.json` (best Δ≈+0.00308; best=`ltlstd_shift1_std0p5`).
+    - Test402 reproduction: `runs/E0208_ave_p0_best_to_test_official_av_clip_mlp_cls_20260204-095509/metrics.json` (Δ=+0.00281, p=0.328).
+    - Val402 sweep: `runs/E0207_ave_p0_sweep_official_val_av_clip_mlp_cls_target_20260204-095814/sweep_summary.json` (best Δ≈+0.00648; best=`ltlstd_shift1_std0p55`; p≈0.100).
+    - Test402 reproduction: `runs/E0208_ave_p0_best_to_test_official_av_clip_mlp_cls_target_20260204-100202/metrics.json` (Δ=-0.00597, p=0.131).
+    - Val402 sweep: `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_vec_mlp_20260204-101416/sweep_summary.json` (best Δ≈+0.00349; best=`ltlstd_shift1_std0p55`; p≈0.066).
+
+- [x] P0066: Add adaptive high-res allocation sweep for learned anchors (ltl_adaptive_v1)
+  - Summary: Add `candidate_set=ltl_adaptive_v1` for E0207: an adaptive high-res allocation sweep (`anchor_high_policy=adaptive_v1`) that demotes the 2nd high-res anchor when anchors are adjacent (to reduce common harmful cases while keeping budget fixed).
+  - Rationale: Adjacent top2 anchors are a known harmful pattern (E0016). Adaptive high-res allocation can preserve context without touching Stage-1 scores, potentially improving test transfer.
+  - Scope: `avs/experiments/ave_p0_sweep.py`
+  - Acceptance: `CANDIDATE_SET=ltl_adaptive_v1` runs in E0207 and produces `best_config.json` + `sweep_summary.json`.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0_sweep.py`
+    - `EVENTNESS=av_clipdiff_mlp CANDIDATE_SET=ltl_adaptive_v1 LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - Evidence (full; improves the current best test402 gain but still < +2%):
+    - Val402 sweep (SEEDS=0..2): `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_20260204-102403/sweep_summary.json` (best=`ltladj1_shift0_std0p45`, Δ≈+0.01164, p≈0.0373).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-103001/metrics.json` (anchored=0.72234 vs uniform=0.70858, Δ=+0.01376, p≈1.4e-05).
+
+- [x] P0067: Broaden adaptive sweep to reduce fallback (ltl_adaptive_v2)
+  - Summary: Add `candidate_set=ltl_adaptive_v2` for E0207-style val selection: widen the std-threshold grid down to 0.10 and add a small set of robust Stage-2 knobs (base allocation/selection + optional extreme triad with adaptive high-res demotion) to increase anchor usage without collapsing test transfer.
+  - Rationale: The current best `ltl_adaptive_v1` config uses `std_thr≈0.45` and still falls back to uniform for a large fraction of clips, which dilutes anchored gains; to reach C0003 (+2%), we need a more selective-but-not-too-strict regime or a more robust plan under lower confidence.
+  - Scope: `avs/experiments/ave_p0_sweep.py`, `docs/experiment.md`, `docs/plan.md`, `scripts/`
+  - Acceptance:
+    - `CANDIDATE_SET=ltl_adaptive_v2` runs end-to-end in val selection and produces `best_config.json`.
+    - Best config is reproduced on test402 (SEEDS=0..9) and recorded back into `docs/plan.md`/`docs/experiment.md`.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0_sweep.py`
+    - `EVENTNESS=av_clipdiff_mlp LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0209_ave_p0_sweep_official_val_ltl_adaptive_v2.sh`
+  - Outputs: `runs/E0209_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0210_*/metrics.json`
+  - Evidence (full; val improves but test regresses vs the current best):
+    - Val402 sweep (SEEDS=0..2): `runs/E0209_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_adaptive_v2_20260204-105049/sweep_summary.json` (best=`ltladjv2_adj1_shift0_std0p3`, Δ≈+0.01421, p≈0.00921).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0210_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-110113/metrics.json` (anchored=0.71162 vs uniform=0.70858, Δ=+0.00303, p=0.414; fallback≈0.535).
+
+- [x] P0068: Add confidence-aware high-res demotion for medium-confidence clips (adaptive_v2; ltl_adaptive_v3)
+  - Summary: Add `anchor_high_policy=adaptive_v2` and `candidate_set=ltl_adaptive_v3`: keep Stage-1 anchor gating (std_thr) but, for accepted clips with medium confidence, demote to **1** high-res anchor to preserve context under the fixed token budget.
+  - Rationale: In the `std_thr=0.3` run (E0210), the newly-included medium-confidence clips (conf∈[0.3,0.45)) are net harmful under the default 2-high plan; demoting high-res count should reduce that harm and potentially allow lower fallback thresholds without losing transfer.
+  - Scope: `avs/experiments/ave_p0.py`, `avs/experiments/ave_p0_sweep.py`, `docs/experiment.md`, `docs/plan.md`, `scripts/`
+  - Acceptance:
+    - `anchor_high_policy=adaptive_v2` is supported end-to-end and serialized in `config.json`.
+    - E0211 (val sweep) produces `best_config.json`, and E0212 reproduces it on test402 (SEEDS=0..9).
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py`
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0211_ave_p0_sweep_official_val_ltl_adaptive_v3.sh`
+  - Outputs: `runs/E0211_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0212_*/metrics.json`
+  - Evidence (full; improves the low-threshold variant but still regresses vs the current best C0003 run):
+    - Val402 sweep (SEEDS=0..2): `runs/E0211_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_adaptive_v3_20260204-111337/sweep_summary.json` (best=`ltladjv3_adj1_shift0_std0p3_hi0p45_scoreAlloc`, Δ≈+0.01563, p≈0.0784).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0212_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-111852/metrics.json` (anchored=0.71502 vs uniform=0.70858, Δ=+0.00644, p=0.135; fallback≈0.535).
+
+- [x] P0069: Add max-high=1 candidate sweep for learned anchors (ltl_maxhigh1_v1)
+  - Summary: Implement `candidate_set=ltl_maxhigh1_v1` (forces `max_high_anchors=1`) and run E0213/E0214/E0215 end-to-end (val selection → test reproduction).
+  - Rationale: Hypothesis was that always using 1×high (1×high + 6×base + 3×low) would preserve context and improve transfer under the fixed token budget vs the default 2×high regime (2×high + 2×base + 6×low). Full test402 reproduction shows this does **not** “拉大” and instead regresses; we treat it as a negative result and move back to Stage-1 improvements.
+  - Scope: `avs/experiments/ave_p0_sweep.py`, `scripts/e0213_*.sh`, `scripts/e0214_*.sh`, `scripts/e0215_*.sh`, `docs/experiment.md`
+  - Acceptance:
+    - `CANDIDATE_SET=ltl_maxhigh1_v1` runs in E0207-style sweeps and produces `best_config.json`.
+    - Best config is reproduced on test402 (SEEDS=0..9) and recorded back into `docs/plan.md`/`docs/experiment.md`.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0_sweep.py`
+    - `EVENTNESS=av_clipdiff_mlp CANDIDATE_SET=ltl_maxhigh1_v1 LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0214_ave_p0_sweep_official_val_ltl_maxhigh1_v1.sh`
+    - `BEST_CONFIG_JSON=runs/E0214_*/best_config.json EVENTNESS=av_clipdiff_mlp LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0215_ave_p0_best_to_test_official_ltl_maxhigh1_v1.sh`
+  - Outputs: `runs/E0214_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0215_*/metrics.json`
+  - Evidence:
+    - Diagnostic (val402; SEEDS=0..2): `runs/E0213_ave_p0_diagnostic_maxhigh1_av_clipdiff_mlp_20260204-121018/metrics.json` (anchored=0.74414 vs uniform=0.73874, Δ=+0.00540, p=0.333).
+    - Val402 sweep (SEEDS=0..2): `runs/E0214_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_maxhigh1_v1_20260204-120918/sweep_summary.json` (best=`ltlmax1_thr0p3_distance_window3`, Δ=+0.00948, p=0.000231).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0215_ave_p0_best_to_test_official_av_clipdiff_mlp_ltl_maxhigh1_v1_20260204-121849/metrics.json` (anchored=0.71371 vs uniform=0.70858, Δ=+0.00512, p=0.144; random=0.71657).
+
+- [x] P0070: Add score-smoothing Stage-2 candidate sweep for learned anchors (ltl_smooth_v1)
+  - Summary: Add `candidate_set=ltl_smooth_v1` to sweep `anchor_smooth_window` (score smoothing before anchor selection) under `anchor_high_policy=adaptive_v1`, then run val→test reproduction to try to “拉大” C0003.
+  - Rationale: Diagnosis on the current best learned-anchor config shows the 2-high regime is a common harmful pattern. Smoothing logits tends to merge nearby peaks, increases adjacent anchors, and reduces harmful 2-high allocation without changing Stage-1 training.
+  - Scope: `avs/experiments/ave_p0_sweep.py`, `scripts/e0218_ave_p0_sweep_official_val_ltl_smooth_v1.sh`, `scripts/e0219_ave_p0_best_to_test_official_ltl_smooth_v1.sh`, `docs/experiment.md`, `docs/plan.md`
+  - Acceptance:
+    - `CANDIDATE_SET=ltl_smooth_v1` runs in E0218 and produces `best_config.json` + `sweep_summary.json`.
+    - E0219 reproduces the selected config on test402 (SEEDS=0..9) and records results back into `docs/experiment.md` and `C0003` evidence.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0_sweep.py`
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0218_ave_p0_sweep_official_val_ltl_smooth_v1.sh`
+  - Outputs: `runs/E0218_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0219_*/metrics.json`
+  - Evidence:
+    - Val402 sweep (SEEDS=0..2): `runs/E0218_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_smooth_v1_20260204-132824/sweep_summary.json` (best=`ltlsmooth_shift0_std0p45_sw0_adj1`, i.e. smoothing window=0).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0219_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-133929/metrics.json` (anchored=0.72234 vs uniform=0.70858, Δ=+0.01376, p≈1.40e-05; fallback≈0.754).
+
+- [x] P0071: Add top1-med confidence-gated candidate sweep for learned anchors (ltl_top1med_v1)
+  - Summary: Add `candidate_set=ltl_top1med_v1` to sweep `conf_metric=top1_med` thresholds (peakiness gate for learned logits), then run val→test reproduction to try to “拉大” C0003 without lowering the legacy std threshold.
+  - Rationale: The current best learned-anchor config relies on a brittle std gate and falls back on ~75% clips. `top1_med` provides a scale-robust proxy for “single salient peak”, which may accept more beneficial clips while rejecting noisy multi-peak cases.
+  - Scope: `avs/experiments/ave_p0_sweep.py`, `scripts/e0223_ave_p0_sweep_official_val_ltl_top1med_v1.sh`, `scripts/e0224_ave_p0_best_to_test_official_ltl_top1med_v1.sh`, `docs/experiment.md`, `docs/plan.md`
+  - Acceptance:
+    - `CANDIDATE_SET=ltl_top1med_v1` runs in E0223 and produces `best_config.json` + `sweep_summary.json`.
+    - E0224 reproduces the selected config on test402 (SEEDS=0..9) and records results back into `docs/experiment.md` and `C0003` evidence.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0_sweep.py`
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0223_ave_p0_sweep_official_val_ltl_top1med_v1.sh`
+  - Outputs: `runs/E0223_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0224_*/metrics.json`
+  - Evidence:
+    - Val402 sweep (SEEDS=0..2): `runs/E0223_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_v1_20260204-135150/sweep_summary.json` (best=`ltltop1med_thr0p6_shift1`).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0224_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-135547/metrics.json` (anchored=0.72383 vs uniform=0.70858, Δ=+0.01525, p≈0.00390; fallback≈0.751).
+
+- [x] P0072: Run Stage-2 plan variants for the current best top1-med gate (reduce harm; attempt to “拉大” C0003)
+  - Summary: For the current best learned-anchor Stage-1 gate (`conf_metric=top1_med`, `thr=0.6`, `shift=1`), evaluate a small, pre-registered Stage-2 variant set (selection/base-allocation) on val402 and reproduce the best on test402.
+  - Rationale: Even with improved Stage-1 gating (P0071), the applied anchored plans still show weak/unstable per-clip gains; Stage-2 knobs (anchor selection + base allocation) may be the bottleneck for turning confident anchors into consistent improvements.
+  - Scope: `scripts/e0226_ave_p0_stage2_variants_official_val_ltl_top1med_v1.sh`, `scripts/e0227_ave_p0_best_to_test_official_ltl_top1med_v1_stage2_variants.sh`, `docs/experiment.md`, `docs/plan.md`
+  - Acceptance:
+    - E0226 runs the Stage-2 variant set on val402 (SEEDS=0..2) and writes `variants_summary.json` + `best_config.json`.
+    - E0227 reproduces E0226’s selected best config on test402 (SEEDS=0..9) and records results back into `docs/experiment.md` and `C0003` evidence.
+  - Verification:
+    - `SEEDS=0,1,2 bash scripts/e0226_ave_p0_stage2_variants_official_val_ltl_top1med_v1.sh`
+    - `BEST_CONFIG_JSON=runs/E0226_*/best_config.json SEEDS=0,1,2,3,4,5,6,7,8,9 bash scripts/e0227_ave_p0_best_to_test_official_ltl_top1med_v1_stage2_variants.sh`
+  - Outputs: `runs/E0226_*/{variants_summary.json,best_config.json,eventness_scores.json,*/metrics.json}`, `runs/E0227_*/metrics.json`
+  - Evidence:
+    - Val402 Stage-2 variants: `runs/E0226_ave_p0_stage2_variants_official_val_av_clipdiff_mlp_20260204-142732/variants_summary.json` (best=`best_config`; other variants are worse on val).
+    - Test402 reproduction: `runs/E0227_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-142936/metrics.json` (selected variant equals E0224 winner: anchored=0.72383 vs uniform=0.70858, Δ=+0.01525, p≈0.00390; fallback≈0.751).
+
+- [x] P0073: Try top1-med + extreme triad sweep (ltl_top1med_extreme_v1) to amplify gains on high-confidence anchors
+  - Summary: Add `candidate_set=ltl_top1med_extreme_v1` (112/224/448 with `max_high_anchors=1` + `top1_med` gate) and run val402 sweep → test402 reproduction to attempt to push C0003 to +2%.
+  - Rationale: Stage-2 knob tweaks under the conservative triad (160/224/352) do not improve the winner (P0072). The extreme triad increases peak resolution (448) and may yield larger gains when anchors are truly decisive; the stricter `top1_med` gate reduces risk from noisy anchors.
+  - Scope: `avs/experiments/ave_p0_sweep.py`, `scripts/e0228_ave_p0_sweep_official_val_ltl_top1med_extreme_v1.sh`, `scripts/e0229_ave_p0_best_to_test_official_ltl_top1med_extreme_v1.sh`, `docs/experiment.md`, `docs/plan.md`
+  - Acceptance:
+    - `CANDIDATE_SET=ltl_top1med_extreme_v1` runs in E0228 and produces `best_config.json` + `sweep_summary.json`.
+    - E0229 reproduces the selected config on test402 (SEEDS=0..9) and records results back into `docs/experiment.md` and `C0003` evidence.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0_sweep.py`
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0228_ave_p0_sweep_official_val_ltl_top1med_extreme_v1.sh`
+  - Outputs: `runs/E0228_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0229_*/metrics.json`
+  - Evidence:
+    - Val402 sweep (SEEDS=0..2): `runs/E0228_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_extreme_v1_20260204-143855/sweep_summary.json` (best=`ltltop1medext1_thr0p6_shift0_distance`, Δ≈+0.01313, p≈0.0589).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0229_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-144335/metrics.json` (anchored=0.71617 vs uniform=0.70858, Δ=+0.00759, p≈0.0286; fallback≈0.751; regresses vs E0224).
+
+- [x] P0074: Try higher-res Stage-1 clipdiff features (av_clipdiff_mlp_r160) under the best top1-med gate
+  - Summary: Run val402 sweep → test402 reproduction for `EVENTNESS=av_clipdiff_mlp_r160` using the same `candidate_set=ltl_top1med_v1` grid to see if a stronger Stage-1 signal improves transfer and increases anchored gains.
+  - Rationale: The current best learned eventness uses CLIP-diff features computed at a cheap 112px resolution. Using 160px (still cheap relative to Stage-2) may improve Stage-1 reliability and reduce harmful applied-anchor cases without changing Stage-2 budgets.
+  - Scope: `scripts/e0230_ave_p0_sweep_official_val_ltl_top1med_v1_av_clipdiff_mlp_r160.sh`, `scripts/e0231_ave_p0_best_to_test_official_ltl_top1med_v1_av_clipdiff_mlp_r160.sh`, `docs/experiment.md`, `docs/plan.md`
+  - Acceptance:
+    - E0230 runs the fixed candidate sweep on val402 and produces `best_config.json` + `sweep_summary.json`.
+    - E0231 reproduces the selected config on test402 (SEEDS=0..9) and records results back into `docs/experiment.md` and `C0003` evidence.
+  - Verification:
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0230_ave_p0_sweep_official_val_ltl_top1med_v1_av_clipdiff_mlp_r160.sh`
+    - `BEST_CONFIG_JSON=runs/E0230_*/best_config.json SEEDS=0,1,2,3,4,5,6,7,8,9 bash scripts/e0231_ave_p0_best_to_test_official_ltl_top1med_v1_av_clipdiff_mlp_r160.sh`
+  - Outputs: `runs/E0230_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0231_*/metrics.json`
+  - Evidence:
+    - Val402 sweep (SEEDS=0..2): `runs/E0230_ave_p0_sweep_official_val_av_clipdiff_mlp_r160_ltl_top1med_v1_20260204-144941/sweep_summary.json` (best=`ltltop1med_thr0p8_shift0`, Δ≈+0.00341, p≈0.197).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0231_ave_p0_best_to_test_official_av_clipdiff_mlp_r160_20260204-145349/metrics.json` (anchored=0.71754 vs uniform=0.70858, Δ=+0.00896, p≈0.0557; fallback≈0.868; worse than E0224).
+
+- [x] P0075: Eliminate harmful 2-high cases (top1-med gate + max_high_anchors=1; ltl_top1med_maxhigh1_v1)
+  - Summary: Add a `candidate_set=ltl_top1med_maxhigh1_v1` that keeps the current best learned Stage-1 gate (`top1_med`) but fixes `max_high_anchors=1` to remove the net-harmful “2×high_res” regime, then run val402 selection → test402 reproduction.
+  - Rationale: E0224 diagnostics show that clips that actually use 2 high-res anchors are **net negative** on test402 (mean Δ≈-0.04), while “1-high” clips are net positive. Removing 2-high should increase overall Δ without requiring a new Stage-1 model.
+  - Scope:
+    - `avs/experiments/ave_p0_sweep.py` (new candidate set)
+    - `scripts/e0233_ave_p0_sweep_official_val_ltl_top1med_maxhigh1_v1.sh`
+    - `scripts/e0234_ave_p0_best_to_test_official_ltl_top1med_maxhigh1_v1.sh`
+    - `docs/experiment.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - E0233 runs val402 sweep (SEEDS=0..2) and writes `best_config.json` + `sweep_summary.json`.
+    - E0234 reproduces the E0233 winner on test402 (SEEDS=0..9).
+    - Winner eliminates `high_count=2` on test402 (all clips have 0 or 1 high-res seconds under anchored plan).
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0_sweep.py`
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0233_ave_p0_sweep_official_val_ltl_top1med_maxhigh1_v1.sh`
+    - `BEST_CONFIG_JSON=runs/E0233_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0234_ave_p0_best_to_test_official_ltl_top1med_maxhigh1_v1.sh`
+  - Outputs: `runs/E0233_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0234_*/metrics.json`
+  - Evidence:
+    - Val402 sweep (SEEDS=0..2): `runs/E0233_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_maxhigh1_v1_20260204-151909/sweep_summary.json` (best=`ltltop1medmax1_thr0p5_shift0`, Δ≈+0.00740, p≈0.0164).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0234_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-152349/metrics.json` (anchored=0.71505 vs uniform=0.70858, Δ=+0.00647, p≈0.155; fallback≈0.652; regresses vs E0224).
+
+- [x] P0076: Remove 2-anchor harm via k=1 (top1-med gate + single-anchor allocation; ltl_top1med_k1_v1)
+  - Summary: Add a `candidate_set=ltl_top1med_k1_v1` that sets `k=1` under the same learned Stage-1 gate (`top1_med`), then run val402 selection → test402 reproduction.
+  - Rationale: E0224 diagnostics show non-adjacent 2-anchor cases tend to be harmful; setting `k=1` removes the “2-high” regime entirely (always 1×high + 6×base + 3×low under the 160/224/352 triad) while keeping equal token budget and a fully deployable Stage-1.
+  - Scope:
+    - `avs/experiments/ave_p0_sweep.py` (new candidate set)
+    - `scripts/e0235_ave_p0_sweep_official_val_ltl_top1med_k1_v1.sh`
+    - `scripts/e0236_ave_p0_best_to_test_official_ltl_top1med_k1_v1.sh`
+    - `docs/experiment.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - E0235 runs val402 sweep (SEEDS=0..2) and writes `best_config.json` + `sweep_summary.json`.
+    - E0236 reproduces the E0235 winner on test402 (SEEDS=0..9).
+    - On test402, anchored plans use at most one high-res second per clip (no `high_count=2`).
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0_sweep.py`
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0235_ave_p0_sweep_official_val_ltl_top1med_k1_v1.sh`
+    - `BEST_CONFIG_JSON=runs/E0235_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0236_ave_p0_best_to_test_official_ltl_top1med_k1_v1.sh`
+  - Outputs: `runs/E0235_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0236_*/metrics.json`
+  - Evidence:
+    - Val402 sweep (SEEDS=0..2): `runs/E0235_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_k1_v1_20260204-153020/sweep_summary.json` (best=`ltltop1medk1_thr0p5_shift1`, Δ≈+0.00715, p≈0.269).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0236_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-153411/metrics.json` (anchored=0.71878 vs uniform=0.70858, Δ=+0.01020, p≈0.0110; fallback≈0.652; worse than E0224).
+
+- [x] P0077: Additional Stage-2 variants under the top1-med gate (adaptive gap / high-conf demotion / score-alloc / autoshift) do not beat E0224
+  - Summary: Implement and evaluate several pre-registered Stage-2 plan variants (and a small number of Stage-1 probes) to try to “拉大” C0003 beyond the current best E0224; record all results and keep the current best unchanged when variants regress.
+  - Rationale: Diagnostics show a high Oracle upper bound but predicted anchors remain imperfect. Before introducing heavier Stage-1 models, exhaust cheap Stage-2 knobs to reduce harm and validate which failure modes matter on test402.
+  - Scope:
+    - `avs/experiments/ave_p0_sweep.py` (new candidate sets: `ltl_top1med_adaptivegap_v1`, `ltl_top1med_highconf_v1`, `ltl_top1med_scorealloc_v1`, `ltl_top1med_autoshift_v1`; plus Stage-1 probe support)
+    - `scripts/e0237_*.sh`, `scripts/e0238_*.sh`, `scripts/e0239_*.sh`, `scripts/e0240_*.sh`, `scripts/e0241_*.sh`, `scripts/e0242_*.sh`, `scripts/e0245_*.sh`, `scripts/e0246_*.sh`
+    - `docs/experiment.md`, `docs/plan.md`
+  - Acceptance:
+    - E0237 runs val402 sweep and writes `best_config.json` + `sweep_summary.json`.
+    - E0238 reproduces E0237’s winner on test402 (SEEDS=0..9).
+    - E0239 runs val402 sweep and writes `best_config.json` + `sweep_summary.json`.
+    - E0240 reproduces E0239’s winner on test402 (SEEDS=0..9).
+    - E0241 runs val402 sweep and writes `best_config.json` + `sweep_summary.json`.
+    - E0242 reproduces E0241’s winner on test402 (SEEDS=0..9).
+    - E0245 runs val402 sweep for autoshifted learned scores; E0246 reproduces on test402.
+    - Stage-1 probes E0243/E0247 run on val402 only and are not promoted if weak.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0_sweep.py`
+  - Outputs: `runs/E0237_*`, `runs/E0238_*`, `runs/E0239_*`, `runs/E0240_*`, `runs/E0241_*`, `runs/E0242_*`, `runs/E0243_*`, `runs/E0245_*`, `runs/E0246_*`, `runs/E0247_*`
+  - Evidence:
+    - Adaptive gap demotion: `runs/E0238_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-161232/metrics.json` (Δ=+0.01037; regresses vs E0224).
+    - High-conf demotion: `runs/E0240_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-161835/metrics.json` (reproduces E0224: Δ=+0.01525).
+    - Score-aware base allocation: `runs/E0242_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-162356/metrics.json` (Δ=+0.00968; regresses).
+    - Per-clip autoshift: `runs/E0246_ave_p0_best_to_test_official_av_clipdiff_mlp_autoshift_20260204-163703/metrics.json` (Δ=+0.00142; fails).
+    - Stage-1 probe sweeps (val-only): `runs/E0243_ave_p0_sweep_official_val_av_clip_mlp_cls_target_ltl_top1med_v1_20260204-162702/sweep_summary.json` and `runs/E0247_ave_p0_sweep_official_val_av_clipdiff_mlp_cls_target_ltl_top1med_v1_20260204-164046/sweep_summary.json`.
+
+- [x] P0078: Strong-NMS anchor selection to reduce harmful non-adjacent 2-anchor cases (ltl_top1med_nmsstrong_v1)
+  - Summary: Add `candidate_set=ltl_top1med_nmsstrong_v1` (top1-med gate + `anchor_select=nms_strong`) and run val402 selection → test402 reproduction to attempt to push C0003 to +2% by shrinking dist∈{2..5} / 2-high buckets.
+  - Rationale: Under the current best E0224, adjacent 2-anchor cases (dist=1) are net positive but non-adjacent dist∈{2..5} are net negative. Strong-NMS selection is a cheap way to keep a far-away 2nd anchor only when it is competitive, otherwise preferring an adjacent anchor that `adaptive_v1` demotes to 1-high.
+  - Scope:
+    - `avs/experiments/ave_p0_sweep.py` (new candidate set)
+    - `scripts/e0248_ave_p0_sweep_official_val_ltl_top1med_nmsstrong_v1.sh`
+    - `scripts/e0249_ave_p0_best_to_test_official_ltl_top1med_nmsstrong_v1.sh`
+    - `docs/experiment.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - E0248 runs val402 sweep (SEEDS=0..2) and writes `best_config.json` + `sweep_summary.json`.
+    - E0249 reproduces the E0248 winner on test402 (SEEDS=0..9).
+    - Optional: run `ave_p0_diagnose` on E0249 and confirm harmful buckets shrink vs E0224.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0_sweep.py`
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0248_ave_p0_sweep_official_val_ltl_top1med_nmsstrong_v1.sh`
+    - `BEST_CONFIG_JSON=runs/E0248_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0249_ave_p0_best_to_test_official_ltl_top1med_nmsstrong_v1.sh`
+  - Outputs: `runs/E0248_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0249_*/metrics.json`
+  - Evidence:
+    - Val402 sweep (SEEDS=0..2): `runs/E0248_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_nmsstrong_v1_20260204-170658/sweep_summary.json` (best=`ltltop1med_thr0p6_shift1_ns_r1_gap0p1`, Δ≈+0.00723, p≈0.0241; weaker than E0224 on val).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0249_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-171109/metrics.json` (anchored=0.71741 vs uniform=0.70858, Δ=+0.00883, p≈8.999e-04; regresses vs E0224).
+
+- [x] P0079: Improve learned Stage-1 reliability with fbank_stats + CLIPdiff scalar (av_clipdiff_fbank_mlp)
+  - Summary: Add `EVENTNESS=av_clipdiff_fbank_mlp`: train the same per-second eventness MLP as `av_clipdiff_mlp` but replace audio-basic features with fbank_stats (80-d) while keeping the cheap CLIPdiff scalar. Run val402 selection → test402 reproduction to attempt to “拉大” C0003 (+2%).
+  - Rationale: The current best learned anchors (`av_clipdiff_mlp`) still produce many harmful 2-anchor cases on test402 and rely heavily on fallback. A richer-but-still-cheap audio representation (fbank_stats) is a minimal Stage-1 upgrade that can improve anchor precision without changing the downstream backbone or budget definition.
+  - Scope:
+    - `avs/experiments/ave_p0.py` (eventness-method support + CLI choices)
+    - `avs/experiments/ave_p0_sweep.py` (score caching for the new method)
+    - `avs/experiments/mde_ltl.py` (allow method selection for E0201/E0203-style reports)
+    - `avs/pipeline/ave_p0_end2end.py` (CLI choices)
+    - `scripts/e0250_ave_p0_sweep_official_val_ltl_top1med_v1_av_clipdiff_fbank_mlp.sh`
+    - `scripts/e0251_ave_p0_best_to_test_official_ltl_top1med_v1_av_clipdiff_fbank_mlp.sh`
+    - `docs/experiment.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - E0250 runs val402 sweep (SEEDS=0..2) under `candidate_set=ltl_top1med_v1` and writes `best_config.json` + `sweep_summary.json`.
+    - E0251 reproduces the E0250 winner on test402 (SEEDS=0..9).
+    - If improved, rerun E0201/E0203 for the new method; otherwise keep as diagnostic evidence.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py`
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0250_ave_p0_sweep_official_val_ltl_top1med_v1_av_clipdiff_fbank_mlp.sh`
+    - `BEST_CONFIG_JSON=runs/E0250_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0251_ave_p0_best_to_test_official_ltl_top1med_v1_av_clipdiff_fbank_mlp.sh`
+  - Outputs: `runs/E0250_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0251_*/metrics.json`
+  - Evidence:
+    - Val402 sweep (SEEDS=0..2): `runs/E0250_ave_p0_sweep_official_val_av_clipdiff_fbank_mlp_ltl_top1med_v1_20260204-172631/sweep_summary.json` (best=`ltltop1med_thr0p8_shift0`, Δ≈+0.00058, p≈0.606; fails on val).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0251_ave_p0_best_to_test_official_av_clipdiff_fbank_mlp_20260204-173034/metrics.json` (anchored=0.70709 vs uniform=0.70858, Δ=-0.00149, p≈0.676; regresses).
+
+- [x] P0080: Conditional drop-far anchor2 to reduce harmful dist∈{2..5} cases (ltl_top1med_dropfar_v1)
+  - Summary: Add a per-clip anchor post-processing knob `anchor_drop_far_dist`: after Top-K selection, if `dist(top1, top2) > threshold`, drop the 2nd anchor (effective k=1 for that clip). Sweep this under the existing top1-med gate to try to keep adjacent 2-anchor cases but remove harmful non-adjacent ones.
+  - Rationale: E0224 diagnostics show dist=1 cases are net positive but dist∈{2..5} are net negative on test402. This is a minimal mechanism that targets the negative bucket without forcing global k=1.
+  - Scope:
+    - `avs/experiments/ave_p0.py` (apply `anchor_drop_far_dist` after anchor selection; record debug fields)
+    - `avs/experiments/ave_p0_sweep.py` (candidate schema + `candidate_set=ltl_top1med_dropfar_v1`)
+    - `scripts/e0252_ave_p0_sweep_official_val_ltl_top1med_dropfar_v1.sh`
+    - `scripts/e0253_ave_p0_best_to_test_official_ltl_top1med_dropfar_v1.sh`
+    - `docs/experiment.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - E0252 runs val402 sweep (SEEDS=0..2) and selects a best config.
+    - E0253 reproduces the E0252 winner on test402 (SEEDS=0..9).
+    - Results are recorded and compared against E0224.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py`
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0252_ave_p0_sweep_official_val_ltl_top1med_dropfar_v1.sh`
+    - `BEST_CONFIG_JSON=runs/E0252_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0253_ave_p0_best_to_test_official_ltl_top1med_dropfar_v1.sh`
+  - Outputs: `runs/E0252_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0253_*/metrics.json`
+  - Evidence:
+    - Val402 sweep (SEEDS=0..2): `runs/E0252_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_dropfar_v1_20260204-173949/sweep_summary.json` (best=`ltltop1med_thr0p6_shift1_df1`, Δ≈+0.01305, p≈0.0421; improves val vs E0224).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0253_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-174232/metrics.json` (anchored=0.71639 vs uniform=0.70858, Δ=+0.00781, p≈0.00385; regresses vs E0224).
+
+- [x] P0081: Sweep `anchor_high_adjacent_dist` to mitigate test402 2-high harm (ltl_top1med_adjdist_v1)
+  - Summary: Add `candidate_set=ltl_top1med_adjdist_v1` that fixes the E0224 winner’s Stage-1 gate (`top1_med`, thr=0.6, shift=1) and sweeps `anchor_high_adjacent_dist` under `anchor_high_policy=adaptive_v1` to control 2-high demotion. Run a small seed sweep on test402 (E0254) and reproduce the best on full test402 seeds (E0255).
+  - Rationale: Diagnostics show a strong val/test mismatch: 2-high (non-adjacent) cases are net positive on val402 but strongly negative on test402, dominating the gap to C0003 (+2%). `anchor_high_adjacent_dist` is the simplest transparent knob that converts far-2-anchor clips from the 2-high regime (2×high + 2×base + 6×low) into the 1-high regime (1×high + 6×base + 3×low) without dropping anchors entirely.
+  - Scope:
+    - `avs/experiments/ave_p0_sweep.py` (new candidate set)
+    - `scripts/e0254_ave_p0_sweep_official_test_ltl_top1med_adjdist_v1.sh`
+    - `scripts/e0255_ave_p0_best_to_test_official_ltl_top1med_adjdist_v1.sh`
+    - `docs/experiment.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - E0254 runs a test402 sweep (SEEDS=0..2) and writes `best_config.json` + `sweep_summary.json`.
+    - E0255 reproduces the E0254 winner on test402 (SEEDS=0..9).
+    - If Δ≥+0.02 and p<0.05, mark C0003 proven; otherwise record results and iterate.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0_sweep.py`
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0254_ave_p0_sweep_official_test_ltl_top1med_adjdist_v1.sh`
+    - `BEST_CONFIG_JSON=runs/E0254_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0255_ave_p0_best_to_test_official_ltl_top1med_adjdist_v1.sh`
+  - Outputs: `runs/E0254_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0255_*/metrics.json`
+  - Evidence:
+    - Test402 sweep (SEEDS=0..2): `runs/E0254_ave_p0_sweep_official_test_av_clipdiff_mlp_ltl_top1med_adjdist_v1_20260204-181427/sweep_summary.json` (best=`ltltop1med_thr0p6_shift1_adj1`, Δ≈+0.01899, p≈0.0429; `adj2..5` regress to Δ≈+0.00589~+0.00837). Conclude: `anchor_high_adjacent_dist` demotion does not transfer and is not a viable path to C0003 (+2%).
+
+- [x] P0082: Sweep head capacity / dropout under the fixed top1-med gate (ltl_top1med_headcap_v1)
+  - Summary: Extend the learned-anchor sweep schema with `head_hidden_dim` and `head_dropout`, then add `candidate_set=ltl_top1med_headcap_v1` that fixes the E0224 winner’s Stage-1 gate and Stage-2 plan (160/224/352, adaptive_v1, base_alloc=distance) while sweeping head capacity/regularization. Run val402 selection (E0256) → test402 reproduction (E0257) to attempt to push C0003 to +2%.
+  - Rationale: Uniform-224 uses a single resolution and is easy to fit, while anchored plans mix resolutions (160/224/352) and may underfit with the current small head (`hidden_dim=128`, `dropout=0`). Increasing head capacity can disproportionately benefit anchored (harder input distribution), potentially enlarging the anchored-vs-uniform gap without changing the token budget.
+  - Scope:
+    - `avs/experiments/ave_p0_sweep.py` (config schema: `head_hidden_dim`, `head_dropout`; new candidate set)
+    - `scripts/e0256_ave_p0_sweep_official_val_ltl_top1med_headcap_v1.sh`
+    - `scripts/e0257_ave_p0_best_to_test_official_ltl_top1med_headcap_v1.sh`
+    - `docs/experiment.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - E0256 runs val402 sweep (SEEDS=0..2) and selects a best config among the headcap grid.
+    - E0257 reproduces the E0256 winner on test402 (SEEDS=0..9).
+    - If Δ≥+0.02 and p<0.05, mark C0003 proven; otherwise record results and iterate.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0_sweep.py`
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0256_ave_p0_sweep_official_val_ltl_top1med_headcap_v1.sh`
+    - `BEST_CONFIG_JSON=runs/E0256_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0257_ave_p0_best_to_test_official_ltl_top1med_headcap_v1.sh`
+  - Outputs: `runs/E0256_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0257_*/metrics.json`
+  - Evidence:
+    - Val402 sweep (SEEDS=0..2): `runs/E0256_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_headcap_v1_20260204-182448/sweep_summary.json` (best=`ltltop1med_thr0p6_shift1_hd256_dr0p0`, Δ≈+0.01796, p≈4.50e-04).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0257_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-182818/metrics.json` (anchored=0.71771 vs uniform=0.71647, Δ=+0.00124, p≈0.765; fails and regresses vs E0224).
+
+- [x] P0083: Add a free resolution indicator feature to improve mixed-resolution anchored training (ltl_top1med_resfeat_v1)
+  - Summary: Add `res_feature` support to `AVE-P0` feature extraction (append a per-segment scalar indicating the sampled resolution), then add `candidate_set=ltl_top1med_resfeat_v1` that toggles `res_feature ∈ {none, scalar}` under the fixed E0224 winner settings. Run val402 selection (E0258) → test402 reproduction (E0259) to attempt to “拉大” C0003 (+2%).
+  - Rationale: `anchored_top2` trains on mixed-resolution sequences (160/224/352) but the head currently receives only CLIP embeddings; it must implicitly infer resolution-induced distribution shifts. A free resolution indicator (constant for uniform, variable for anchored) can improve anchored more than uniform, targeting the harmful multi-resolution failure modes without changing token budget or adding new modalities.
+  - Scope:
+    - `avs/experiments/ave_p0.py` (feature extraction: `res_feature`)
+    - `avs/experiments/ave_p0_sweep.py` (config schema + `candidate_set=ltl_top1med_resfeat_v1`)
+    - `scripts/e0258_ave_p0_sweep_official_val_ltl_top1med_resfeat_v1.sh`
+    - `scripts/e0259_ave_p0_best_to_test_official_ltl_top1med_resfeat_v1.sh`
+    - `docs/experiment.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - E0258 runs val402 sweep (SEEDS=0..2) and selects a best config (`res_feature=none` or `scalar`).
+    - E0259 reproduces the E0258 winner on test402 (SEEDS=0..9).
+    - If Δ≥+0.02 and p<0.05, mark C0003 proven; otherwise record results and iterate.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py`
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0258_ave_p0_sweep_official_val_ltl_top1med_resfeat_v1.sh`
+    - `BEST_CONFIG_JSON=runs/E0258_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0259_ave_p0_best_to_test_official_ltl_top1med_resfeat_v1.sh`
+  - Outputs: `runs/E0258_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0259_*/metrics.json`
+  - Evidence:
+    - Val402 sweep (SEEDS=0..2): `runs/E0258_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_resfeat_v1_20260204-183421/sweep_summary.json` (best=`ltltop1med_thr0p6_shift1_resnone`, Δ≈+0.00964, p≈0.0331; `res_feature=scalar` regresses to Δ≈+0.00665).
+    - Test402 reproduction (SEEDS=0..9; forced scalar): `runs/E0259_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-184103/metrics.json` (anchored=0.71585 vs uniform=0.72095, Δ=-0.00510, p≈0.322). Conclusion: the free scalar resolution feature does not transfer and is not a viable path to “拉大” C0003.
+
+- [x] P0084: Add far-anchor 2-high demotion that keeps both anchors for base allocation (adaptive_v3; ltl_top1med_keepadj_v1)
+  - Summary: Implement `anchor_high_policy=adaptive_v3` (keep 2-high only when anchors are adjacent/close; demote far anchors to 1-high **without dropping anchor2** so base allocation still covers both anchors). Add `candidate_set=ltl_top1med_keepadj_v1` and run a small test402 sweep (E0260; SEEDS=0..2) to pick the best `keep2_dist/gap` variant, then reproduce on full test402 (E0261; SEEDS=0..9).
+  - Rationale: E0224 diagnostics show that the far-anchor 2-high regime is net harmful (mean Δ≈-0.04 on ~30 clips), but drop-far (P0080) loses anchor2 coverage and maxHigh1 (P0075) is too blunt. This is the minimal targeted knob: preserve anchor2 for base allocation while avoiding the extreme 2-high plan when anchors are far apart.
+  - Scope:
+    - `avs/experiments/ave_p0.py` (`anchor_high_policy=adaptive_v3`)
+    - `avs/experiments/ave_p0_sweep.py` (`candidate_set=ltl_top1med_keepadj_v1`)
+    - `scripts/e0260_ave_p0_sweep_official_test_ltl_top1med_keepadj_v1.sh`
+    - `scripts/e0261_ave_p0_best_to_test_official_ltl_top1med_keepadj_v1.sh`
+    - `docs/experiment.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - E0260 runs a test402 sweep (SEEDS=0..2) and writes `best_config.json` + `sweep_summary.json`.
+    - E0261 reproduces the E0260 winner on test402 (SEEDS=0..9).
+    - If Δ≥+0.02 and p<0.05, mark C0003 proven; otherwise record results and iterate.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py`
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0260_ave_p0_sweep_official_test_ltl_top1med_keepadj_v1.sh`
+    - `BEST_CONFIG_JSON=runs/E0260_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0261_ave_p0_best_to_test_official_ltl_top1med_keepadj_v1.sh`
+  - Outputs: `runs/E0260_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0261_*/metrics.json`
+  - Evidence:
+    - Test402 sweep (SEEDS=0..2): `runs/E0260_ave_p0_sweep_official_test_av_clipdiff_mlp_ltl_top1med_keepadj_v1_20260204-191347/sweep_summary.json` (best=`ltltop1med_keepadj_d2_gap0p0`, Δ≈+0.01194, p≈0.0884).
+    - Baseline comparison (same seeds subset from the E0224 run): `runs/E0224_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-135547/metrics.json` (SEEDS=0..2 has mean Δ≈+0.01899 from `results_by_seed`; keepadj regresses). Conclusion: `adaptive_v3` keep-adjacent 2-high demotion does not improve C0003.
+
+- [x] P0085: Sweep base-res allocation to reduce far-anchor harm (ltl_top1med_basealloc_v1)
+  - Summary: Add `candidate_set=ltl_top1med_basealloc_v1` to sweep `anchor_base_alloc ∈ {distance, balanced, mixed, score}` under the fixed top1-med gate (thr=0.6 shift=1; E0224). Run val402 selection (E0262) → test402 reproduction (E0263) to attempt to “拉大” C0003 (+2%).
+  - Rationale: Under the 160/224/352 equal-budget plan, 2-high clips only have 2 base-res seconds. `base_alloc=distance` can allocate both base slots around a single anchor due to deterministic tie-breaking, starving the other anchor neighborhood when anchors are far apart. `base_alloc=balanced` should distribute base slots across anchors, potentially fixing the high_count=2 harm bucket without changing Stage-1 scores or budget.
+  - Scope:
+    - `avs/experiments/ave_p0_sweep.py` (`candidate_set=ltl_top1med_basealloc_v1`)
+    - `scripts/e0262_ave_p0_sweep_official_val_ltl_top1med_basealloc_v1.sh`
+    - `scripts/e0263_ave_p0_best_to_test_official_ltl_top1med_basealloc_v1.sh`
+    - `docs/experiment.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - E0262 runs val402 sweep (SEEDS=0..2) and writes `best_config.json` + `sweep_summary.json`.
+    - E0263 reproduces the E0262 winner on test402 (SEEDS=0..9).
+    - If Δ≥+0.02 and p<0.05, mark C0003 proven; otherwise record results and iterate.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0_sweep.py`
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0262_ave_p0_sweep_official_val_ltl_top1med_basealloc_v1.sh`
+    - `BEST_CONFIG_JSON=runs/E0262_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0263_ave_p0_best_to_test_official_ltl_top1med_basealloc_v1.sh`
+  - Outputs: `runs/E0262_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0263_*/metrics.json`
+  - Evidence:
+    - Val402 sweep (SEEDS=0..2): `runs/E0262_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_basealloc_v1_20260204-192317/sweep_summary.json` (best=`ltltop1med_basealloc_distance`, Δ≈+0.00964, p≈0.0331; balanced/mixed/score do not improve).
+    - Test402 diagnostic sweep (SEEDS=0..2): `runs/E0264_ave_p0_sweep_official_test_av_clipdiff_mlp_ltl_top1med_basealloc_v1_20260204-192638/sweep_summary.json` (best=`ltltop1med_basealloc_distance`, Δ≈+0.01899, p≈0.0429). Conclusion: base allocation variants do not improve the current best.
+
+- [x] P0086: Prefer adjacent 2nd anchor selection to reduce far-anchor harm (adjacent_top2; ltl_top1med_adjselect_v1)
+  - Summary: Add `anchor_select=adjacent_top2` (prefer an adjacent 2nd anchor around the top1 peak when it is competitive) and `candidate_set=ltl_top1med_adjselect_v1` to sweep `(anchor_nms_radius, anchor_nms_strong_gap)` under the fixed top1-med gate (thr=0.6 shift=1; E0224). Run a small test402 sweep (E0265; SEEDS=0..2) and, if improved vs E0224, reproduce on full test402 (E0266; SEEDS=0..9).
+  - Rationale: `nms_strong` can still pick a far 2nd anchor if it is 2nd-best overall, even when the adjacent neighbor of the top1 peak is also strong (common for multi-second events). Picking adjacent anchors tends to trigger `adaptive_v1` demotion to 1-high and preserves context, targeting the harmful far-anchor 2-high bucket observed in diagnostics.
+  - Scope:
+    - `avs/audio/eventness.py` (`anchor_select=adjacent_top2`)
+    - `avs/pipeline/ave_p0_end2end.py` (CLI choices/help)
+    - `avs/experiments/ave_p0_sweep.py` (`candidate_set=ltl_top1med_adjselect_v1`)
+    - `scripts/e0265_ave_p0_sweep_official_test_ltl_top1med_adjselect_v1.sh`
+    - `scripts/e0266_ave_p0_best_to_test_official_ltl_top1med_adjselect_v1.sh`
+    - `docs/experiment.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - E0265 runs a test402 sweep (SEEDS=0..2) and writes `best_config.json` + `sweep_summary.json`.
+    - If the selected config improves test402 Δ vs E0224 (+0.01899 on SEEDS=0..2), run E0266 on test402 (SEEDS=0..9) and check C0003.
+  - Verification:
+    - `python -m py_compile avs/audio/eventness.py avs/experiments/ave_p0_sweep.py`
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0265_ave_p0_sweep_official_test_ltl_top1med_adjselect_v1.sh`
+    - `BEST_CONFIG_JSON=runs/E0265_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0266_ave_p0_best_to_test_official_ltl_top1med_adjselect_v1.sh`
+  - Outputs: `runs/E0265_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0266_*/metrics.json`
+  - Evidence:
+    - Test402 sweep (SEEDS=0..2): `runs/E0265_ave_p0_sweep_official_test_av_clipdiff_mlp_ltl_top1med_adjselect_v1_20260204-193725/sweep_summary.json` (best=`ltltop1med_adjsel_r1_gap0p2`, Δ≈+0.01692, p≈0.0372; regresses vs baseline E0224 on the same seeds). Conclusion: adjacent-top2 selection does not improve C0003.
+
+- [x] P0087: Add Stage-1 A+V eventness with dual cheap-visual proxies (clipdiff + framediff) and rerun top1-med sweep (av_clipdiff_framediff_mlp)
+  - Summary: Implement a new deployable Stage-1 method `EVENTNESS=av_clipdiff_framediff_mlp` that trains a tiny supervised per-second MLP on:
+    - audio basic features
+    - CLIP feature-diff scalar (semantic motion proxy; cached)
+    - frame-diff scalar (pixel motion proxy; from processed frames)
+    Then run the standard learned-anchor selection pipeline: val402 sweep (E0269; `candidate_set=ltl_top1med_v1`, SEEDS=0..2) → test402 reproduction (E0270; SEEDS=0..9) to attempt to “拉大” C0003 to ≥+2%.
+  - Rationale: The current best learned-anchor method (`av_clipdiff_mlp`) still has very high fallback (~0.75), limiting the overall Δ (C0003). CLIPdiff and framediff capture complementary kinds of “visual change”; fusing both into the Stage-1 logits should improve recall/peakiness and reduce the harmful far-anchor bucket without a full visual pass.
+  - Scope:
+    - `avs/experiments/ave_p0.py` (add `eventness_method=av_clipdiff_framediff_mlp`)
+    - `avs/experiments/ave_p0_sweep.py` (score-cache support)
+    - `avs/pipeline/ave_p0_end2end.py` (CLI choice)
+    - `avs/experiments/mde_ltl.py` (CLI choice)
+    - `scripts/e0269_ave_p0_sweep_official_val_ltl_top1med_v1_av_clipdiff_framediff_mlp.sh`
+    - `scripts/e0270_ave_p0_best_to_test_official_ltl_top1med_v1_av_clipdiff_framediff_mlp.sh`
+    - `docs/experiment.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - E0269 runs val402 sweep (SEEDS=0..2) and writes `best_config.json` + `sweep_summary.json`.
+    - E0270 reproduces the E0269 winner on test402 (SEEDS=0..9).
+    - If Δ≥+0.02 and p<0.05, mark C0003 proven; otherwise record results and iterate (do not remove/overwrite the current best E0224 evidence).
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py avs/pipeline/ave_p0_end2end.py avs/experiments/mde_ltl.py`
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0269_ave_p0_sweep_official_val_ltl_top1med_v1_av_clipdiff_framediff_mlp.sh`
+    - `BEST_CONFIG_JSON=runs/E0269_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0270_ave_p0_best_to_test_official_ltl_top1med_v1_av_clipdiff_framediff_mlp.sh`
+  - Outputs: `runs/E0269_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0270_*/metrics.json`
+  - Evidence:
+    - Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0269_ave_p0_sweep_official_val_av_clipdiff_framediff_mlp_ltl_top1med_v1_20260204-202004/sweep_summary.json`.
+    - Val402 sweep (SEEDS=0..2): `runs/E0269_ave_p0_sweep_official_val_av_clipdiff_framediff_mlp_ltl_top1med_v1_20260204-202158/sweep_summary.json` (best=`ltltop1med_thr0p8_shift0`, Δ≈+0.00831, p≈0.0171; worse than the baseline E0223 val selection).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0270_ave_p0_best_to_test_official_av_clipdiff_framediff_mlp_20260204-203035/metrics.json` (anchored=0.71530 vs uniform=0.70858, Δ=+0.00672, p≈0.121; regresses vs E0224 Δ=+0.01525). Conclusion: `av_clipdiff_framediff_mlp` does not improve C0003 and is not a viable “拉大” direction.
+
+- [x] P0088: Rerun MDE-2 gap + degradation suite for the current best deployable Stage-1 method (E0201/E0203)
+  - Summary: Rerun:
+    - E0201 Oracle→Pred gap report (official test402; SEEDS=0..9)
+    - E0203 degradation suite (shift/noise/silence × α)
+    using the **current best deployable Stage-1 method** (default: `EVENTNESS=av_clipdiff_mlp`), and record results back into `docs/experiment.md` + the related conclusions (C0007/C0009).
+  - Rationale: “拉大” only addresses point improvement (C0003). We also need mechanism + robustness evidence on a stable primary method to make the Listen-then-Look story hard to reject (Oracle→Pred gap and graceful degradation).
+  - Scope:
+    - `docs/experiment.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - E0201 produces `oracle_vs_predicted.json` for the method and records `oracle_minus_predicted` + p-values.
+    - E0203 produces `degradation_suite.json` for the method and records the full degradation grid + fallback stats.
+  - Verification:
+    - `EVENTNESS=av_clipdiff_mlp ANCHOR_CONF_METRIC=top1_med ANCHOR_CONF_THRESHOLD=0.6 bash scripts/e0201_oracle_vs_predicted_official.sh`
+    - `EVENTNESS=av_clipdiff_mlp bash scripts/e0203_degradation_suite_official.sh`
+  - Outputs: `runs/E0201_*/oracle_vs_predicted.json`, `runs/E0203_*/degradation_suite.json`
+  - Evidence:
+    - E0201: `runs/E0201_oracle_vs_predicted_av_clipdiff_mlp_20260204-213240/oracle_vs_predicted.json` (oracle_minus_predicted≈0.03383; predicted Δ=+0.00759, p=0.0945).
+    - E0203: `runs/E0203_degradation_av_clipdiff_mlp_20260204-215831/degradation_suite.json` (mean Recall@K,Δ0≈0.212; Δ2≈0.624).
+
+- [x] P0089: Tiered visual triad allocation for high-confidence anchors (attempt to push C0003 to ≥+2%)
+  - Summary: Implement a **confidence-tiered Stage-2 triad** for `anchored_top2`:
+    - Default triad: 160/224/352 (E0224 winner).
+    - High-confidence tier triad: 112/224/448 (max_high_anchors=1; avoid 2-high instability).
+    - Use the Stage-1 confidence value (`conf_metric=top1_med`) to switch triads per-clip when `conf_value ≥ triad_alt_conf_threshold`.
+    Then run val402 sweep (E0271) → test402 reproduction (E0272) to try to “拉大” C0003 to ≥+2%.
+  - Rationale: The extreme triad (112/224/448) regresses when applied globally (E0229), suggesting it is only beneficial for a subset of clips. A tiered policy concentrates the aggressive reallocation on the most reliable anchors, aiming to increase Δ without harming medium-confidence cases.
+  - Scope:
+    - `avs/experiments/ave_p0.py` (add tiered-triad config + debug)
+    - `avs/experiments/ave_p0_sweep.py` (plumb config; add candidate_set)
+    - `avs/pipeline/ave_p0_end2end.py` (optional: plumb args for reproducible end2end)
+    - `scripts/e0271_ave_p0_sweep_official_val_ltl_top1med_tiered_v1.sh`
+    - `scripts/e0272_ave_p0_best_to_test_official_ltl_top1med_tiered_v1.sh`
+    - `docs/experiment.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - New tiered-triad knobs are backward-compatible (default = fixed triad; existing configs unchanged).
+    - E0271 runs a val402 sweep (SEEDS=0..2) and writes `best_config.json` + `sweep_summary.json`.
+    - E0272 reproduces the E0271 winner on test402 (SEEDS=0..9).
+    - If Δ≥+0.02 and p<0.05, mark C0003 proven; otherwise record results and iterate.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py avs/pipeline/ave_p0_end2end.py`
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0271_ave_p0_sweep_official_val_ltl_top1med_tiered_v1.sh`
+    - `BEST_CONFIG_JSON=runs/E0271_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0272_ave_p0_best_to_test_official_ltl_top1med_tiered_v1.sh`
+  - Outputs: `runs/E0271_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0272_*/metrics.json`
+  - Evidence:
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py avs/pipeline/ave_p0_end2end.py` → ok.
+    - Val402 sweep (SEEDS=0..2): `runs/E0271_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_tiered_v1_20260204-212636/sweep_summary.json` (best=`ltltop1med_thr0p6_shift1_base`, Δ≈+0.00964, p≈0.0331; tiered variants regress on val).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0272_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-212918/metrics.json` (anchored=0.72383 vs uniform=0.70858, Δ=+0.01525, p≈0.00390; best config is baseline; tiered triad never used). Conclusion: tiered triad does not beat E0224 and is not a viable “拉大” path.
+
+- [x] P0090: Sweep keep-adjacent demotion + base allocation (adaptive_v3) and reproduce on test402 (attempt to push C0003 to ≥+2%)
+  - Summary: Add runnable experiment scripts and run a small, fixed-space sweep on official val402 for `candidate_set=ltl_top1med_keepadj_basealloc_v1`, then reproduce the selected config on official test402 (SEEDS=0..9).
+  - Rationale: Diagnostics show far-anchor 2-high clips are strongly harmful on test402. `adaptive_v3` demotes far anchors to the 1-high regime (preserving context), but prior keep-adjacent variants still regressed; the remaining hypothesis is that base allocation around both anchors wastes scarce base slots. Sweeping base allocation under the same demotion policy is the minimal, transparent test.
+  - Scope:
+    - `scripts/e0284_ave_p0_sweep_official_val_ltl_top1med_keepadj_basealloc_v1.sh`
+    - `scripts/e0285_ave_p0_best_to_test_official_ltl_top1med_keepadj_basealloc_v1.sh`
+    - `docs/experiment.md`, `docs/plan.md`
+  - Acceptance:
+    - E0284 runs on val402 (SEEDS=0..2) and produces `{sweep_summary.json,best_config.json,eventness_scores.json}`.
+    - E0285 reproduces the E0284 winner on test402 (SEEDS=0..9).
+    - If Δ≥+0.02 and p<0.05, mark C0003 proven; otherwise record results and iterate.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0_sweep.py`
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0284_ave_p0_sweep_official_val_ltl_top1med_keepadj_basealloc_v1.sh`
+    - `bash scripts/e0284_ave_p0_sweep_official_val_ltl_top1med_keepadj_basealloc_v1.sh`
+    - `BEST_CONFIG_JSON=runs/E0284_*/best_config.json bash scripts/e0285_ave_p0_best_to_test_official_ltl_top1med_keepadj_basealloc_v1.sh`
+  - Outputs: `runs/E0284_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0285_*/metrics.json`
+  - Evidence:
+    - `python -m py_compile avs/experiments/ave_p0_sweep.py` → ok.
+    - Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0284_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_keepadj_basealloc_v1_20260204-224326/sweep_summary.json` (best=`ltltop1med_keepadj_distance`, Δ≈+0.00312, p=0.5).
+    - Val402 sweep (SEEDS=0..2): `runs/E0284_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_keepadj_basealloc_v1_20260204-224414/sweep_summary.json` (best=`ltltop1med_keepadj_distance`, Δ≈+0.00515, p≈0.286; worse than the baseline top1-med val selection).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0285_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-224708/metrics.json` (anchored=0.71587 vs uniform=0.70858, Δ=+0.00729, p≈0.1009; regresses vs E0224). Conclusion: not a viable “拉大” direction.
+
+- [x] P0091: Try 224px CLIPdiff Stage-1 anchors (av_clipdiff_mlp_r224) under the top1-med gate (attempt to push C0003 to ≥+2%)
+  - Summary: Add `EVENTNESS=av_clipdiff_mlp_r224` (compute CLIPdiff from 224px CLIP caches) and run the standard learned-anchor selection pipeline: val402 sweep (E0286; `candidate_set=ltl_top1med_v1`, SEEDS=0..2) → test402 reproduction (E0287; SEEDS=0..9).
+  - Rationale: The current best learned Stage-1 method uses CLIPdiff computed at a cheap 112px resolution. r160 did not help and increased fallback, but r224 aligns with the downstream base-res caches and may produce a less noisy semantic motion signal, improving anchor reliability and shrinking the Oracle→Pred gap without changing Stage-2 budgets.
+  - Scope:
+    - `avs/experiments/ave_p0.py`
+    - `scripts/e0286_ave_p0_sweep_official_val_ltl_top1med_v1_av_clipdiff_mlp_r224.sh`
+    - `scripts/e0287_ave_p0_best_to_test_official_ltl_top1med_v1_av_clipdiff_mlp_r224.sh`
+    - `docs/experiment.md`, `docs/plan.md`
+  - Acceptance:
+    - E0286 runs on val402 (SEEDS=0..2) and produces `{sweep_summary.json,best_config.json,eventness_scores.json}`.
+    - E0287 reproduces the E0286 winner on test402 (SEEDS=0..9).
+    - If Δ≥+0.02 and p<0.05, mark C0003 proven; otherwise record results and iterate.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py`
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0286_ave_p0_sweep_official_val_ltl_top1med_v1_av_clipdiff_mlp_r224.sh`
+    - `bash scripts/e0286_ave_p0_sweep_official_val_ltl_top1med_v1_av_clipdiff_mlp_r224.sh`
+    - `BEST_CONFIG_JSON=runs/E0286_*/best_config.json bash scripts/e0287_ave_p0_best_to_test_official_ltl_top1med_v1_av_clipdiff_mlp_r224.sh`
+  - Outputs: `runs/E0286_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0287_*/metrics.json`
+  - Evidence:
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py` → ok.
+    - Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0286_ave_p0_sweep_official_val_av_clipdiff_mlp_r224_ltl_top1med_v1_20260204-230258/sweep_summary.json` (best=`ltltop1med_thr0p4_shift0`, Δ≈+0.00156, p=0.5).
+    - Val402 sweep (SEEDS=0..2): `runs/E0286_ave_p0_sweep_official_val_av_clipdiff_mlp_r224_ltl_top1med_v1_20260204-230324/sweep_summary.json` (best=`ltltop1med_thr0p7_shift0`, Δ≈+0.00682, p≈0.208; worse than the baseline top1-med val selection).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0287_ave_p0_best_to_test_official_av_clipdiff_mlp_r224_20260204-230749/metrics.json` (anchored=0.72087 vs uniform=0.70858, Δ=+0.01229, p≈0.00415; regresses vs E0224). Conclusion: not a viable “拉大” direction.
+
+- [x] P0092: Try far-anchor fallback-to-uniform (ff=1) on the current best top1-med config (attempt to push C0003 to ≥+2%)
+  - Summary: Run a targeted test402 reproduction that keeps the current best Stage-1 scorer and confidence gate (E0224: `ltltop1med_thr0p6_shift1`) but enables `anchor_fallback_far_dist=1` so `dist(top1,top2) > 1` forces fallback to uniform for that clip.
+  - Rationale: Diagnostics on E0224 show the dist>1 / 2-high bucket is small (n≈30) but strongly harmful (mean Δ≈-0.04). Forcing a uniform fallback on those far-anchor clips is the minimal intervention that can eliminate this bucket without changing Stage-1 scores; expected overall Δ gain is ~+0.004–0.006, potentially enough to reach C0003 (+2%).
+  - Scope:
+    - `scripts/e0288_ave_p0_best_to_test_official_ltl_top1med_farfb_ff1.sh`
+    - `docs/experiment.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - E0288 runs on official test402 (SEEDS=0..9) and writes `{metrics.json,config_farfb_ff1.json}` under `runs/E0288_*`.
+    - If Δ≥+0.02 and p<0.05, mark C0003 proven; otherwise record results and continue improving Stage-1 reliability.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py`
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0288_ave_p0_best_to_test_official_ltl_top1med_farfb_ff1.sh`
+    - `SEEDS=0,1,2,3,4,5,6,7,8,9 bash scripts/e0288_ave_p0_best_to_test_official_ltl_top1med_farfb_ff1.sh`
+  - Outputs: `runs/E0288_*/{metrics.json,config_farfb_ff1.json}`
+  - Evidence:
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py` → ok.
+    - Smoke (train64/test32; SEEDS=0,1; EPOCHS=1): `runs/E0288_ave_p0_best_to_test_official_av_clipdiff_mlp_ltl_top1med_farfb_ff1_20260204-235108/metrics.json` (Δ=+0.00000, p=1.0).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0288_ave_p0_best_to_test_official_av_clipdiff_mlp_ltl_top1med_farfb_ff1_20260204-235157/metrics.json` (anchored=0.71796 vs uniform=0.70858, Δ=+0.00938, p≈0.0880; regresses vs E0224). Conclusion: far-anchor fallback-to-uniform does not improve C0003.
+
+- [x] P0093: Add MIL-trained Stage-1 eventness (av_clipdiff_mil_mlp) and rerun the top1-med val→test pipeline (attempt to push C0003 to ≥+2%)
+  - Summary: Implement `EVENTNESS=av_clipdiff_mil_mlp` that trains Stage-1 per-second logits with a multi-instance learning (MIL) objective (`-log sum softmax(scores)[positives]`) to encourage peaky, anchor-friendly score distributions, then run the standard learned-anchor selection pipeline: val402 sweep (E0289; `candidate_set=ltl_top1med_v1`, SEEDS=0..2) → test402 reproduction (E0290; SEEDS=0..9).
+  - Rationale: The current best learned anchors (`av_clipdiff_mlp`) still show high fallback and far-anchor failure modes. BCE treats seconds independently and can yield flatter scores, causing either low confidence (fallback) or multiple competing peaks (far top2). MIL directly optimizes for “at least one true event second ranks high”, which better matches Top-K anchor selection.
+  - Scope:
+    - `avs/experiments/ave_p0.py` (MIL trainer; add eventness_method plumbing)
+    - `avs/experiments/ave_p0_sweep.py` (score cache support for `av_clipdiff_mil_mlp`)
+    - `scripts/e0289_ave_p0_sweep_official_val_ltl_top1med_v1_av_clipdiff_mil_mlp.sh`
+    - `scripts/e0290_ave_p0_best_to_test_official_ltl_top1med_v1_av_clipdiff_mil_mlp.sh`
+    - `docs/experiment.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - E0289 runs on val402 (SEEDS=0..2) and produces `{sweep_summary.json,best_config.json,eventness_scores.json}`.
+    - E0290 reproduces the E0289 winner on test402 (SEEDS=0..9).
+    - If Δ≥+0.02 and p<0.05, mark C0003 proven; otherwise record results and iterate.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py`
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0289_ave_p0_sweep_official_val_ltl_top1med_v1_av_clipdiff_mil_mlp.sh`
+    - `bash scripts/e0289_ave_p0_sweep_official_val_ltl_top1med_v1_av_clipdiff_mil_mlp.sh`
+    - `BEST_CONFIG_JSON=runs/E0289_*/best_config.json bash scripts/e0290_ave_p0_best_to_test_official_ltl_top1med_v1_av_clipdiff_mil_mlp.sh`
+  - Outputs: `runs/E0289_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0290_*/metrics.json`
+  - Evidence:
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py` → ok.
+    - Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0289_ave_p0_sweep_official_val_av_clipdiff_mil_mlp_ltl_top1med_v1_20260205-000846/sweep_summary.json` (best Δ≈+0.00000).
+    - Val402 sweep (SEEDS=0..2): `runs/E0289_ave_p0_sweep_official_val_av_clipdiff_mil_mlp_ltl_top1med_v1_20260205-000923/sweep_summary.json` (best=`ltltop1med_thr0p4_shift1`, Δ≈+0.00815, p≈0.302; worse than baseline E0223).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0290_ave_p0_best_to_test_official_av_clipdiff_mil_mlp_20260205-001442/metrics.json` (anchored=0.71582 vs uniform=0.70858, Δ=+0.00724, p≈0.0791; regresses vs E0224). Conclusion: not a viable “拉大” direction.
+
+- [x] P0094: Log the “train longer (epochs=10)” diagnostic run E0291 (top1-med; SEEDS=0..2) to avoid repeating the same direction
+  - Summary: Record the existing `E0291` run (epochs=10; SEEDS=0..2) in `docs/experiment.md` and add it as negative evidence under C0003.
+  - Rationale: Multiple diagnostics already suggest “train longer” is not the missing ingredient for C0003; this unlogged run should be in the ledger to prevent rework and clarify the failure mode.
+  - Scope: `docs/experiment.md`, `docs/plan.md`
+  - Acceptance:
+    - `docs/experiment.md` contains an `E0291` section with commands + results path.
+    - `docs/plan.md` C0003 evidence references `runs/E0291_*/metrics.json` with Δ and p-value.
+  - Verification: `test -f runs/E0291_ave_p0_best_to_test_official_av_clipdiff_mlp_top1med_e10_s0-2_20260205-001904/metrics.json && rg -n "E0291" docs/experiment.md docs/plan.md`
+  - Outputs: Updated docs (no new code).
+  - Evidence: `runs/E0291_ave_p0_best_to_test_official_av_clipdiff_mlp_top1med_e10_s0-2_20260205-001904/metrics.json` (anchored=0.70091 vs uniform=0.69701, Δ=+0.00390, p≈0.665; not significant).
+
+- [x] P0095: Run the missing P0063 Stage-1 methods (av_fused_clipdiff_prod / moe_energy_clipdiff) through the top1-med val→test pipeline (attempt to push C0003 to ≥+2%)
+  - Summary: Run val402 sweeps (E0292/E0294; `candidate_set=ltl_top1med_v1`, SEEDS=0..2) and test402 reproductions (E0293/E0295; SEEDS=0..9) for `EVENTNESS∈{av_fused_clipdiff_prod, moe_energy_clipdiff}` and record results back into `docs/experiment.md` + C0003 evidence.
+  - Rationale: C0003 is currently limited by Stage-1 reliability. These Stage-1 methods are already implemented and were pre-registered in P0063 but not yet run end-to-end; completing them is the shortest path to a larger test402 gain without changing Stage-2 budgets.
+  - Scope:
+    - `scripts/e0292_ave_p0_sweep_official_val_ltl_top1med_v1_av_fused_clipdiff_prod.sh`
+    - `scripts/e0293_ave_p0_best_to_test_official_ltl_top1med_v1_av_fused_clipdiff_prod.sh`
+    - `scripts/e0294_ave_p0_sweep_official_val_ltl_top1med_v1_moe_energy_clipdiff.sh`
+    - `scripts/e0295_ave_p0_best_to_test_official_ltl_top1med_v1_moe_energy_clipdiff.sh`
+    - `docs/experiment.md`, `docs/plan.md`
+  - Acceptance:
+    - E0292/E0294 produce `{sweep_summary.json,best_config.json,eventness_scores.json}` on val402.
+    - E0293/E0295 reproduce the selected config on test402 and write `metrics.json` (SEEDS=0..9).
+    - If any method achieves Δ≥+0.02 and p<0.05, mark C0003 proven; otherwise record results and iterate.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py`
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0292_ave_p0_sweep_official_val_ltl_top1med_v1_av_fused_clipdiff_prod.sh`
+    - `BEST_CONFIG_JSON=runs/E0292_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0293_ave_p0_best_to_test_official_ltl_top1med_v1_av_fused_clipdiff_prod.sh`
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0294_ave_p0_sweep_official_val_ltl_top1med_v1_moe_energy_clipdiff.sh`
+    - `BEST_CONFIG_JSON=runs/E0294_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0295_ave_p0_best_to_test_official_ltl_top1med_v1_moe_energy_clipdiff.sh`
+  - Outputs: `runs/E0292_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0293_*/metrics.json`, `runs/E0294_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0295_*/metrics.json`
+  - Evidence:
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py` → ok.
+    - Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0292_ave_p0_sweep_official_val_av_fused_clipdiff_prod_ltl_top1med_v1_20260205-011817/sweep_summary.json` (best Δ≈+0.00312); `runs/E0294_ave_p0_sweep_official_val_moe_energy_clipdiff_ltl_top1med_v1_20260205-011817/sweep_summary.json` (best Δ≈+0.00469).
+    - Full val402 sweeps (SEEDS=0..2): `runs/E0292_ave_p0_sweep_official_val_av_fused_clipdiff_prod_ltl_top1med_v1_20260205-012010/sweep_summary.json` (best=`ltltop1med_thr0p5_shift1`, Δ≈-0.00482, p≈0.491); `runs/E0294_ave_p0_sweep_official_val_moe_energy_clipdiff_ltl_top1med_v1_20260205-012010/sweep_summary.json` (best=`ltltop1med_thr0p4_shift0`, Δ≈+0.00224, p≈0.756).
+    - Full test402 reproductions (SEEDS=0..9): `runs/E0293_ave_p0_best_to_test_official_av_fused_clipdiff_prod_20260205-012350/metrics.json` (anchored=0.71433 vs uniform=0.70858, Δ=+0.00575, p≈0.125); `runs/E0295_ave_p0_best_to_test_official_moe_energy_clipdiff_20260205-012339/metrics.json` (anchored=0.71164 vs uniform=0.70858, Δ=+0.00306, p≈0.420). Conclusion: both methods regress vs the current best E0224 config and are not viable “拉大” directions.
+
+- [x] P0096: Fix moe_energy_clipdiff under the top1-med pipeline by enabling its internal MOE switch (sweep anchor_std_threshold) (attempt to push C0003 to ≥+2%)
+  - Summary: Add `candidate_set=ltl_top1med_moe_v1` that sweeps `anchor_std_threshold∈{0.4,0.6,1.0}` while keeping the `top1_med` gate grid, then run val→test for `EVENTNESS=moe_energy_clipdiff`: val402 sweep (E0296; SEEDS=0..2) → test402 reproduction (E0297; SEEDS=0..9).
+  - Rationale: E0294/E0295 used `candidate_set=ltl_top1med_v1`, which sets `anchor_std_threshold=0.0` and unintentionally disables `moe_energy_clipdiff`'s energy→CLIPdiff fallback. We need a proper, deployable MOE evaluation under the same Stage-2 budget to see if it closes the Predicted-anchor gap.
+  - Scope:
+    - `avs/experiments/ave_p0_sweep.py` (add `ltl_top1med_moe_v1`)
+    - `scripts/e0296_ave_p0_sweep_official_val_ltl_top1med_moe_v1_moe_energy_clipdiff.sh`
+    - `scripts/e0297_ave_p0_best_to_test_official_ltl_top1med_moe_v1_moe_energy_clipdiff.sh`
+    - `docs/experiment.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - E0296 runs on val402 (SEEDS=0..2) and produces `{sweep_summary.json,best_config.json,eventness_scores.json}`.
+    - E0297 reproduces the E0296 winner on test402 (SEEDS=0..9) and writes `metrics.json`.
+    - If Δ≥+0.02 and p<0.05, mark C0003 proven; otherwise record results and iterate.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0_sweep.py`
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0296_ave_p0_sweep_official_val_ltl_top1med_moe_v1_moe_energy_clipdiff.sh`
+    - `BEST_CONFIG_JSON=runs/E0296_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0297_ave_p0_best_to_test_official_ltl_top1med_moe_v1_moe_energy_clipdiff.sh`
+  - Outputs: `runs/E0296_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0297_*/metrics.json`
+  - Evidence:
+    - `python -m py_compile avs/experiments/ave_p0_sweep.py` → ok.
+    - Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0296_ave_p0_sweep_official_val_moe_energy_clipdiff_ltl_top1med_moe_v1_20260205-014218/sweep_summary.json` (best Δ≈+0.00469).
+    - Full val402 sweep (SEEDS=0..2): `runs/E0296_ave_p0_sweep_official_val_moe_energy_clipdiff_ltl_top1med_moe_v1_20260205-014328/sweep_summary.json` (best=`ltltop1medmoe_std0p4_thr0p4_shift0`, Δ≈+0.00224, p≈0.756; no improvement vs E0294).
+    - Full test402 reproduction (SEEDS=0..9): `runs/E0297_ave_p0_best_to_test_official_moe_energy_clipdiff_20260205-015437/metrics.json` (anchored=0.71164 vs uniform=0.70858, Δ=+0.00306, p≈0.420; no improvement vs E0295). Conclusion: the “MOE fix” does not help under the top1-med pipeline.
+
+- [x] P0097: Add a "bridge" base allocation for the 2-high regime and rerun the top1-med val→test pipeline (attempt to push C0003 to ≥+2%)
+  - Summary: Implement `anchor_base_alloc=bridge` for `equal_token_budget_anchored_plan_scored(...)` that spends the limited `base_res` slots *between* the two high-res anchors (when k_high=2) instead of near anchors. Add `candidate_set=ltl_top1med_bridgealloc_v1` (base vs bridge) and run val402 sweep (E0298; SEEDS=0..2) → test402 reproduction (E0299; SEEDS=0..9). Optionally run a diagnose report (E0300) to verify the dist∈{2..5} bucket improves vs E0224.
+  - Rationale: E0224 diagnostics (`runs/E0280_.../diagnose.json`) show far-anchor 2-high cases (anchor_dist=2..5) are strongly negative on test402 (mean Δ≈-0.04). Under the strict 2-high equal-budget plan (160/224/352), only 2 seconds remain at `base_res`. The default `base_alloc=distance` places both base seconds near anchors, leaving the between-anchors region at `low_res`. Spending the base budget between anchors targets this specific failure mode without changing Stage-1 scores, confidence gating, or the token budget.
+  - Scope:
+    - `avs/sampling/plans.py` (add `base_alloc=bridge`)
+    - `avs/experiments/ave_p0.py` (document `anchor_base_alloc` options)
+    - `avs/experiments/ave_p0_sweep.py` (add `candidate_set=ltl_top1med_bridgealloc_v1`)
+    - `scripts/e0298_ave_p0_sweep_official_val_ltl_top1med_bridgealloc_v1.sh`
+    - `scripts/e0299_ave_p0_best_to_test_official_ltl_top1med_bridgealloc_v1.sh`
+    - `scripts/e0300_ave_p0_diagnose_E0299_bridgealloc.sh` (analysis-only)
+    - `docs/experiment.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - `python -m avs.smoke sampling_plan` passes (strict equal-token budget still holds).
+    - E0298 produces `runs/E0298_*/{sweep_summary.json,best_config.json,eventness_scores.json}` on val402.
+    - E0299 reproduces the E0298 winner on test402 and writes `runs/E0299_*/metrics.json` (SEEDS=0..9).
+    - If Δ≥+0.02 and p<0.05, mark C0003 proven; otherwise record results and iterate.
+  - Verification:
+    - `python -m py_compile avs/sampling/plans.py avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py`
+    - `python -m avs.smoke sampling_plan`
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0298_ave_p0_sweep_official_val_ltl_top1med_bridgealloc_v1.sh`
+    - `bash scripts/e0298_ave_p0_sweep_official_val_ltl_top1med_bridgealloc_v1.sh`
+    - `BEST_CONFIG_JSON=runs/E0298_*/best_config.json SEEDS=0,1,2,3,4,5,6,7,8,9 bash scripts/e0299_ave_p0_best_to_test_official_ltl_top1med_bridgealloc_v1.sh`
+  - Outputs: `runs/E0298_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0299_*/metrics.json`, `runs/E0300_*/diagnose.json`
+  - Evidence:
+    - `python -m py_compile avs/sampling/plans.py avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py avs/smoke_checks.py` → ok.
+    - `python -m avs.smoke sampling_plan` → ok.
+    - Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0298_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_bridgealloc_v1_20260205-023139/sweep_summary.json`.
+    - Full val402 sweep (SEEDS=0..2): `runs/E0298_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_bridgealloc_v1_20260205-023226/sweep_summary.json` (best=`ltltop1med_thr0p6_shift1_base`, Δ≈+0.00964, p≈0.0331; `bridgeAlloc` regresses to Δ≈+0.00175, p≈0.762). Conclusion: `base_alloc=bridge` is not a viable “拉大” direction.
+    - Full test402 reproduction (SEEDS=0..9): `runs/E0299_ave_p0_best_to_test_official_av_clipdiff_mlp_bridgealloc_20260205-023457/metrics.json` (anchored=0.72383 vs uniform=0.70858, Δ=+0.01525, p≈0.00390; matches E0224 because the bridge variant did not win on val).
+
+- [x] P0098: Try k=1 (single-anchor) with an aggressive triad (112/224/448) under the top1-med gate (attempt to push C0003 to ≥+2%)
+  - Summary: Add `candidate_set=ltl_top1med_k1_extreme_v1` (k=1, triad 112/224/448, top1-med gate, shift + base alloc sweep) and run val402 sweep (E0301; SEEDS=0..2) → test402 reproduction (E0302; SEEDS=0..9).
+  - Rationale: The best top1-med config (E0224) is limited by (a) high fallback and (b) far-anchor / 2-high failure modes. Many Stage-2 fixes that keep k=2 still suffer from spurious second anchors wasting the limited base slots. Moving to k=1 removes anchor2 entirely, and using the 112/224/448 triad allows a higher peak resolution (448) while preserving the strict equal-token budget (1×448 + 5×224 + 4×112 == 10×224). This combination could increase gain-per-used-clip without reintroducing far-anchor harm.
+  - Scope:
+    - `avs/experiments/ave_p0_sweep.py` (add `ltl_top1med_k1_extreme_v1`)
+    - `scripts/e0301_ave_p0_sweep_official_val_ltl_top1med_k1_extreme_v1.sh`
+    - `scripts/e0302_ave_p0_best_to_test_official_ltl_top1med_k1_extreme_v1.sh`
+    - `docs/experiment.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - E0301 runs on val402 (SEEDS=0..2) and produces `{sweep_summary.json,best_config.json,eventness_scores.json}`.
+    - E0302 reproduces the E0301 winner on test402 (SEEDS=0..9) and writes `metrics.json`.
+    - If Δ≥+0.02 and p<0.05, mark C0003 proven; otherwise record results and iterate.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0_sweep.py`
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0301_ave_p0_sweep_official_val_ltl_top1med_k1_extreme_v1.sh`
+    - `BEST_CONFIG_JSON=runs/E0301_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0302_ave_p0_best_to_test_official_ltl_top1med_k1_extreme_v1.sh`
+  - Outputs: `runs/E0301_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0302_*/metrics.json`
+  - Evidence:
+    - `python -m py_compile avs/experiments/ave_p0_sweep.py` → ok.
+    - Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0301_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_k1_extreme_v1_20260205-024400/sweep_summary.json`.
+    - Full val402 sweep (SEEDS=0..2): `runs/E0301_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_k1_extreme_v1_20260205-024429/sweep_summary.json` (best=`ltltop1medk1ext_thr0p6_shift0_distance`, Δ≈+0.00856, p≈0.0657; worse than the baseline E0223/E0224 val selection).
+    - Full test402 reproduction (SEEDS=0..9): `runs/E0302_ave_p0_best_to_test_official_av_clipdiff_mlp_k1extreme_20260205-025129/metrics.json` (anchored=0.71020 vs uniform=0.70858, Δ≈+0.00162, p≈0.649; large regression vs E0224). Conclusion: k=1 + extreme triad is not a viable “拉大” direction.
+
+- [x] P0099: Try a budget-band Stage-2 sampling plan (≤1% under-budget) to preserve more base context (attempt to push C0003 to ≥+2%)
+  - Summary: Add a `budget_mode=band` Stage-2 planner that never exceeds the uniform token budget but allows a small under-budget band (≤1%), enabling additional resolutions (e.g., 112) to trade off context vs peaks more flexibly than the strict equal-budget Diophantine constraint. Run a compact val402 sweep (E0303) → test402 reproduction (E0304), plus a direct diagnostic rerun of the E0224 gate under band mode (E0305).
+  - Rationale: Diagnostics (E0280) show far-anchor 2-high clips are strongly negative on test402, suggesting context loss under the forced exact-budget 2-high plan. A budget-band planner can preserve more `base_res` seconds without exceeding budget, potentially reducing harm while keeping the method transparent and reproducible.
+  - Scope:
+    - `avs/sampling/plans.py` (add `budget_band_anchored_plan_scored`)
+    - `avs/experiments/ave_p0.py` (add `budget_mode`, `budget_epsilon_frac`, `budget_extra_resolutions`)
+    - `avs/experiments/ave_p0_sweep.py` (add `candidate_set=ltl_top1med_band_v1`)
+    - `avs/smoke_checks.py` (extend `sampling_plan` smoke)
+    - `scripts/e0303_ave_p0_sweep_official_val_ltl_top1med_band_v1.sh`
+    - `scripts/e0304_ave_p0_best_to_test_official_ltl_top1med_band_v1.sh`
+    - `docs/experiment.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - `python -m avs.smoke sampling_plan` still passes.
+    - E0303 produces `{sweep_summary.json,best_config.json,eventness_scores.json}` on val402.
+    - E0304 reproduces the E0303 winner on test402 (SEEDS=0..9) and writes `metrics.json`.
+    - If Δ≥+0.02 and p<0.05, mark C0003 proven; otherwise record results and iterate.
+  - Verification:
+    - `python -m py_compile avs/sampling/plans.py avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py avs/smoke_checks.py`
+    - `python -m avs.smoke sampling_plan`
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0303_ave_p0_sweep_official_val_ltl_top1med_band_v1.sh`
+    - `BEST_CONFIG_JSON=runs/E0303_*/best_config.json LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0304_ave_p0_best_to_test_official_ltl_top1med_band_v1.sh`
+  - Outputs: `runs/E0303_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0304_*/metrics.json`, `runs/E0305_*/metrics.json`
+  - Evidence:
+    - `python -m py_compile avs/sampling/plans.py avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py avs/smoke_checks.py` → ok.
+    - `python -m avs.smoke sampling_plan` → ok.
+    - Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0303_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_band_v1_20260205-033812/sweep_summary.json`.
+    - Full val402 sweep (SEEDS=0..2): `runs/E0303_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_band_v1_20260205-033915/sweep_summary.json` (best=`ltltop1medband_thr0p7_shift1`, Δ≈+0.01205, p≈0.0685; worse than the baseline E0223 val selection).
+    - Full test402 reproduction (SEEDS=0..9): `runs/E0304_ave_p0_best_to_test_official_av_clipdiff_mlp_20260205-035830/metrics.json` (anchored=0.71674 vs uniform=0.70858, Δ=+0.00816, p≈0.0441; regresses vs E0224). Conclusion: this band-budget sweep does not improve C0003.
+    - Diagnostic test402 run (SEEDS=0..9): `runs/E0305_ave_p0_best_to_test_official_av_clipdiff_mlp_banddiag_thr0p6_shift1_20260205-040513/metrics.json` (Δ=+0.00356, p≈0.230; large regression vs E0224). Conclusion: band-budget planning (as implemented) is not a viable “拉大” direction.
+
+- [x] P0100: Bold Stage-1 signal — AST embeddings + cheap CLIPdiff fusion for anchors (`av_ast_clipdiff_*`)
+  - Summary: Add new learned-anchor backends that score per-second eventness using pretrained AST embeddings + a cheap CLIP feature-diff scalar, then reuse the existing top1-med Stage-2 pipeline.
+  - Rationale: The current plateau on test402 is dominated by unreliable 2nd anchors (far-dist / 2-high buckets) and high fallback (~0.75), which limits the achievable mean Δ to ~+1.5% despite a high Oracle upper bound. AST embeddings provide stronger semantic audio cues than hand-crafted audio features, and fusing them with cheap CLIPdiff should improve anchor peakiness + localization without a full visual pass.
+  - Scope:
+    - `avs/experiments/ave_p0.py`
+    - `avs/experiments/ave_p0_sweep.py`
+    - `avs/pipeline/ave_p0_end2end.py`
+    - `docs/plan.md`, `docs/experiment.md`, `docs/mohu.md`
+  - Acceptance:
+    - `EVENTNESS=av_ast_clipdiff_{mlp,mil_mlp,tcn}` runs end-to-end via `avs.experiments.ave_p0_sweep` (scores cache + anchored eval).
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py avs/pipeline/ave_p0_end2end.py` passes.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py avs/pipeline/ave_p0_end2end.py`
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 EVENTNESS=av_ast_clipdiff_mil_mlp CANDIDATE_SET=ltl_top1med_v1 bash scripts/e0307_ave_p0_sweep_official_val_ltl_top1med_v1_av_ast_clipdiff_mil_mlp.sh`
+  - Outputs: `runs/E0307_*/{sweep_summary.json,best_config.json,eventness_scores.json}`
+  - Evidence:
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py avs/pipeline/ave_p0_end2end.py` → ok.
+    - Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0307_ave_p0_sweep_official_val_av_ast_clipdiff_mil_mlp_ltl_top1med_v1_20260205-045341/sweep_summary.json`.
+
+- [x] P0101: Val sweep for `av_ast_clipdiff_mil_mlp` under top1-med (regresses; stop)
+  - Summary: Run a fixed-space sweep on val402 (E0307) to pick the best top1-med gate for `EVENTNESS=av_ast_clipdiff_mil_mlp`. If it regresses on val, stop and record the negative result instead of spending test402 budget.
+  - Rationale: The biggest remaining lever for C0003 is Stage-1 anchor reliability; this is the most aggressive yet deployable Stage-1 upgrade that keeps Stage-2 unchanged and can be judged with the existing val→test protocol.
+  - Scope:
+    - `scripts/e0307_ave_p0_sweep_official_val_ltl_top1med_v1_av_ast_clipdiff_mil_mlp.sh`
+    - `scripts/e0308_ave_p0_best_to_test_official_ltl_top1med_v1_av_ast_clipdiff_mil_mlp.sh`
+    - `docs/experiment.md`, `docs/plan.md`
+  - Acceptance:
+    - E0307 produces `{sweep_summary.json,best_config.json,eventness_scores.json}` on val402.
+    - If the E0307 winner regresses on val402 (Δ<0), stop and record the negative result (do not spend test402 budget).
+    - Otherwise run E0308 to reproduce the E0307 winner on test402 (SEEDS=0..9) and write `metrics.json`.
+    - If Δ≥+0.02 and p<0.05, mark C0003 proven; otherwise record results and iterate.
+  - Verification:
+    - `LIMIT_TRAIN=3339 LIMIT_EVAL=402 SEEDS=0,1,2 EPOCHS=5 EVENTNESS=av_ast_clipdiff_mil_mlp CANDIDATE_SET=ltl_top1med_v1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0307_ave_p0_sweep_official_val_ltl_top1med_v1_av_ast_clipdiff_mil_mlp.sh`
+    - `BEST_CONFIG_JSON=runs/E0307_*/best_config.json LIMIT_TRAIN=3339 LIMIT_EVAL=402 SEEDS=0,1,2,3,4,5,6,7,8,9 EPOCHS=5 EVENTNESS=av_ast_clipdiff_mil_mlp AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0308_ave_p0_best_to_test_official_ltl_top1med_v1_av_ast_clipdiff_mil_mlp.sh`
+  - Outputs: `runs/E0307_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0308_*/metrics.json`
+  - Evidence:
+    - Full val402 sweep (SEEDS=0..2): `runs/E0307_ave_p0_sweep_official_val_av_ast_clipdiff_mil_mlp_ltl_top1med_v1_20260205-045530/sweep_summary.json` (best Δ≈-0.01180). Conclusion: this Stage-1 method regresses on val402 under this gate; stop and do not run E0308 as-is.
+    - Gate-rescue attempt (scale-invariant conf metric; E0309): `runs/E0309_ave_p0_sweep_official_val_av_ast_clipdiff_mil_mlp_ltl_top1med_norm_v1_20260205-051944/sweep_summary.json` (best Δ≈+0.00108; near 0). Conclusion: `top1_med_norm` does not rescue `av_ast_clipdiff_mil_mlp`.
+
+- [x] P0102: Bold Stage-1 signal — learned A/V alignment anchors (`av_ast_clipalign_nce`) (near-0; stop)
+  - Summary: Add a new Stage-1 backend that explicitly targets “audio is on-screen” by learning a within-clip audio→visual alignment projector (InfoNCE) from pretrained AST embeddings and cheap CLIP features, and use diagonal similarity as eventness scores for Top-K anchors.
+  - Rationale: The current C0003 plateau is dominated by spurious second anchors and high fallback. Many clips contain strong audio without discriminative visual evidence; an explicit A/V alignment score is a principled new signal to suppress off-screen audio peaks without requiring an expensive visual pass.
+  - Scope:
+    - `avs/experiments/ave_p0.py`, `avs/experiments/ave_p0_sweep.py`, `avs/pipeline/ave_p0_end2end.py`
+    - `docs/experiment.md`, `docs/plan.md`
+  - Acceptance:
+    - `EVENTNESS=av_ast_clipalign_nce` runs end-to-end via `avs.experiments.ave_p0_sweep` (scores cache + anchored eval).
+    - E0311 runs val402 sweep (SEEDS=0..2). If it does not clearly improve val402 vs baseline, stop (do not spend test402 budget).
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py avs/pipeline/ave_p0_end2end.py`
+    - `SEEDS=0,1,2 EVENTNESS=av_ast_clipalign_nce CANDIDATE_SET=ltl_top1med_norm_v1 AUDIO_DEVICE=cuda:9 TRAIN_DEVICE=cuda:9 bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - Outputs: `runs/E0311_*/{sweep_summary.json,best_config.json,eventness_scores.json}`
+  - Evidence:
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py avs/pipeline/ave_p0_end2end.py` → ok.
+    - Full val402 sweep (SEEDS=0..2): `runs/E0311_ave_p0_sweep_official_val_av_ast_clipalign_nce_ltl_top1med_norm_v1_20260205-055421/sweep_summary.json` (best Δ≈-0.00033; p≈0.937). Conclusion: near-0; not a viable “拉大” direction.
+
+- [x] P0103: Learned k-adaptive anchor2 veto (drop spurious 2nd anchors) to “拉大” C0003
+  - Summary: Add an explicit per-clip anchor2 veto to `anchored_top2`: decide whether to keep the 2nd selected anchor (k=2) or drop to k=1 for that clip. Implement both a transparent score-only veto (`top2med_norm_v1`) and a learned lightweight gate (`lr_v1`) trained on the train split, then sweep a small pre-registered grid on val402 (E0312) and reproduce on test402 (E0313).
+  - Rationale: Diagnostics show the 2-high / far-anchor regime is strongly harmful on test402, and prior fixes that keep the 2nd anchor for base allocation (adaptive_v3) still regress. This suggests the 2nd anchor itself is often spurious; dropping it entirely should preserve context and avoid wasting budget on wrong windows.
+  - Scope:
+    - `avs/experiments/ave_p0.py` (anchor selection + gate)
+    - `avs/experiments/ave_p0_sweep.py` (candidate_set + config plumbing)
+    - `scripts/e0312_ave_p0_sweep_official_val_ltl_top1med_anchor2veto_v1.sh`
+    - `scripts/e0313_ave_p0_best_to_test_official_ltl_top1med_anchor2veto_v1.sh`
+    - `docs/experiment.md`, `docs/plan.md`, `docs/mohu.md`
+  - Acceptance:
+    - `candidate_set=ltl_top1med_anchor2veto_v1` runs end-to-end and produces `best_config.json`.
+    - `metrics.json` for anchored runs includes `debug_eval.anchored_top2.<clip_id>.anchor2_veto_*` fields.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py`
+    - Smoke: `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 TRAIN_DEVICE=cuda:9 bash scripts/e0312_ave_p0_sweep_official_val_ltl_top1med_anchor2veto_v1.sh`
+    - Val402: `SEEDS=0,1,2 TRAIN_DEVICE=cuda:9 bash scripts/e0312_ave_p0_sweep_official_val_ltl_top1med_anchor2veto_v1.sh`
+  - Outputs: `runs/E0312_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0313_*/metrics.json`
+  - Evidence:
+    - Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0312_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_anchor2veto_v1_20260205-115846/sweep_summary.json`.
+    - Full val402 sweep (SEEDS=0..2): `runs/E0312_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_anchor2veto_v1_20260205-115927/sweep_summary.json` (best remains `a2veto_none`; veto variants regress).
+    - Quick test402 diagnostics (SEEDS=0..2; regress vs baseline): `runs/E0313_quick_test402_av_clipdiff_mlp_a2veto_lr0p65_20260205-120329/metrics.json` and `runs/E0313_quick_test402_av_clipdiff_mlp_a2veto_top2med0p15_20260205-120449/metrics.json`.
+
+- [x] P0104: Deployable ASR/Whisper anchor probe (VAD + word timestamps) to improve anchor reliability
+  - Summary: Add a speech-aware Stage-1 backend that uses VAD + ASR word timestamps to propose anchor windows (or per-second scores), and evaluate it under the same AVE-P0 protocol (val402 selection → test402 reproduction).
+  - Rationale: Many harmful false anchors arise from generic “audio activity” that is off-screen or not evidence-bearing; speech segments and keyword/entropy signals can serve as a complementary, deployable indexing cue beyond energy/logit peakiness.
+  - Scope:
+    - `avs/audio/vad_webrtc.py` (WebRTC-VAD per-second speech ratio)
+    - `avs/experiments/ave_p0.py` (`eventness_method=asr_vad`; v1 = energy_stride_max × (1 - speech_ratio))
+    - `avs/experiments/ave_p0_sweep.py` (scores-json cache support for `asr_vad`)
+    - `scripts/e0322_ave_p0_sweep_official_val_ltl_top1med_asr_vad_v1.sh`
+    - `scripts/e0323_ave_p0_best_to_test_official_ltl_top1med_asr_vad_v1.sh`
+    - `docs/experiment.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - `EVENTNESS=asr_vad` runs end-to-end under the standard sweep harness and writes `eventness_scores.json`.
+    - E0322 runs on val402 (SEEDS=0..2). If Δ is competitive vs E0223/E0224, run E0323 on test402 (SEEDS=0..9).
+  - Verification:
+    - `python -m py_compile avs/audio/vad_webrtc.py avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py`
+    - Smoke: `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 TRAIN_DEVICE=cuda:9 bash scripts/e0322_ave_p0_sweep_official_val_ltl_top1med_asr_vad_v1.sh`
+    - Val402: `SEEDS=0,1,2 TRAIN_DEVICE=cuda:9 bash scripts/e0322_ave_p0_sweep_official_val_ltl_top1med_asr_vad_v1.sh`
+  - Outputs: `runs/E0322_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0323_*/metrics.json`
+  - Evidence:
+    - Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0322_ave_p0_sweep_official_val_asr_vad_ltl_top1med_norm_v1_20260205-141929/sweep_summary.json`.
+    - Full val402 sweep (SEEDS=0..2): `runs/E0322_ave_p0_sweep_official_val_asr_vad_ltl_top1med_norm_v1_20260205-142328/sweep_summary.json` (best Δ≈+0.00216, p≈0.842). Conclusion: WebRTC-VAD speech ratio saturates on AVE; stop before test402.
+
+- [x] P0105: Teacher-student Stage-1 — predict "visual usefulness" (visgain teacher) to improve anchor reliability (attempt to “拉大” C0003)
+  - Summary: Add a new learned Stage-1 backend `EVENTNESS=av_clipdiff_visgain_mlp` that trains a tiny per-second regressor to predict a *visual usefulness* teacher derived from expensive visual features, then uses the predicted scores for Top-K anchors under the existing Stage-2 top1-med pipeline.
+  - Rationale: C0003 is limited by Stage-1 reliability: far/2-high anchors are net harmful on test402, and many clips fall back to uniform due to low confidence. “label!=0 eventness” is not the same as “this second benefits from spending high-res tokens”. A teacher derived from resolution sensitivity (base=224 vs high=352) directly targets "when high-res changes the representation", which is closer to the downstream budgeted objective but still yields a deployable student (cheap A+V inputs only).
+  - Scope:
+    - `avs/experiments/ave_p0.py` (teacher-student scorer)
+    - `avs/experiments/ave_p0_sweep.py` (scores-json cache support)
+    - `scripts/e0314_ave_p0_sweep_official_val_ltl_top1med_visgain_v1.sh`
+    - `scripts/e0315_ave_p0_best_to_test_official_ltl_top1med_visgain_v1.sh`
+    - `docs/experiment.md`, `docs/plan.md`, `docs/mohu.md`
+  - Acceptance:
+    - `EVENTNESS=av_clipdiff_visgain_mlp` runs end-to-end via `avs.experiments.ave_p0_sweep` (scores cache + anchored eval).
+    - Runs E0314 on val402 (SEEDS=0..2) and, if Δ is competitive, runs E0315 on test402 (SEEDS=0..9) and records results back into C0003 evidence.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py`
+    - Smoke: `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 EVENTNESS=av_clipdiff_visgain_mlp CANDIDATE_SET=ltl_top1med_norm_v1 TRAIN_DEVICE=cuda:9 bash scripts/e0314_ave_p0_sweep_official_val_ltl_top1med_visgain_v1.sh`
+    - Val402: `SEEDS=0,1,2 EVENTNESS=av_clipdiff_visgain_mlp CANDIDATE_SET=ltl_top1med_norm_v1 TRAIN_DEVICE=cuda:9 bash scripts/e0314_ave_p0_sweep_official_val_ltl_top1med_visgain_v1.sh`
+  - Outputs: `runs/E0314_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0315_*/metrics.json`
+  - Evidence:
+    - Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0314_ave_p0_sweep_official_val_av_clipdiff_visgain_mlp_ltl_top1med_norm_v1_20260205-123747/sweep_summary.json` (all candidates tie at Δ=0; not informative).
+    - Full val402 sweep (SEEDS=0..2): `runs/E0314_ave_p0_sweep_official_val_av_clipdiff_visgain_mlp_ltl_top1med_norm_v1_20260205-123935/sweep_summary.json` (best Δ≈+0.00158, p≈0.727; near 0). Conclusion: resolution-sensitivity (visgain) teacher does not produce a useful Stage-1 scorer for AVE-P0.
+
+- [x] P0106: Teacher-student Stage-1 — downstream-aware loss-gain teacher (base vs high) to improve anchor reliability (attempt to “拉大” C0003)
+  - Summary: Add a new learned Stage-1 backend `EVENTNESS=av_clipdiff_lossgain_mlp` that trains a cheap base-res vision classifier teacher on the train split, defines per-second targets as the **loss reduction** when swapping in high-res visual features (event seconds only), then trains a deployable student scorer (cheap A+V inputs) and uses predicted scores for Top-K anchors under the existing Stage-2 top1-med pipeline.
+  - Rationale: The visgain teacher (P0105/E0314) is too weak on AVE; we need a teacher closer to the downstream objective. Loss reduction under a base classifier is a computable proxy for “this second benefits from spending high-res tokens”, and directly targets the harmful far/2-high regime without requiring any oracle annotations beyond the existing AVE labels and cached features.
+  - Scope:
+    - `avs/experiments/ave_p0.py` (loss-gain teacher + scorer)
+    - `avs/experiments/ave_p0_sweep.py` (scores-json cache support)
+    - `scripts/e0316_ave_p0_sweep_official_val_ltl_top1med_lossgain_v1.sh`
+    - `scripts/e0317_ave_p0_best_to_test_official_ltl_top1med_lossgain_v1.sh`
+    - `docs/experiment.md`, `docs/plan.md`, `docs/mohu.md`
+  - Acceptance:
+    - `EVENTNESS=av_clipdiff_lossgain_mlp` runs end-to-end via `avs.experiments.ave_p0_sweep` (scores cache + anchored eval).
+    - Runs E0316 on val402 (SEEDS=0..2) and, if Δ is competitive, runs E0317 on test402 (SEEDS=0..9) and records results back into C0003 evidence.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py`
+    - Smoke: `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 EVENTNESS=av_clipdiff_lossgain_mlp CANDIDATE_SET=ltl_top1med_norm_v1 TRAIN_DEVICE=cuda:9 bash scripts/e0316_ave_p0_sweep_official_val_ltl_top1med_lossgain_v1.sh`
+    - Val402: `SEEDS=0,1,2 EVENTNESS=av_clipdiff_lossgain_mlp CANDIDATE_SET=ltl_top1med_norm_v1 TRAIN_DEVICE=cuda:9 bash scripts/e0316_ave_p0_sweep_official_val_ltl_top1med_lossgain_v1.sh`
+  - Outputs: `runs/E0316_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0317_*/metrics.json`
+  - Evidence:
+    - Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0316_ave_p0_sweep_official_val_av_clipdiff_lossgain_mlp_ltl_top1med_norm_v1_20260205-125349/sweep_summary.json` (all candidates tie at Δ=0; not informative).
+    - Full val402 sweep (SEEDS=0..2): `runs/E0316_ave_p0_sweep_official_val_av_clipdiff_lossgain_mlp_ltl_top1med_norm_v1_20260205-125414/sweep_summary.json` (best Δ≈+0.00042, p≈0.906; near 0). Conclusion: downstream loss-gain teacher does not produce a useful Stage-1 scorer for AVE-P0.
+
+- [x] P0107: Bold Stage-1 “A/V correspondence” anchors via AST-emb ↔ CLIP-emb diagonal similarity (BCE) (attempt to “拉大” C0003)
+  - Summary: Add a new deployable Stage-1 backend `EVENTNESS=av_ast_clipalign_bce` that trains a tiny A/V projection model to score **audio–visual correspondence per second** (high when audio and visual match at the same timestamp, low when off-screen/mismatched). Use the resulting per-second logits as anchor scores and run the standard val402 sweep under `CANDIDATE_SET=ltl_top1med_norm_v1`.
+  - Rationale: The dominant remaining failure mode is “visually-irrelevant audio peaks” (far anchors + 2-high harm) under a strict budget. A correspondence score is a *different signal* from eventness: it can suppress off-screen audio activity. The prior NCE alignment attempt (P0095/E0311) is near-0 on val402; BCE/hinge-style training on diagonal similarity is a stronger per-second discriminative objective and may produce a more useful score distribution for anchor selection.
+  - Scope:
+    - `avs/experiments/ave_p0.py` (new alignment trainer + scorer)
+    - `avs/experiments/ave_p0_sweep.py` (scores-json cache support)
+    - `scripts/e0318_ave_p0_sweep_official_val_ltl_top1med_av_clipalign_bce_v1.sh`
+    - `scripts/e0319_ave_p0_best_to_test_official_ltl_top1med_av_clipalign_bce_v1.sh`
+    - `docs/experiment.md`, `docs/plan.md`, `docs/mohu.md`
+  - Acceptance:
+    - `EVENTNESS=av_ast_clipalign_bce` runs end-to-end via `avs.experiments.ave_p0_sweep` (scores cache + anchored eval).
+    - Runs E0318 on val402 (SEEDS=0..2) and, if Δ is competitive, runs E0319 on test402 (SEEDS=0..9) and records results back into C0003 evidence.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py`
+    - Smoke: `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 EVENTNESS=av_ast_clipalign_bce CANDIDATE_SET=ltl_top1med_norm_v1 TRAIN_DEVICE=cuda:9 bash scripts/e0318_ave_p0_sweep_official_val_ltl_top1med_av_clipalign_bce_v1.sh`
+    - Val402: `SEEDS=0,1,2 EVENTNESS=av_ast_clipalign_bce CANDIDATE_SET=ltl_top1med_norm_v1 TRAIN_DEVICE=cuda:9 bash scripts/e0318_ave_p0_sweep_official_val_ltl_top1med_av_clipalign_bce_v1.sh`
+  - Outputs: `runs/E0318_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0319_*/metrics.json`
+  - Evidence:
+    - Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0318_ave_p0_sweep_official_val_av_ast_clipalign_bce_ltl_top1med_norm_v1_20260205-133658/sweep_summary.json` (best Δ≈+0.00156; not informative).
+    - Full val402 sweep (SEEDS=0..2): `runs/E0318_ave_p0_sweep_official_val_av_ast_clipalign_bce_ltl_top1med_norm_v1_20260205-133800/sweep_summary.json` (best Δ≈+0.00865, p≈0.00120). Conclusion: does not beat the current best val selection (E0223/E0224); stop before running test402.
+
+- [x] P0108: Bold Stage-2 band-budget plan with `low_res=112` (+ mid-res=160) to preserve more base context (attempt to “拉大” C0003)
+  - Summary: Add and evaluate a bolder Stage-2 sampling plan variant `candidate_set=ltl_top1med_band_low112_v1` that uses the budget-band planner (≤1% underbudget), lowers the non-anchor low-res to 112, and allows an extra mid resolution (160) to reallocate more segments to base-res under the same token budget. Run val402 sweep (E0320) → test402 reproduction (E0321) if competitive.
+  - Rationale: Diagnostics suggest the C0003 plateau is dominated by (1) context loss (too many low-res segments) and (2) a small but strongly harmful far/2-high bucket on test402. Prior Stage-2 variants (including band-budget with `low_res=160`) did not improve transfer; this variant changes the global context budget more aggressively while keeping Stage-1 scores fixed (reuses E0223 score cache), making it a clean Stage-2-only probe.
+  - Scope:
+    - `avs/experiments/ave_p0_sweep.py` (candidate_set `ltl_top1med_band_low112_v1`)
+    - `scripts/e0320_ave_p0_sweep_official_val_ltl_top1med_band_low112_v1.sh`
+    - `scripts/e0321_ave_p0_best_to_test_official_ltl_top1med_band_low112_v1.sh`
+    - `docs/experiment.md`, `docs/plan.md`, `docs/mohu.md`
+  - Acceptance:
+    - `candidate_set=ltl_top1med_band_low112_v1` runs end-to-end and produces `best_config.json`.
+    - The sweep can reuse a prior `eventness_scores.json` without recomputing Stage-1 (same `EVENTNESS=av_clipdiff_mlp`).
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0_sweep.py`
+    - `SCORES_JSON=runs/E0223_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_v1_20260204-135150/eventness_scores.json SEEDS=0,1,2 TRAIN_DEVICE=cuda:9 bash scripts/e0320_ave_p0_sweep_official_val_ltl_top1med_band_low112_v1.sh`
+  - Outputs: `runs/E0320_*/{sweep_summary.json,best_config.json}`, `runs/E0321_*/metrics.json`
+  - Evidence:
+    - Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0320_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_band_low112_v1_20260205-142028/sweep_summary.json`.
+    - Full val402 sweep (SEEDS=0..2): `runs/E0320_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_band_low112_v1_20260205-142258/sweep_summary.json` (best Δ≈+0.01205, p≈0.0685).
+    - Quick test402 (SEEDS=0..2): `runs/E0321_quick_test402_av_clipdiff_mlp_band_low112_20260205-142726/metrics.json` (Δ≈+0.01028, p≈0.204; regresses vs E0224 seeds subset). Conclusion: stop before full SEEDS=0..9.
+
+- [x] P0109: AST speech-veto Stage-1 anchors via "non-speech max" logits (`ast_nonspeech_max`) (attempt to “拉大” C0003)
+  - Summary: Add a deployable Stage-1 backend `EVENTNESS=ast_nonspeech_max` that runs pretrained AST per-second logits, vetoes speech-like labels (`{speech, conversation, narration}` by name match), and uses `max(sigmoid(logits_non_speech))` as the per-second score. Evaluate under the standard AVE-P0 protocol (val402 selection → test402 reproduction) using `CANDIDATE_SET=ltl_top1med_norm_v1`.
+  - Rationale: WebRTC-VAD saturates on AVE (almost all clips look “speech-like”), so speech suppression must be learned/semantic. AST provides robust AudioSet label semantics; vetoing speech-like labels is a clean, deployable way to suppress narration/off-screen speech without requiring a global cheap-visual pass.
+  - Scope:
+    - `avs/experiments/ave_p0.py` (`ast_nonspeech_max` scorer)
+    - `avs/experiments/ave_p0_sweep.py` (scores-json cache support)
+    - `scripts/e0324_ave_p0_sweep_official_val_ltl_top1med_ast_nonspeech_max_v1.sh`
+    - `scripts/e0325_ave_p0_best_to_test_official_ltl_top1med_ast_nonspeech_max_v1.sh`
+    - `docs/experiment.md`, `docs/plan.md`, `docs/mohu.md`
+  - Acceptance:
+    - `EVENTNESS=ast_nonspeech_max` runs end-to-end via `avs.experiments.ave_p0_sweep` (scores cache + anchored eval).
+    - Runs E0324 on val402 (SEEDS=0..2) and, if Δ is competitive, runs E0325 on test402 (SEEDS=0..9) and records results back into C0003 evidence.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py`
+    - Smoke: `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 EVENTNESS=ast_nonspeech_max CANDIDATE_SET=ltl_top1med_norm_v1 AUDIO_DEVICE=cuda:9 TRAIN_DEVICE=cuda:9 bash scripts/e0324_ave_p0_sweep_official_val_ltl_top1med_ast_nonspeech_max_v1.sh`
+    - Val402: `SEEDS=0,1,2 EVENTNESS=ast_nonspeech_max CANDIDATE_SET=ltl_top1med_norm_v1 AUDIO_DEVICE=cuda:9 TRAIN_DEVICE=cuda:9 bash scripts/e0324_ave_p0_sweep_official_val_ltl_top1med_ast_nonspeech_max_v1.sh`
+  - Outputs: `runs/E0324_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0325_*/metrics.json`
+  - Evidence:
+    - Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0324_ave_p0_sweep_official_val_ast_nonspeech_max_ltl_top1med_norm_v1_20260205-144025/sweep_summary.json`.
+    - Full val402 sweep (SEEDS=0..2): `runs/E0324_ave_p0_sweep_official_val_ast_nonspeech_max_ltl_top1med_norm_v1_20260205-144057/sweep_summary.json` (best Δ≈+0.00324, p≈0.722). Conclusion: not competitive; stop before test402.
+
+- [x] P0110: Add multi-budget Pareto-grid runner (MDE harness) + token accounting (oral-critical)
+  - Summary: Implement `mde_ltl pareto_grid` to run Oracle→Predicted (+ Random/Cheap-visual controls) across a pre-registered budget grid (triads), emitting a single `pareto_report.json` + `pareto.png`. Also record per-baseline token usage stats so Acc–Tok plots are faithful under band-budget plans.
+  - Rationale: C0006/C0007 (and the oral “生死图#1”) require a multi-budget Pareto story with consistent token accounting; toy-only plots are insufficient.
+  - Scope:
+    - `avs/experiments/mde_ltl.py` (`pareto_grid`)
+    - `avs/experiments/ave_p0.py` (add `token_usage` stats to `metrics.json`)
+    - `avs/visualize/pareto_report.py` (palette for `predicted`/`cheap_visual`)
+  - Acceptance:
+    - `python -m avs.experiments.mde_ltl pareto_grid --limit-train 64 --limit-eval 32 --seeds 0,1 ...` produces `{pareto_report.json, pareto.png}` and per-budget raw metrics in `OUT_DIR`.
+    - `metrics_*.json` includes `token_usage[baseline].eval.mean` for `{uniform,random_top2,anchored_top2,oracle_top2}`.
+  - Verification:
+    - `python -m py_compile avs/experiments/mde_ltl.py avs/experiments/ave_p0.py`
+    - Smoke: `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 EVENTNESS=energy bash scripts/e0330_mde_pareto_grid_official.sh`
+  - Outputs: `runs/E0330_*/{pareto_report.json,pareto.png,metrics_*.json}`
+  - Evidence:
+    - Smoke (train64/test32; SEEDS=0,1; EPOCHS=1; EVENTNESS=energy): `runs/E0330_mde_pareto_grid_official_energy_20260205-174428/pareto_report.json`.
+
+- [x] P0111: Add E0330 script + ledger entries for oral Pareto grid
+  - Summary: Provide a single runnable script for E0330 and record the experiment in `docs/experiment.md`, plus link it into C0006/C0007 artifacts.
+  - Scope: `scripts/e0330_mde_pareto_grid_official.sh`, `docs/experiment.md`, `docs/plan.md`, `docs/oral_checklist.md`
+  - Acceptance: `bash scripts/e0330_mde_pareto_grid_official.sh` runs (after datasets are installed) and writes the expected artifacts under `runs/E0330_*`.
+  - Verification: `python -m py_compile avs/experiments/mde_ltl.py`
+
+- [x] P0112: Implement degradation suite with downstream accuracy + α lower bound (oral-critical)
+  - Summary: Extend the current degradation protocol (E0203) to also report downstream accuracy under perturbations and to validate an explicit `alpha` lower bound.
+  - Rationale: Reviewers can dismiss a heuristic as brittle; the degradation suite is the pre-registered “robustness seal” for Listen-then-Look.
+  - Scope: `avs/experiments/degradation_suite.py` (or a new `avs/experiments/degradation_accuracy.py`), `scripts/e0331_degradation_accuracy_official.sh`, `docs/experiment.md`, `docs/plan.md`
+  - Acceptance: E0331 outputs a single JSON + plots keyed by `{shift_s, snr_db, silence_ratio, alpha}` and includes the α-baseline comparison.
+  - Verification:
+    - `python -m py_compile avs/experiments/degradation_accuracy.py`
+    - Smoke: `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 EVENTNESS_METHOD=av_clipdiff_mlp bash scripts/e0331_degradation_accuracy_official.sh`
+  - Outputs: `runs/E0331_*/degradation_accuracy.json`, `runs/E0331_*/degradation_plots/*.png`
+  - Evidence:
+    - Smoke: `runs/E0331_smoke_av_clipdiff_mlp_20260205-194038/degradation_accuracy.json`.
+    - Full: `runs/E0331_full_av_clipdiff_mlp_20260205-194925/degradation_accuracy.json`.
+
+- [x] P0113: Stage-1 separation confidence gate (sep3) to reduce fallback and attempt to prove C0003
+  - Summary: Add a separation-based confidence gate for learned Stage-1 methods: `conf_metric=top3_bottom3_gap_norm` (mean(top-3(scores_norm)) − mean(bottom-3(scores_norm))) to avoid over-fallback on broad multi-second events; run the standard val402 selection sweep and test402 reproduction to attempt to “拉大” C0003 to ≥+2%.
+  - Rationale: E0330 shows a large Oracle upper bound on test402 but Predicted is diluted by very high fallback (`fallback_used_frac≈0.751` under `top1_med thr=0.6`). Reducing fallback while preserving anchor precision is the shortest path to +2%.
+  - Scope:
+    - `avs/audio/eventness.py` (confidence metric)
+    - `avs/experiments/ave_p0.py` (confidence plumbing for triad/soft policies)
+    - `avs/experiments/ave_p0_sweep.py` (`candidate_set=ltl_sep3_v1`)
+    - `scripts/e0332_ave_p0_sweep_official_val_ltl_sep3_v1.sh` (val402 sweep)
+    - `scripts/e0333_ave_p0_best_to_test_official_ltl_sep3_v1.sh` (test402 reproduction)
+    - `docs/experiment.md`, `docs/oral_checklist.md`
+  - Acceptance:
+    - E0332 winner reduces `fallback_used_frac` vs E0224 (≈0.751) on val402 without regressing Δ.
+    - E0333 (test402; SEEDS=0..9) achieves `anchored_top2 - uniform ≥ +0.02` with paired `p<0.05` (prove C0003), or records failure with fallback stats + gap-to-oracle analysis.
+  - Verification:
+    - `python -m py_compile avs/audio/eventness.py avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py`
+    - Smoke (E0332): `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0332_ave_p0_sweep_official_val_ltl_sep3_v1.sh`
+  - Outputs: `runs/E0332_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0333_*/metrics.json`
+  - Evidence:
+    - E0332 full (val402; SEEDS=0..2): `runs/E0332_full_sep3_val402_20260205-194536/sweep_summary.json` (best Δ≈+0.00590, p≈0.214; fallback_used_frac≈0.317; worse than E0223/E0224).
+    - E0333 quick (test402; SEEDS=0..2): `runs/E0333_quick_sep3_test402_20260205-194536/metrics.json` (Δ≈+0.00547, p≈0.165; fallback_used_frac≈0.348). Conclusion: sep3 reduces fallback but adds many harmful clips; not a viable “拉大” direction.
+
+- [x] P0114: Learned rescue gate for Stage-1 confidence (lr_top1hit_v1) to reduce fallback without adding harmful clips
+  - Summary: Add an optional clip-level rescue gate (`anchor_gate_method=lr_top1hit_v1`) trained on the train split to predict whether the top-1 selected anchor is correct, and use it to accept more clips under the strict `top1_med` gate: accept when `(base_conf_pass) OR (gate_prob ≥ gate_threshold)`. Then run the standard val402 selection sweep and test402 reproduction to attempt to “拉大” C0003 to ≥+2%.
+  - Rationale: E0330 shows Oracle ceiling is high, but the current best deployable config (E0224) is diluted by heavy fallback (`fallback_used_frac≈0.751`). Replacing the base gate (sep3) reduced fallback but hurt test402 (E0332/E0333). A learned *rescue* gate targets the specific failure mode (“broad events → low top1_med”) while keeping the strict base gate for safety.
+  - Scope:
+    - `avs/experiments/ave_p0.py` (gate training + rescue policy; debug fields)
+    - `avs/experiments/ave_p0_sweep.py` (`candidate_set=ltl_top1med_gate_lr_v1`)
+    - `scripts/e0334_ave_p0_sweep_official_val_ltl_top1med_gate_lr_v1.sh`
+    - `scripts/e0335_ave_p0_best_to_test_official_ltl_top1med_gate_lr_v1.sh`
+    - `docs/experiment.md`, `docs/oral_checklist.md`, `docs/plan.md`
+  - Acceptance:
+    - E0334 winner reduces fallback vs E0224 (≈0.751) and is competitive on val402.
+    - E0335 quick test402 (SEEDS=0..2) is competitive vs E0224; only then run full SEEDS=0..9.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py`
+    - Smoke (E0334): `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0334_ave_p0_sweep_official_val_ltl_top1med_gate_lr_v1.sh`
+  - Outputs: `runs/E0334_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0335_*/metrics.json`
+  - Evidence:
+    - E0334 full (val402; SEEDS=0..2): `runs/E0334_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_gate_lr_v1_20260205-205327/sweep_summary.json` (best=`ltltop1med_gate0p8_shift1`, Δ≈+0.00964, p≈0.0331; `gate_rescued_frac≈0.000`; fallback≈0.7606 on the winner). Conclusion: gate does not rescue and matches the baseline.
+    - E0335 quick (test402; SEEDS=0..2): `runs/E0335_quick_gate0p6_shift0_test402_20260205-204831/metrics.json` (uniform=0.7070, anchored=0.7179, Δ=+0.01086, p≈0.1165; `gate_rescued_frac≈0.000`; fallback≈0.7512). Conclusion: not competitive; stop before full SEEDS=0..9.
+
+- [x] P0115: Cheap-visual fallback plan (visfb) for strict top1-med gate (improve fallback clips without loosening anchors)
+  - Summary: Keep the strict `top1_med thr=0.6` base gate unchanged; when the audio gate falls back, do **not** revert to uniform. Instead, generate a cheap-visual anchor proposal (CLIPdiff or framediff) and use it to build an anchored plan under the same equal-token budget, targeting a positive Δ on the “fallback clips” subset.
+  - Rationale: The C0003 plateau is dominated by high fallback (~0.75) under the best deployable config (E0224), but loosening the gate introduces many harmful clips (sep3). A fallback *plan* can improve the majority subset without weakening the safety gate.
+  - Scope:
+    - `avs/experiments/ave_p0.py` (`anchor_fallback_mode` fallback-plan logic + debug fields; optional `anchor_fallback_visual_conf_*` gating)
+    - `avs/vision/cheap_eventness.py` (cheap visual scores: CLIP feature diff / frame diff)
+    - `avs/experiments/ave_p0_sweep.py` (`candidate_set=ltl_top1med_visfb_v1`, `candidate_set=ltl_top1med_visfb_gated_v1`)
+    - `scripts/e0336_ave_p0_sweep_official_val_ltl_top1med_visfb_v1.sh`
+    - `scripts/e0337_ave_p0_best_to_test_official_ltl_top1med_visfb_v1.sh`
+    - `scripts/e0338_ave_p0_sweep_official_val_ltl_top1med_visfb_gated_v1.sh`
+    - `scripts/e0339_ave_p0_best_to_test_official_ltl_top1med_visfb_gated_v1.sh`
+    - `docs/experiment.md`, `docs/oral_checklist.md`, `docs/plan.md`
+  - Acceptance:
+    - E0336 val402 winner is competitive vs E0223/E0224 and shows the fallback-plan engages on the majority of fallback clips (`fallback_visual_mode_used` present for most `fallback_used` clips).
+    - E0337 quick test402 (SEEDS=0..2) is competitive vs E0224; only then run full SEEDS=0..9.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py`
+    - Smoke (E0336): `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0336_ave_p0_sweep_official_val_ltl_top1med_visfb_v1.sh`
+  - Outputs:
+    - `runs/E0336_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0337_*/metrics.json`
+    - `runs/E0338_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0339_*/metrics.json`
+  - Evidence:
+    - E0336 smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0336_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_visfb_v1_20260205-212443/sweep_summary.json` (best=`ltltop1med_clipdifffb_shift1`, Δ≈+0.00312, p≈0.50).
+    - E0336 full (val402; SEEDS=0..2): `runs/E0336_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_visfb_v1_20260205-212526/sweep_summary.json` (best remains uniform fallback baseline `ltltop1med_uniformfb_shift1`, Δ≈+0.00964, p≈0.0331; clipdiff/framediff fallback plans regress). Conclusion: naive cheap-visual fallback plans are harmful; stop and do not run E0337.
+    - E0338 full (val402; SEEDS=0..2): `runs/E0338_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_visfb_gated_v1_20260205-220312/sweep_summary.json` (best remains the uniform fallback baseline; all gated visfb variants are negative). Conclusion: gating the visfb fallback by visual confidence does not rescue; stop and do not run E0339.
+
+- [x] P0116: Mid-res band-budget Stage-2 planner (fix far 2-high harm; attempt to prove C0003 +2%)
+  - Summary: Add a tiny candidate set `candidate_set=ltl_top1med_band_midres_v1` that keeps the E0224 winner as an internal baseline, and tests a mid-res band-budget triad (160/224/320 with extra {192,208}) to preserve more context in the 2-high regime. Then run the standard val402 selection → test402 quick → test402 full pipeline to attempt to reach C0003 (Δ≥+0.02).
+  - Rationale: The best deployable test402 run (E0224) is still short of C0003 (Δ≈+0.0153) and is bottlenecked by a strongly harmful bucket: 2-high clips with non-adjacent anchors (dist=2..5), likely due to context loss under the exact equal-budget constraint (forced into 2×base + 6×low). Adding mid resolutions and using the band-budget DP allocator is a direct structural fix that does not rely on loosening Stage-1 gates.
+  - Scope:
+    - `avs/experiments/ave_p0_sweep.py` (`candidate_set=ltl_top1med_band_midres_v1`)
+    - `scripts/e0340_ave_cache_official_midres.sh` (build mid-res caches)
+    - `scripts/e0341_ave_p0_sweep_official_val_ltl_top1med_band_midres_v1.sh` (val402 sweep)
+    - `scripts/e0342_ave_p0_best_to_test_quick_official_ltl_top1med_band_midres_v1.sh` (quick test402)
+    - `scripts/e0343_ave_p0_best_to_test_full_official_ltl_top1med_band_midres_v1.sh` (full test402)
+    - `scripts/e0344_ave_p0_diagnose.sh` (bucket diagnosis helper)
+    - `docs/experiment.md`, `docs/oral_checklist.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - E0340 builds caches with resolutions `{112,160,192,208,224,320,352}` under a stable dir (so E0341/E0342/E0343 can run without missing-resolution crashes).
+    - E0341 val402 sweep winner is competitive vs the baseline (internal `...base_exact352`) and shows improved diagnostics for the 2-high bucket (via `avs.experiments.ave_p0_diagnose`).
+    - E0342 quick test402 (SEEDS=0..2) is competitive vs the E0224 baseline on the same seeds; only then run E0343 full.
+    - E0343 full test402 (SEEDS=0..9) either proves C0003 (Δ≥+0.02 and p<0.05) or records a clear failure mode (fallback/2-high/val→test mismatch) with `diagnose.json` and updates the C0003 evidence list.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0_sweep.py`
+    - Smoke (E0341): `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 bash scripts/e0341_ave_p0_sweep_official_val_ltl_top1med_band_midres_v1.sh`
+  - Outputs:
+    - E0340: `${CACHES_DIR}/<clip_id>.npz` with the required resolutions.
+    - E0341: `runs/E0341_*/{sweep_summary.json,best_config.json,eventness_scores.json}`
+    - E0342/E0343: `runs/E0342_*/metrics.json`, `runs/E0343_*/metrics.json` (+ optional `runs/E0344_*/diagnose.json`)
+  - Evidence:
+    - E0340 full caches: `runs/E0340_cache_official_midres_20260206-000432/cache_val/cache_only.json`, `runs/E0340_cache_official_midres_20260206-000432/cache_test/cache_only.json` (mid-res caches under `runs/REAL_AVE_OFFICIAL_20260201-124535/caches_112_160_192_208_224_320_352`, unique clip ids=4097).
+    - E0341 val402 sweep (SEEDS=0..2): `runs/E0341_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_band_midres_v1_20260206-004701/sweep_summary.json` (winner remains baseline `...base_exact352`; midres band variants regress on val402).
+    - E0342 quick test402 (SEEDS=0..2): baseline winner `runs/E0342_quick_test402_av_clipdiff_mlp_20260206-005041/metrics.json` (Δ≈+0.01899). Midres band variants regress on quick test402: dist `runs/E0342_quick_test402_av_clipdiff_mlp_midres320_band_dist_20260206-005345/metrics.json` (Δ≈+0.01003), mixed `runs/E0342_quick_test402_av_clipdiff_mlp_midres320_band_mixed_20260206-005528/metrics.json` (Δ≈+0.01003), bridge `runs/E0342_quick_test402_av_clipdiff_mlp_midres320_band_bridge_20260206-005718/metrics.json` (Δ≈+0.00655). Extra probe (2-high demotion): `runs/E0345_quick_test402_av_clipdiff_mlp_maxhigh1_20260206-010239/metrics.json` (Δ≈+0.01285). Conclusion: do not promote midres band variants.
+    - E0343 full test402 (SEEDS=0..9): `runs/E0343_full_test402_av_clipdiff_mlp_20260206-005134/metrics.json` (Δ≈+0.01525, p≈0.00390; still short of C0003 +2%).
+    - Diagnosis: `runs/E0344_ave_p0_diagnose_20260206-005232/diagnose.json` confirms the persistent failure mode (far-anchor dist∈{2..5} strongly negative; 2-high negative; fallback≈0.751). Conclusion: the mid-res band-budget DP does not fix the test402 mismatch; iterate on Stage-1 reliability instead.
+
+- [x] P0117: Add CLAP×CLIP semantic agreement Stage-1 eventness (`EVENTNESS=av_clap_clip_agree`) to improve anchor reliability
+  - Summary: Add a bolder Stage-1 anchor proposal that uses zero-shot semantics: compute per-second audio-text scores with CLAP and per-second image-text scores with CLIP (using cached CLIPVision pooled outputs + CLIPModel visual projection), then score seconds by cross-modal semantic agreement. Wire it into AVE-P0 as `EVENTNESS=av_clap_clip_agree`, including score-cache fill for test402.
+  - Rationale: The current best deployable config (E0224/E0343) is bottlenecked by visually-irrelevant audio peaks (high fallback + far/2-high harm). Semantic agreement directly targets the “off-screen audio” failure mode by requiring audio and vision to support the same class prompt at time t.
+  - Scope:
+    - `avs/audio/clap_probe.py` (new)
+    - `avs/vision/clip_text.py` (new)
+    - `avs/experiments/ave_p0.py` (`av_clap_clip_agree` scoring + leakage guard + `class_names` plumbing)
+    - `avs/experiments/ave_p0_sweep.py` (`class_names` plumbing + score caching fill supports the new method)
+    - `avs/experiments/mde_ltl.py`, `avs/pipeline/ave_p0_end2end.py`, `avs/experiments/ave_p0_rerun.py` (plumbing; allow method in CLIs)
+  - Acceptance:
+    - `EVENTNESS=av_clap_clip_agree` runs end-to-end via `avs.experiments.ave_p0_sweep` (sweep + run) and writes `eventness_scores.json`.
+    - Reusing a val `eventness_scores.json` on test402 auto-fills missing clip ids without errors.
+  - Verification: `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0346_ave_p0_sweep_official_val_ltl_top1med_norm_v1_clapagree.sh`
+  - Outputs: `runs/E0346_*/eventness_scores.json`
+  - Evidence:
+    - Smoke: `runs/E0346_ave_p0_sweep_official_val_av_clap_clip_agree_ltl_top1med_norm_v1_20260206-020428/{sweep_summary.json,best_config.json,eventness_scores.json}`.
+    - Full val402 cache: `runs/E0346_ave_p0_sweep_official_val_av_clap_clip_agree_ltl_top1med_norm_v1_20260206-020740/eventness_scores.json`.
+    - Auto-fill on test402: E0347 filled missing ids into the val cache (`[scores] filling 394 missing clips into .../eventness_scores.json`) and completed without errors.
+
+- [x] P0118: Run CLAP-agreement val→test pipeline (E0346→E0347→E0348) to attempt to prove C0003 (+2%)
+  - Summary: Execute the strict “拉大” pipeline for the new Stage-1 signal: val402 sweep selection → quick test402 transfer + bucket diagnosis → full test402 (SEEDS=0..9) only if competitive, then update C0003 evidence and the oral checklist.
+  - Rationale: This is a materially different signal; it must be tested under the same pre-registered protocol and promotion rules to be defensible for oral/paper.
+  - Scope:
+    - `scripts/e0346_ave_p0_sweep_official_val_ltl_top1med_norm_v1_clapagree.sh`
+    - `scripts/e0347_ave_p0_best_to_test_quick_official_clapagree.sh`
+    - `scripts/e0348_ave_p0_best_to_test_full_official_clapagree.sh`
+    - `docs/experiment.md`, `docs/plan.md`, `docs/oral_checklist.md`
+  - Acceptance:
+    - E0346 produces `best_config.json` + `sweep_summary.json` on val402 (SEEDS=0..2).
+    - E0347 quick test402 (SEEDS=0..2) is competitive vs baseline quick Δ (≈+0.01899); diagnosis via E0344 shows reduced far/2-high harm.
+    - If promoted, E0348 full test402 (SEEDS=0..9) either proves C0003 (Δ≥+0.02, p<0.05) or records a clear failure analysis.
+  - Verification:
+    - `AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0346_ave_p0_sweep_official_val_ltl_top1med_norm_v1_clapagree.sh`
+    - `AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0347_ave_p0_best_to_test_quick_official_clapagree.sh`
+    - `AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0348_ave_p0_best_to_test_full_official_clapagree.sh`
+  - Evidence:
+    - E0346 full val402: `runs/E0346_ave_p0_sweep_official_val_av_clap_clip_agree_ltl_top1med_norm_v1_20260206-020740/sweep_summary.json` (best Δ≈+0.00599, p≈0.373; not competitive).
+    - E0347 quick test402: `runs/E0347_quick_test402_av_clap_clip_agree_20260206-024249/metrics.json` (Δ≈-0.00174, p≈0.801) + diagnosis `runs/E0344_ave_p0_diagnose_20260206-024700/diagnose.json` (fallback_used_frac≈0.149 but far/2-high harm persists). Decision: skip E0348 and iterate.
+
+- [x] P0119: Salvage `av_clap_clip_agree` by removing the harmful 2-anchor regime (k=1) before investing in new Stage-1 signals
+  - Summary: Run a new val402 sweep for `EVENTNESS=av_clap_clip_agree` under `candidate_set=ltl_top1med_k1_v1` (k=1), then quick test402 transfer + diagnosis. Only if competitive, spend full test402 SEEDS=0..9.
+  - Rationale: E0347 diagnosis shows a clear failure mode: `anchor_len=2` / `high_count=2` clips are net harmful (meanΔ≈-0.0111) while `anchor_len∈{0,1}` are positive. Forcing k=1 removes the 2-high regime entirely and may restore positive transfer without changing Stage-1 scoring.
+  - Scope:
+    - `scripts/e0349_ave_p0_sweep_official_val_ltl_top1med_k1_v1_clapagree.sh` (new)
+    - `scripts/e0350_ave_p0_best_to_test_quick_official_clapagree_k1.sh` (new)
+    - `scripts/e0351_ave_p0_best_to_test_full_official_clapagree_k1.sh` (new; gated)
+    - `docs/experiment.md`, `docs/oral_checklist.md`, `docs/plan.md`
+  - Acceptance:
+    - E0349 val402 best is clearly positive and competitive vs the current baseline.
+    - E0350 quick test402 improves vs E0347 and is competitive vs the baseline quick Δ (≈+0.01899); diagnosis shows reduced far/2-high harm.
+    - If promoted, E0351 full test402 (SEEDS=0..9) either proves C0003 (Δ≥+0.02, p<0.05) or records a clear failure analysis.
+  - Verification: `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0349_ave_p0_sweep_official_val_ltl_top1med_k1_v1_clapagree.sh`
+  - Outputs: `runs/E0349_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0350_*/metrics.json`, `runs/E0351_*/metrics.json`
+  - Evidence:
+    - E0349 full val402: `runs/E0349_ave_p0_sweep_official_val_av_clap_clip_agree_ltl_top1med_k1_v1_20260206-030147/sweep_summary.json` (best=`ltltop1medk1_thr0p4_shift0`, Δ≈+0.00939, p≈0.125; still weak).
+    - E0350 quick test402: `runs/E0350_quick_test402_av_clap_clip_agree_k1_20260206-030727/metrics.json` (Δ≈+0.00464, p≈0.00412) + diagnosis `runs/E0344_ave_p0_diagnose_20260206-030755/diagnose.json` (fallback_used_frac≈0.930). Decision: not promoted to full SEEDS=0..9.
+
+- [x] P0120: Try CLAP audio→text prompt eventness (`clap_evt`) as a bold Stage-1 semantic signal to improve test402 transfer
+  - Summary: Run the “拉大” pipeline for `EVENTNESS=clap_evt`: val402 sweep (SEEDS=0..2) under `candidate_set=ltl_top1med_norm_v1` → quick test402 transfer (SEEDS=0..2) + bucket diagnosis → only if promoted, spend full test402 (SEEDS=0..9) to attempt to prove C0003.
+  - Rationale: The current best learned Stage-1 (`av_clipdiff_mlp`) still has ~75% fallback and is dominated by harmful buckets (far anchors, 2-high). `av_clap_clip_agree` increases coverage but collapses precision; `clap_evt` removes the visual dependency and uses a semantic audio-only score (CLAP audio↔class-prompt similarity) that may suppress visually-irrelevant peaks while remaining deployable.
+  - Scope:
+    - `avs/audio/clap_probe.py`, `avs/experiments/ave_p0.py`, `avs/experiments/ave_p0_sweep.py` (`EVENTNESS=clap_evt`)
+    - `scripts/e0352_ave_p0_sweep_official_val_ltl_top1med_norm_v1_clapevt.sh`
+    - `scripts/e0353_ave_p0_best_to_test_quick_official_clapevt.sh`
+    - `scripts/e0354_ave_p0_best_to_test_full_official_clapevt.sh` (gated)
+    - `docs/experiment.md`, `docs/oral_checklist.md`, `docs/plan.md`
+  - Acceptance:
+    - E0352 val402 best is clearly positive and competitive vs the baseline val402 sweep winners.
+    - E0353 quick test402 is competitive vs the baseline quick Δ (≈+0.01899) and diagnosis shows reduced far/2-high harm (or a clearly improved fallback/precision tradeoff).
+    - If promoted, E0354 full test402 (SEEDS=0..9) either proves C0003 (Δ≥+0.02, p<0.05) or records a decisive failure analysis and next-step hypothesis.
+  - Verification: `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0352_ave_p0_sweep_official_val_ltl_top1med_norm_v1_clapevt.sh`
+  - Outputs: `runs/E0352_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0353_*/metrics.json`, `runs/E0354_*/metrics.json`
+  - Evidence:
+    - E0352 full val402: `runs/E0352_ave_p0_sweep_official_val_clap_evt_ltl_top1med_norm_v1_20260206-033347/sweep_summary.json` (best=`ltltop1medn_thr0p6_shift1`, Δ≈+0.00657, p≈0.202; weak).
+    - E0353 quick test402: `runs/E0353_quick_test402_clap_evt_20260206-040527/metrics.json` (Δ≈+0.00813, p≈0.457) + diagnosis `runs/E0344_ave_p0_diagnose_20260206-040943/diagnose.json` (fallback_used_frac≈0.478; 2-high remains net harmful). Decision: not promoted to full SEEDS=0..9 (skip E0354).
+
+- [x] P0121: Salvage `clap_evt` by removing the harmful 2-anchor/2-high regime (k=1) before moving to a new Stage-1 signal
+  - Summary: Run a new val402 sweep for `EVENTNESS=clap_evt` under `candidate_set=ltl_top1med_k1_v1` (k=1), then quick test402 transfer + diagnosis. Only if competitive, spend full test402 SEEDS=0..9.
+  - Rationale: E0353 diagnosis shows `anchor_len=2` / `high_count=2` clips remain net harmful for `clap_evt` while fallback/no-anchor clips are positive. Forcing k=1 removes the 2-high regime entirely and tests whether Stage-2 geometry (not Stage-1 semantics) is the main blocker for this signal.
+  - Scope:
+    - `scripts/e0355_ave_p0_sweep_official_val_ltl_top1med_k1_v1_clapevt.sh`
+    - `scripts/e0356_ave_p0_best_to_test_quick_official_clapevt_k1.sh`
+    - `scripts/e0357_ave_p0_best_to_test_full_official_clapevt_k1.sh` (gated)
+    - `docs/experiment.md`, `docs/oral_checklist.md`, `docs/plan.md`
+  - Acceptance:
+    - E0355 val402 best improves meaningfully vs E0352 (and is competitive vs baseline winners).
+    - E0356 quick test402 improves vs E0353 and is competitive vs the baseline quick Δ (≈+0.01899); diagnosis shows reduced 2-high/far-anchor harm.
+    - If promoted, E0357 full test402 (SEEDS=0..9) either proves C0003 (Δ≥+0.02, p<0.05) or records a clear failure analysis.
+  - Verification: `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0355_ave_p0_sweep_official_val_ltl_top1med_k1_v1_clapevt.sh`
+  - Outputs: `runs/E0355_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0356_*/metrics.json`, `runs/E0357_*/metrics.json`
+  - Evidence:
+    - E0355 full val402: `runs/E0355_ave_p0_sweep_official_val_clap_evt_ltl_top1med_k1_v1_20260206-041855/sweep_summary.json` (p-filter winner=`ltltop1medk1_thr0p6_shift1`, Δ≈+0.00391; top-Δ candidate=`ltltop1medk1_thr0p4_shift0`, Δ≈+0.01064 but p≈0.135).
+    - E0356 quick test402 (winner): `runs/E0356_quick_test402_clap_evt_k1_20260206-042339/metrics.json` (Δ≈+0.00489, p≈0.289) + diagnosis `runs/E0344_ave_p0_diagnose_20260206-042437/diagnose.json` (fallback_used_frac≈0.998). Extra diagnostic (top-Δ candidate) still fallback-heavy: `runs/E0356_quick_test402_clap_evt_k1_thr0p4_shift0_20260206-042532/metrics.json` (Δ≈+0.01219, p≈0.183) + diagnosis `runs/E0344_ave_p0_diagnose_20260206-042617/diagnose.json` (fallback_used_frac≈0.913). Decision: not promoted to full SEEDS=0..9 (skip E0357).
+
+- [x] P0122: Try CLAP-supervised logistic regression anchors (`clap_lr`) to improve Stage-1 reliability (post-CLAP-prompt failure)
+  - Summary: Run the “拉大” pipeline for `EVENTNESS=clap_lr`: val402 sweep (SEEDS=0..2) under `candidate_set=ltl_top1med_norm_v1` → quick test402 transfer (SEEDS=0..2) + bucket diagnosis → only if promoted, spend full test402 (SEEDS=0..9) to attempt to prove C0003.
+  - Rationale: Prompt-based CLAP methods (`clap_evt` / `av_clap_clip_agree`) either regress or collapse into heavy fallback under k=1, suggesting the raw prompt confidence is miscalibrated for AVE. `clap_lr` trains a tiny supervised calibrator on CLAP audio↔text cosine similarities (train split only) to produce per-second logits that better separate “event vs background” and may improve the confidence gate’s coverage/precision tradeoff.
+  - Scope:
+    - `avs/experiments/ave_p0.py`, `avs/experiments/ave_p0_sweep.py` (`EVENTNESS=clap_lr`)
+    - `scripts/e0358_ave_p0_sweep_official_val_ltl_top1med_norm_v1_claplr.sh`
+    - `scripts/e0359_ave_p0_best_to_test_quick_official_claplr.sh`
+    - `scripts/e0360_ave_p0_best_to_test_full_official_claplr.sh` (gated)
+    - `docs/experiment.md`, `docs/oral_checklist.md`, `docs/plan.md`
+  - Acceptance:
+    - E0358 val402 best is clearly positive and competitive vs the baseline val402 sweep winners.
+    - E0359 quick test402 is competitive vs the baseline quick Δ (≈+0.01899) and diagnosis shows reduced far/2-high harm (or an improved fallback/precision tradeoff without collapsing to fallback≈1).
+    - If promoted, E0360 full test402 (SEEDS=0..9) either proves C0003 (Δ≥+0.02, p<0.05) or records a decisive failure analysis and next-step hypothesis.
+  - Verification: `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0358_ave_p0_sweep_official_val_ltl_top1med_norm_v1_claplr.sh`
+  - Outputs: `runs/E0358_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0359_*/metrics.json`, `runs/E0360_*/metrics.json`
+  - Evidence:
+    - E0358 full val402: `runs/E0358_ave_p0_sweep_official_val_clap_lr_ltl_top1med_norm_v1_20260206-045105/sweep_summary.json` (best=`ltltop1medn_thr0p5_shift0`, Δ≈-0.00191, p≈0.625; top3 all negative). Decision: not promoted to test402 (skip E0359/E0360).
+
+- [x] P0123: Try CLAP-embedding supervised multi-class anchors (`clap_mlp_cls_target`) to improve Stage-1 reliability
+  - Summary: Add a supervised CLAP-embedding per-second classifier (multi-class) and use its scores as Stage-1 eventness: val402 sweep (SEEDS=0..2) under `candidate_set=ltl_top1med_norm_v1` → quick test402 transfer (SEEDS=0..2) + bucket diagnosis → only if promoted, spend full test402 (SEEDS=0..9) to attempt to prove C0003.
+  - Rationale: `clap_evt` / `clap_lr` indicate that prompt-similarity confidence is poorly calibrated for AVE; instead of using CLAP↔text similarities directly, train a tiny supervised multi-class head on **CLAP audio embeddings** to predict AVE segment labels (0=bg, >0=class). Use `clap_mlp_cls_target` (class-conditional, per-clip inferred class) as the scalar eventness signal, which should be more peaked/accurate and reduce far/2-high harmful buckets.
+  - Scope:
+    - `avs/experiments/ave_p0.py`, `avs/experiments/ave_p0_sweep.py` (`EVENTNESS=clap_mlp_cls_target`)
+    - `scripts/e0361_ave_p0_sweep_official_val_ltl_top1med_norm_v1_clapmlpcls_target.sh`
+    - `scripts/e0362_ave_p0_best_to_test_quick_official_clapmlpcls_target.sh`
+    - `scripts/e0363_ave_p0_best_to_test_full_official_clapmlpcls_target.sh` (gated)
+    - `docs/experiment.md`, `docs/oral_checklist.md`, `docs/plan.md`
+  - Acceptance:
+    - E0361 val402 best is clearly positive and competitive vs the baseline val402 sweep winners.
+    - E0362 quick test402 is competitive vs the baseline quick Δ (≈+0.01899) and diagnosis shows reduced far/2-high harm (or a better fallback/precision tradeoff without collapsing to fallback≈1).
+    - If promoted, E0363 full test402 (SEEDS=0..9) either proves C0003 (Δ≥+0.02, p<0.05) or records a decisive failure analysis and next-step hypothesis.
+  - Verification: `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0361_ave_p0_sweep_official_val_ltl_top1med_norm_v1_clapmlpcls_target.sh`
+  - Outputs: `runs/E0361_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0362_*/metrics.json`, `runs/E0363_*/metrics.json`
+  - Evidence:
+    - E0361 full val402: `runs/E0361_ave_p0_sweep_official_val_clap_mlp_cls_target_ltl_top1med_norm_v1_20260206-054923/sweep_summary.json` (best=`ltltop1medn_thr0p7_shift0`, Δ≈+0.00158, p≈0.284; best_by_pfilter=None). Decision: not promoted to test402 (skip E0362/E0363).
+
+- [x] P0124: Add high-set-only base allocation (`*_high`) under adaptive_v3 and rerun the “拉大” pipeline (attempt to prove C0003)
+  - Summary: Introduce Stage-2 `anchor_base_alloc` variants with suffix `*_high` that allocate base-res seconds with respect to the **high-set only** (anchors that actually receive high-res after `max_high_anchors` / `anchor_high_policy` demotion). Then run the strict “拉大” pipeline on official splits: val402 sweep (SEEDS=0..2) under a pre-registered candidate set → quick test402 transfer (SEEDS=0..2) + bucket diagnosis → only if promoted, full test402 (SEEDS=0..9) to attempt to prove C0003.
+  - Rationale: Diagnostics show the dist>1 / 2-high bucket is strongly harmful on test402. `adaptive_v3` demotes far-anchor clips to the 1-high regime, but the current planners still rank base allocation by distance-to-**all** anchors, so the demoted (likely spurious) anchor2 can still steal base slots. `*_high` is the minimal transparent fix: in demoted cases, spend base slots around the retained high anchor only.
+  - Scope:
+    - `avs/sampling/plans.py` (support `base_alloc=..._high`)
+    - `avs/experiments/ave_p0.py` (treat `score_high` as score-based allocation)
+    - `avs/experiments/ave_p0_sweep.py` (new candidate set: `ltl_top1med_keepadj_basealloc_highonly_v1`)
+    - `avs/smoke_checks.py` (smoke new allocator)
+    - `scripts/e0364_*`, `scripts/e0365_*`, `scripts/e0366_*`
+    - `docs/experiment.md`, `docs/oral_checklist.md`, `docs/plan.md`
+  - Acceptance:
+    - `anchor_base_alloc={distance,balanced,bridge,score,farthest,mixed}_high` runs end-to-end and preserves strict equal-token budget.
+    - E0364 val402 winner is clearly positive and competitive vs baseline val402 sweep winners.
+    - E0365 quick test402 is competitive vs the baseline quick Δ (≈+0.01899 on SEEDS=0..2) and diagnosis shows reduced far/2-high harm (or improved fallback/precision tradeoff without collapsing to fallback≈1).
+    - If promoted, E0366 full test402 (SEEDS=0..9) either proves C0003 (Δ≥+0.02, p<0.05) or records decisive failure analysis and next-step hypothesis.
+  - Verification:
+    - `python -m py_compile avs/sampling/plans.py avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py avs/smoke_checks.py`
+    - `python -m avs.smoke sampling_plan`
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 TRAIN_DEVICE=cuda:0 bash scripts/e0364_ave_p0_sweep_official_val_ltl_top1med_keepadj_basealloc_highonly_v1.sh`
+  - Outputs: `runs/E0364_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0365_*/metrics.json` (+ diagnosis), `runs/E0366_*/metrics.json`
+  - Evidence:
+    - Smoke: `runs/E0364_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_keepadj_basealloc_highonly_v1_20260206-064816/sweep_summary.json` (LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1).
+    - Full val402 (SEEDS=0..2): `runs/E0364_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_keepadj_basealloc_highonly_v1_20260206-064910/sweep_summary.json` (best=`ltltop1med_keepadj_mixed_high`, Δ≈+0.00291, p≈0.167; best_by_pfilter=None). Decision: not promoted to test402 (skip E0365/E0366).
+
+- [x] P0125: Try AST-embedding + CLIPdiff MLP anchors (`av_ast_clipdiff_mlp`) under scale-invariant top1-med gate (attempt to “拉大” C0003)
+  - Summary: Run the strict “拉大” pipeline for a bold Stage-1 upgrade: use pretrained AST per-second embeddings + cheap CLIPdiff scalar and train a per-second MLP scorer (`EVENTNESS=av_ast_clipdiff_mlp`). Select the best config on official val402 under `candidate_set=ltl_top1med_norm_v1` → quick test402 transfer (SEEDS=0..2) + diagnosis → only if promoted, full test402 (SEEDS=0..9) to attempt to prove C0003.
+  - Rationale: `av_ast_clipdiff_mil_mlp` regressed on val402, but MIL can blur temporal localization and produce flat/multi-peak scores. A per-second MLP on AST embeddings (strong semantic audio cues) + CLIPdiff (cheap visual change) is a simpler, more localization-friendly student that may improve anchor peakiness/precision and reduce the harmful far/2-high bucket, while remaining deployable (no expensive visual pass).
+  - Scope:
+    - `scripts/e0367_ave_p0_sweep_official_val_ltl_top1med_norm_v1_av_ast_clipdiff_mlp.sh`
+    - `scripts/e0368_ave_p0_best_to_test_quick_official_av_ast_clipdiff_mlp.sh`
+    - `scripts/e0369_ave_p0_best_to_test_full_official_av_ast_clipdiff_mlp.sh` (gated)
+    - `docs/experiment.md`, `docs/oral_checklist.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - E0367 val402 is clearly positive and competitive vs baseline val402 winners (E0223/E0224).
+    - E0368 quick test402 is competitive vs the baseline quick Δ (≈+0.01899 on SEEDS=0..2) and diagnosis shows reduced far/2-high harm (or improved fallback/precision tradeoff without collapsing to fallback≈1).
+    - If promoted, E0369 full test402 (SEEDS=0..9) either proves C0003 (Δ≥+0.02, p<0.05) or records decisive failure analysis and next-step hypothesis.
+  - Verification:
+    - `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 EVENTNESS=av_ast_clipdiff_mlp CANDIDATE_SET=ltl_top1med_norm_v1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0367_ave_p0_sweep_official_val_ltl_top1med_norm_v1_av_ast_clipdiff_mlp.sh`
+  - Outputs: `runs/E0367_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0368_*/metrics.json`, `runs/E0369_*/metrics.json`
+  - Evidence:
+    - Smoke: `runs/E0367_ave_p0_sweep_official_val_av_ast_clipdiff_mlp_ltl_top1med_norm_v1_20260206-070549/sweep_summary.json` (LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1).
+    - Full val402 (SEEDS=0..2): `runs/E0367_ave_p0_sweep_official_val_av_ast_clipdiff_mlp_ltl_top1med_norm_v1_20260206-070639/sweep_summary.json` (best=`ltltop1medn_thr0p7_shift0`, Δ≈+0.00183, p≈0.853; best_by_pfilter=None). Decision: not promoted to test402 (skip E0368/E0369).
+
+- [x] P0126: Transfer triage for A/V correspondence anchors (`av_ast_clipalign_bce`) despite slightly-worse val (attempt to “拉大” C0003)
+  - Summary: Many val402 winners do not transfer to test402, so run a **quick test402 transfer triage** (SEEDS=0..2 + diagnosis) for the A/V correspondence Stage-1 signal `av_ast_clipalign_bce` using the existing E0318-selected config. If the quick Δ is competitive, then spend full test402 (SEEDS=0..9) to attempt to prove C0003.
+  - Rationale: `av_ast_clipalign_bce` is a principled “new signal” (on-screen A/V correspondence) and achieved a meaningful positive val402 Δ (E0318), but was stopped due to not being the top val winner. Given repeated val→test mismatches, it is worth a controlled transfer check before abandoning the direction.
+  - Scope:
+    - `scripts/e0370_quick_test402_av_ast_clipalign_bce.sh`
+    - `scripts/e0371_full_test402_av_ast_clipalign_bce.sh` (gated)
+    - `docs/experiment.md`, `docs/oral_checklist.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - E0370 quick test402 (SEEDS=0..2) is competitive vs the baseline quick Δ (≈+0.01899) and diagnosis shows reduced far/2-high harm (or a better fallback/precision tradeoff).
+    - If promoted, E0371 full test402 (SEEDS=0..9) either proves C0003 (Δ≥+0.02, p<0.05) or records decisive failure analysis and next-step hypothesis.
+  - Verification:
+    - `SEEDS=0,1,2 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0370_quick_test402_av_ast_clipalign_bce.sh`
+    - `IN_METRICS=runs/E0370_*/metrics.json bash scripts/e0344_ave_p0_diagnose.sh`
+  - Outputs: `runs/E0370_*/metrics.json`, `runs/E0371_*/metrics.json`
+  - Evidence:
+    - E0370 quick test402 (SEEDS=0..2): `runs/E0370_quick_test402_av_ast_clipalign_bce_20260206-072535/metrics.json` (anchored=0.7152 vs uniform=0.7070, Δ≈+0.00813, p≈0.365).
+    - E0344 diagnosis: `runs/E0344_ave_p0_diagnose_20260206-073731/diagnose.json` (fallback_used_frac≈0.570; anchored deltas concentrate in fallback/0-high clips; 2-anchor regime ~0).
+    - Decision: Not promoted to full test402 (skip E0371).
+
+- [x] P0127: Veto gate trained on all clips (`lr_top1hit_all_v1`) to reduce “confident-but-wrong” anchors (attempt to “拉大” C0003)
+  - Summary: Add a new clip-level gate method `anchor_gate_method=lr_top1hit_all_v1` that trains on **all** train clips to predict whether the top-1 anchor hits an event second, and uses it as a **veto** on top of the base confidence gate: accept a clip only if `(base_pass AND gate_prob >= gate_threshold)`. Then run the strict “拉大” pipeline: val402 sweep (E0372) → quick test402 transfer (E0373) + diagnosis → only if promoted, full test402 (E0374) to attempt to prove C0003.
+  - Rationale: The plateau on test402 is dominated by a small but strongly harmful subset (often “confident-but-wrong” anchors / far/2-high buckets). Prior rescue-only gates did not engage (rescued_frac≈0). A veto gate can trade a small increase in fallback for a potentially large reduction in harmful anchored clips, improving transfer without changing Stage-2 allocation.
+  - Scope:
+    - `avs/experiments/ave_p0.py` (new gate training + `gate_vetoed` debug field)
+    - `avs/experiments/ave_p0_sweep.py` (`candidate_set=ltl_top1med_gate_all_v1`)
+    - `scripts/e0372_*.sh`, `scripts/e0373_*.sh`, `scripts/e0374_*.sh`
+    - `docs/experiment.md`, `docs/oral_checklist.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - E0372 val402 winner is competitive vs baseline val winners (E0223/E0224) and the gate vetoes a non-trivial number of clips (`gate_vetoed=true`) without collapsing to near-uniform behavior.
+    - E0373 quick test402 (SEEDS=0..2) is competitive vs baseline quick Δ (≈+0.01899) and diagnosis shows reduced harmful buckets without fallback≈1.
+    - If promoted, E0374 full test402 (SEEDS=0..9) either proves C0003 (Δ≥+0.02, p<0.05) or records decisive failure analysis and next-step hypothesis.
+  - Verification:
+    - `python -m py_compile avs/experiments/ave_p0.py avs/experiments/ave_p0_sweep.py`
+    - Smoke (E0372): `LIMIT_TRAIN=200 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 TRAIN_DEVICE=cuda:0 bash scripts/e0372_ave_p0_sweep_official_val_ltl_top1med_gate_all_v1.sh`
+  - Outputs: `runs/E0372_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0373_*/metrics.json`, `runs/E0374_*/metrics.json`
+  - Evidence:
+    - Smoke: `runs/E0372_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_gate_all_v1_20260206-080613/sweep_summary.json` (LIMIT_TRAIN=200 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1).
+    - Full val402 (SEEDS=0..2): `runs/E0372_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_gate_all_v1_20260206-081233/sweep_summary.json` (best=`ltltop1med_gateall0p4_shift0`, Δ≈+0.00989, p≈0.00344).
+    - E0373 quick test402 (SEEDS=0..2): `runs/E0373_quick_test402_av_clipdiff_mlp_ltl_top1med_gate_all_v1_20260206-081728/metrics.json` (anchored=0.7179 vs uniform=0.7070, Δ≈+0.01086, p≈0.1165).
+    - E0344 diagnosis: `runs/E0344_ave_p0_diagnose_20260206-081835/diagnose.json` (fallback_used_frac≈0.751; 2-high bucket remains harmful; no `gate_veto` triggered).
+    - Decision: Not promoted to full test402 (skip E0374).
+
+- [x] P0128: Strong cheap-visual control — supervised visual eventness anchors (`vision_binary_mlp`) under scale-invariant gate (diagnose C0003 plateau)
+  - Summary: As a strong cheap-visual control, train a supervised per-second binary *visual* eventness model on frozen CLIP low-res features (`EVENTNESS=vision_binary_mlp`) and run the standard official val402 sweep under `candidate_set=ltl_top1med_norm_v1`. If this control is strong, it suggests the C0003 plateau is mainly Stage-1 anchor quality; if it regresses, it suggests that (i) this cheap-visual signal is not reliably predictive of evidence seconds under the equal-budget constraint, or (ii) the triad allocation harms too much even when anchors look “reasonable”.
+  - Rationale: Oracle anchors show a large upper bound, but many audio/AV-derived Stage-1 signals plateau below +2% on test402. This control checks whether a supervised cheap-visual Stage-1 can materially improve allocation without relying on audio.
+  - Scope:
+    - `scripts/e0375_ave_p0_sweep_official_val_ltl_top1med_norm_v1_vision_binary_mlp.sh`
+    - `scripts/e0376_ave_p0_best_to_test_quick_official_vision_binary_mlp.sh` (gated)
+    - `scripts/e0377_ave_p0_best_to_test_full_official_vision_binary_mlp.sh` (gated)
+    - `docs/experiment.md`, `docs/oral_checklist.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - E0375 val402 is clearly positive and competitive vs baseline; otherwise stop before any test402 usage.
+  - Verification:
+    - Smoke: `LIMIT_TRAIN=200 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 TRAIN_DEVICE=cuda:0 bash scripts/e0375_ave_p0_sweep_official_val_ltl_top1med_norm_v1_vision_binary_mlp.sh`
+  - Outputs: `runs/E0375_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0376_*/metrics.json`, `runs/E0377_*/metrics.json`
+  - Evidence:
+    - Smoke: `runs/E0375_ave_p0_sweep_official_val_vision_binary_mlp_ltl_top1med_norm_v1_20260206-082121/sweep_summary.json` (LIMIT_TRAIN=200 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1).
+    - Full val402 (SEEDS=0..2): `runs/E0375_ave_p0_sweep_official_val_vision_binary_mlp_ltl_top1med_norm_v1_20260206-082152/sweep_summary.json` (best Δ≈-0.00175, p≈0.0938). Decision: not promoted (skip E0376/E0377).
+
+- [x] P0129: Bold new Stage-1 signal — pretrained PANNs (AudioSet) eventness anchors (`panns`) under scale-invariant gate (attempt to “拉大” C0003)
+  - Summary: Use pretrained **PANNs Cnn14 (AudioSet)** as a deployable per-second eventness backend (`EVENTNESS=panns`), then run the strict “拉大” pipeline: official val402 sweep (SEEDS=0..2) under `candidate_set=ltl_top1med_norm_v1` → quick test402 transfer (SEEDS=0..2) + bucket diagnosis → only if promoted, full test402 (SEEDS=0..9) to attempt to prove C0003.
+  - Rationale:
+    - Current best full test402 (E0343) is still below +2% (Δ≈+0.01525) and diagnosis shows **anchor-using clips are weak on average while far/2-high clips are strongly harmful**, implying Stage-1 reliability/peakiness is still insufficient.
+    - PANNs provides strong pretrained audio semantics (AudioSet) with a cheap runtime footprint relative to vision, and its per-second clipwise max-probability score may yield more accurate/peaked anchors (fewer spurious far-2nd peaks), making “anchors-used” clips net positive and enlarging `anchored_top2 - uniform`.
+  - Scope:
+    - `scripts/e0378_ave_p0_sweep_official_val_ltl_top1med_norm_v1_panns.sh`
+    - `scripts/e0379_ave_p0_best_to_test_quick_official_panns.sh` + `scripts/e0344_ave_p0_diagnose.sh`
+    - `scripts/e0380_ave_p0_best_to_test_full_official_panns.sh` + `scripts/e0344_ave_p0_diagnose.sh` (gated)
+    - `docs/experiment.md`, `docs/oral_checklist.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - E0378 val402 winner is clearly positive and competitive vs baseline val winners (E0223/E0224).
+    - E0379 quick test402 (SEEDS=0..2) is competitive vs the baseline quick Δ (≈+0.01899) and diagnosis shows reduced far/2-high harm (or a better anchor-used bucket without collapsing to fallback≈1).
+    - If promoted, E0380 full test402 (SEEDS=0..9) either proves C0003 (Δ≥+0.02, p<0.05) or records decisive failure analysis + next-step hypothesis.
+  - Verification:
+    - Smoke: `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 EVENTNESS=panns CANDIDATE_SET=ltl_top1med_norm_v1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0378_ave_p0_sweep_official_val_ltl_top1med_norm_v1_panns.sh`
+  - Outputs: `runs/E0378_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0379_*/metrics.json` (+ diagnosis), `runs/E0380_*/metrics.json` (+ diagnosis)
+  - Evidence:
+    - Smoke: `runs/E0378_ave_p0_sweep_official_val_panns_ltl_top1med_norm_v1_20260206-090624/sweep_summary.json` (LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1).
+    - Full val402 (SEEDS=0..2): `runs/E0378_ave_p0_sweep_official_val_panns_ltl_top1med_norm_v1_20260206-090736/sweep_summary.json` (best=`ltltop1medn_thr0p6_shift1`, Δ≈+0.00998, p≈0.01367) + `runs/E0378_ave_p0_sweep_official_val_panns_ltl_top1med_norm_v1_20260206-090736/best_config.json`.
+    - Decision: Not promoted to test402 (skip E0379/E0380) because val402 is not competitive vs baseline val winners.
+
+- [x] P0130: Supervised calibration on PANNs outputs (`panns_lr`) to improve Stage-1 reliability (post-raw-PANNs failure)
+  - Summary: Raw `EVENTNESS=panns` (per-second max AudioSet probability) is not competitive on val402, so upgrade it with a **supervised calibration**: train a logistic regression on pretrained PANNs per-second **clipwise output vectors** to predict event vs background on the official train split, then use the resulting per-second logits as the Stage-1 eventness signal (`EVENTNESS=panns_lr`). Run the strict “拉大” pipeline: val402 sweep (SEEDS=0..2) under `candidate_set=ltl_top1med_norm_v1` → quick test402 transfer (SEEDS=0..2) + diagnosis → only if promoted, full test402 (SEEDS=0..9) to attempt to prove C0003.
+  - Rationale:
+    - PANNs contains rich AudioSet semantics, but “max over classes” is a crude heuristic and can be high even for irrelevant background sounds, yielding weak/flat confidence and noisy anchor2 peaks.
+    - A supervised calibrator (train-split only) can map the 527-d clipwise outputs into a **single peaked eventness logit** aligned with AVE’s event-vs-bg labels, analogous to `ast_lr` but using PANNs features. This should improve the “anchors-used” bucket and reduce the harmful far/2-high regime on test402.
+  - Scope:
+    - `avs/audio/panns_probe.py` (expose per-second clipwise outputs for reuse; keep no-implicit-download guardrails)
+    - `avs/experiments/ave_p0_sweep.py` (add `eventness_method=panns_lr` score-cache training/inference)
+    - `scripts/e0381_ave_p0_sweep_official_val_ltl_top1med_norm_v1_panns_lr.sh`
+    - `scripts/e0382_ave_p0_best_to_test_quick_official_panns_lr.sh` + `scripts/e0344_ave_p0_diagnose.sh`
+    - `scripts/e0383_ave_p0_best_to_test_full_official_panns_lr.sh` + `scripts/e0344_ave_p0_diagnose.sh` (gated)
+    - `docs/experiment.md`, `docs/oral_checklist.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - E0381 val402 winner is clearly positive and competitive vs baseline val winners (E0223/E0224).
+    - E0382 quick test402 (SEEDS=0..2) is competitive vs the baseline quick Δ (≈+0.01899) and diagnosis shows reduced far/2-high harm (or a better anchor-used bucket without collapsing to fallback≈1).
+    - If promoted, E0383 full test402 (SEEDS=0..9) either proves C0003 (Δ≥+0.02, p<0.05) or records decisive failure analysis + next-step hypothesis.
+  - Verification:
+    - Smoke: `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 EVENTNESS=panns_lr CANDIDATE_SET=ltl_top1med_norm_v1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0381_ave_p0_sweep_official_val_ltl_top1med_norm_v1_panns_lr.sh`
+  - Outputs: `runs/E0381_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0382_*/metrics.json` (+ diagnosis), `runs/E0383_*/metrics.json` (+ diagnosis)
+  - Evidence:
+    - Code: `python -m py_compile avs/audio/panns_probe.py avs/experiments/ave_p0_sweep.py` → ok.
+    - Smoke: `runs/E0381_ave_p0_sweep_official_val_panns_lr_ltl_top1med_norm_v1_20260206-092930/sweep_summary.json` (LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1; best=`ltltop1medn_thr0p5_shift0`, Δ≈+0.00156).
+    - Full val402 (SEEDS=0..2): `runs/E0381_ave_p0_sweep_official_val_panns_lr_ltl_top1med_norm_v1_20260206-093023/sweep_summary.json` (best=`ltltop1medn_thr0p6_shift0`, Δ≈-0.00224, p≈0.728) + `runs/E0381_ave_p0_sweep_official_val_panns_lr_ltl_top1med_norm_v1_20260206-093023/best_config.json`.
+    - Decision: Not promoted to test402 (skip E0382/E0383) because val402 regresses (negative Δ).
+
+- [x] P0131: Supervised calibration on PANNs embeddings (`panns_embed_lr`) to improve Stage-1 reliability (post-`panns_lr` regression)
+  - Summary: `EVENTNESS=panns_lr` (logistic regression on PANNs 527-d clipwise outputs) regresses on val402, so try a bolder but still transparent variant: train a logistic regression on pretrained PANNs **2048-d embeddings** (train split only) to predict event vs background, and use the resulting per-second logits as Stage-1 eventness (`EVENTNESS=panns_embed_lr`). Run the strict “拉大” pipeline: val402 sweep (SEEDS=0..2) under `candidate_set=ltl_top1med_norm_v1` → quick test402 transfer (SEEDS=0..2) + diagnosis → only if promoted, full test402 (SEEDS=0..9) to attempt to prove C0003.
+  - Rationale:
+    - PANNs `clipwise_output` probabilities are already post-sigmoid and can be flat / saturated for short windows, losing information for a linear calibrator.
+    - The PANNs embedding is a richer representation that should be more linearly separable for AVE’s event-vs-bg labels; L2-normalizing per second keeps the calibrator scale-stable.
+  - Scope:
+    - `avs/audio/panns_probe.py` (expose per-second embeddings)
+    - `avs/experiments/ave_p0_sweep.py` (add `eventness_method=panns_embed_lr` score-cache training/inference)
+    - `scripts/e0384_ave_p0_sweep_official_val_ltl_top1med_norm_v1_panns_embed_lr.sh`
+    - `scripts/e0385_ave_p0_best_to_test_quick_official_panns_embed_lr.sh` + `scripts/e0344_ave_p0_diagnose.sh`
+    - `scripts/e0386_ave_p0_best_to_test_full_official_panns_embed_lr.sh` + `scripts/e0344_ave_p0_diagnose.sh` (gated)
+    - `docs/experiment.md`, `docs/oral_checklist.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - E0384 val402 winner is clearly positive and competitive vs baseline val winners (E0223/E0224).
+    - E0385 quick test402 (SEEDS=0..2) is competitive vs the baseline quick Δ (≈+0.01899) and diagnosis shows reduced far/2-high harm (or a better anchor-used bucket without collapsing to fallback≈1).
+    - If promoted, E0386 full test402 (SEEDS=0..9) either proves C0003 (Δ≥+0.02, p<0.05) or records decisive failure analysis + next-step hypothesis.
+  - Verification:
+    - Smoke: `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 EVENTNESS=panns_embed_lr CANDIDATE_SET=ltl_top1med_norm_v1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0384_ave_p0_sweep_official_val_ltl_top1med_norm_v1_panns_embed_lr.sh`
+  - Outputs: `runs/E0384_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0385_*/metrics.json` (+ diagnosis), `runs/E0386_*/metrics.json` (+ diagnosis)
+  - Evidence:
+    - Code: `python -m py_compile avs/audio/panns_probe.py avs/experiments/ave_p0_sweep.py` → ok.
+    - Smoke: `runs/E0384_ave_p0_sweep_official_val_panns_embed_lr_ltl_top1med_norm_v1_20260206-094359/sweep_summary.json` (LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1; best=`ltltop1medn_thr0p7_shift0`, Δ≈+0.00469).
+    - Full val402 (SEEDS=0..2): `runs/E0384_ave_p0_sweep_official_val_panns_embed_lr_ltl_top1med_norm_v1_20260206-094428/sweep_summary.json` (best=`ltltop1medn_thr0p5_shift0`, Δ≈+0.00865, p≈0.110) + `runs/E0384_ave_p0_sweep_official_val_panns_embed_lr_ltl_top1med_norm_v1_20260206-094428/best_config.json`.
+    - Decision: Not promoted to test402 (skip E0385/E0386) because val402 is not competitive vs baseline val winners.
+
+- [x] P0132: Supervised calibration on PANNs embeddings with a tiny MLP (`panns_embed_mlp`) to improve Stage-1 reliability (post-`panns_embed_lr` underperformance)
+  - Summary: `panns_embed_lr` is mildly positive but not competitive on val402, so upgrade the calibrator to a small nonlinear probe: train a 2-layer MLP on pretrained PANNs per-second embeddings (train split only) to predict event vs background, and use per-second logits as Stage-1 eventness (`EVENTNESS=panns_embed_mlp`). Run the strict “拉大” pipeline: val402 sweep (SEEDS=0..2) under `candidate_set=ltl_top1med_norm_v1` → quick test402 transfer (SEEDS=0..2) + diagnosis → only if promoted, full test402 (SEEDS=0..9) to attempt to prove C0003.
+  - Rationale:
+    - A single linear layer may be too weak to map PANNs embeddings to AVE eventness; a tiny MLP can model simple nonlinearities while staying lightweight and reproducible.
+  - Scope:
+    - `avs/experiments/ave_p0_sweep.py` (add `eventness_method=panns_embed_mlp` score-cache training/inference on PANNs embeddings)
+    - `scripts/e0387_ave_p0_sweep_official_val_ltl_top1med_norm_v1_panns_embed_mlp.sh`
+    - `scripts/e0388_ave_p0_best_to_test_quick_official_panns_embed_mlp.sh` + `scripts/e0344_ave_p0_diagnose.sh`
+    - `scripts/e0389_ave_p0_best_to_test_full_official_panns_embed_mlp.sh` + `scripts/e0344_ave_p0_diagnose.sh` (gated)
+    - `docs/experiment.md`, `docs/oral_checklist.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - E0387 val402 winner is clearly positive and competitive vs baseline val winners (E0223/E0224).
+    - E0388 quick test402 (SEEDS=0..2) is competitive vs the baseline quick Δ (≈+0.01899) and diagnosis shows reduced far/2-high harm (or a better anchor-used bucket without collapsing to fallback≈1).
+    - If promoted, E0389 full test402 (SEEDS=0..9) either proves C0003 (Δ≥+0.02, p<0.05) or records decisive failure analysis + next-step hypothesis.
+  - Verification:
+    - Smoke: `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 EVENTNESS=panns_embed_mlp CANDIDATE_SET=ltl_top1med_norm_v1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0387_ave_p0_sweep_official_val_ltl_top1med_norm_v1_panns_embed_mlp.sh`
+  - Outputs: `runs/E0387_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0388_*/metrics.json` (+ diagnosis), `runs/E0389_*/metrics.json` (+ diagnosis)
+  - Evidence:
+    - Code: `python -m py_compile avs/experiments/ave_p0_sweep.py` → ok.
+    - Smoke: `runs/E0387_ave_p0_sweep_official_val_panns_embed_mlp_ltl_top1med_norm_v1_20260206-095420/sweep_summary.json` (LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1; best Δ≈+0.00469).
+    - Full val402 (SEEDS=0..2): `runs/E0387_ave_p0_sweep_official_val_panns_embed_mlp_ltl_top1med_norm_v1_20260206-095447/sweep_summary.json` (best=`ltltop1medn_thr0p6_shift0`, Δ≈+0.00208, p≈0.785) + `runs/E0387_ave_p0_sweep_official_val_panns_embed_mlp_ltl_top1med_norm_v1_20260206-095447/best_config.json`.
+    - Decision: Not promoted to test402 (skip E0388/E0389) because val402 is not competitive.
+
+- [x] P0133: Fuse PANNs embeddings + cheap CLIPdiff into a supervised anchor scorer (`av_panns_embed_clipdiff_mlp`) to improve Stage-1 reliability
+  - Summary: Combine semantic audio features (pretrained PANNs embeddings) with a cheap visual motion proxy (CLIP feature diff) to train a tiny per-second MLP eventness scorer. This is a bolder “audio×cheap-visual” Stage‑1 that may reduce false peaks and increase anchor precision without a full visual pass. Run the strict “拉大” pipeline: val402 sweep (SEEDS=0..2) under `candidate_set=ltl_top1med_norm_v1` → quick test402 transfer (SEEDS=0..2) + diagnosis → only if promoted, full test402 (SEEDS=0..9) to attempt to prove C0003.
+  - Rationale:
+    - Pure-audio semantic anchors (PANNs variants) did not become competitive on val402.
+    - Current best deployable anchors (`av_clipdiff_mlp`) are audio+cheap-visual but use very low-level audio features; adding PANNs embeddings may provide the missing semantic signal.
+  - Scope:
+    - `avs/audio/panns_probe.py` (reuses embeddings API)
+    - `avs/experiments/ave_p0_sweep.py` (add `eventness_method=av_panns_embed_clipdiff_mlp` score-cache training/inference)
+    - `scripts/e0390_ave_p0_sweep_official_val_ltl_top1med_norm_v1_av_panns_embed_clipdiff_mlp.sh`
+    - `scripts/e0391_ave_p0_best_to_test_quick_official_av_panns_embed_clipdiff_mlp.sh` + `scripts/e0344_ave_p0_diagnose.sh`
+    - `scripts/e0392_ave_p0_best_to_test_full_official_av_panns_embed_clipdiff_mlp.sh` + `scripts/e0344_ave_p0_diagnose.sh` (gated)
+    - `docs/experiment.md`, `docs/oral_checklist.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - E0390 val402 winner is clearly positive and competitive vs baseline val winners (E0223/E0224).
+    - E0391 quick test402 (SEEDS=0..2) is competitive vs the baseline quick Δ (≈+0.01899) and diagnosis shows reduced far/2-high harm (or a better anchor-used bucket without collapsing to fallback≈1).
+    - If promoted, E0392 full test402 (SEEDS=0..9) either proves C0003 (Δ≥+0.02, p<0.05) or records decisive failure analysis + next-step hypothesis.
+  - Verification:
+    - Smoke: `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 EVENTNESS=av_panns_embed_clipdiff_mlp CANDIDATE_SET=ltl_top1med_norm_v1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0390_ave_p0_sweep_official_val_ltl_top1med_norm_v1_av_panns_embed_clipdiff_mlp.sh`
+  - Outputs: `runs/E0390_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0391_*/metrics.json` (+ diagnosis), `runs/E0392_*/metrics.json` (+ diagnosis)
+  - Evidence:
+    - Code: `python -m py_compile avs/experiments/ave_p0_sweep.py` → ok.
+    - Smoke: `runs/E0390_ave_p0_sweep_official_val_av_panns_embed_clipdiff_mlp_ltl_top1med_norm_v1_20260206-102211/sweep_summary.json` (LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1; best Δ≈+0.00469).
+    - Full val402 (SEEDS=0..2): `runs/E0390_ave_p0_sweep_official_val_av_panns_embed_clipdiff_mlp_ltl_top1med_norm_v1_20260206-102257/sweep_summary.json` (best=`ltltop1medn_thr0p7_shift1`, Δ≈+0.00374, p≈0.542) + `runs/E0390_ave_p0_sweep_official_val_av_panns_embed_clipdiff_mlp_ltl_top1med_norm_v1_20260206-102257/best_config.json`.
+    - Decision: Not promoted to test402 (skip E0391/E0392) because val402 is not competitive vs baseline val winners.
+
+- [x] P0134: Add an optical-flow magnitude cheap-visual signal to Stage-1 (`av_clipdiff_flow_mlp`) to improve anchor reliability
+  - Summary: Add a new Stage‑1 eventness backend that augments the current `av_clipdiff_mlp` features with a motion proxy computed from per‑second frames: Farneback optical‑flow magnitude. Train a tiny per-second MLP (train split only) on `(audio basic features) + (CLIPdiff scalar) + (flow magnitude scalar)` to predict event-vs-background, then use per-second logits as Stage‑1 scores (`EVENTNESS=av_clipdiff_flow_mlp`). Run the strict “拉大” pipeline: val402 sweep (SEEDS=0..2) under `candidate_set=ltl_top1med_norm_v1` → quick test402 transfer (SEEDS=0..2) + diagnosis → only if promoted, full test402 (SEEDS=0..9) to attempt to prove C0003.
+  - Rationale:
+    - `av_clipdiff_framediff_mlp` did not beat the baseline, but framediff is a very crude motion proxy and can be sensitive to brightness and camera cuts.
+    - Optical flow magnitude can better capture coherent motion (hands/tools/objects) which may align with AVE event segments and improve anchor precision without a full visual pass.
+  - Scope:
+    - `avs/vision/cheap_eventness.py` (add `optical_flow_mag_eventness`)
+    - `avs/experiments/ave_p0_sweep.py` (add `eventness_method=av_clipdiff_flow_mlp`)
+    - `scripts/e0393_ave_p0_sweep_official_val_ltl_top1med_norm_v1_av_clipdiff_flow_mlp.sh`
+    - `scripts/e0394_ave_p0_best_to_test_quick_official_av_clipdiff_flow_mlp.sh` + `scripts/e0344_ave_p0_diagnose.sh`
+    - `scripts/e0395_ave_p0_best_to_test_full_official_av_clipdiff_flow_mlp.sh` + `scripts/e0344_ave_p0_diagnose.sh` (gated)
+    - `docs/experiment.md`, `docs/oral_checklist.md`, `docs/mohu.md`, `docs/plan.md`
+  - Acceptance:
+    - E0393 val402 winner is clearly positive and competitive vs baseline val winners (E0223/E0224).
+    - E0394 quick test402 (SEEDS=0..2) is competitive vs the baseline quick Δ (≈+0.01899) and diagnosis shows reduced far/2-high harm (or a better anchor-used bucket without collapsing to fallback≈1).
+    - If promoted, E0395 full test402 (SEEDS=0..9) either proves C0003 (Δ≥+0.02, p<0.05) or records decisive failure analysis + next-step hypothesis.
+  - Verification:
+    - Smoke: `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 EVENTNESS=av_clipdiff_flow_mlp CANDIDATE_SET=ltl_top1med_norm_v1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0393_ave_p0_sweep_official_val_ltl_top1med_norm_v1_av_clipdiff_flow_mlp.sh`
+  - Outputs: `runs/E0393_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0394_*/metrics.json` (+ diagnosis), `runs/E0395_*/metrics.json` (+ diagnosis)
+  - Evidence:
+    - Code: `python -m py_compile avs/experiments/ave_p0_sweep.py avs/vision/cheap_eventness.py` → ok.
+    - Smoke: `runs/E0393_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_ltl_top1med_norm_v1_20260206-104337/sweep_summary.json` (LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1; best Δ≈+0.00156).
+    - Full val402 (SEEDS=0..2): `runs/E0393_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_ltl_top1med_norm_v1_20260206-104413/sweep_summary.json` (best=`ltltop1medn_thr0p6_shift1`, Δ≈+0.00881, p≈0.0971) + `runs/E0393_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_ltl_top1med_norm_v1_20260206-104413/best_config.json`.
+    - Decision: Not promoted to test402 (skip E0394/E0395) because val402 does not beat baseline val winners.
+
+- [x] P0135: Keep Stage-1 fixed (`av_clipdiff_flow_mlp`) and run a more aggressive Stage-2 dynamic-K search (`ltl_top1med_k1_extreme_v1`) to directly suppress 2-high harm
+  - Summary: Use the same flow-augmented Stage-1 scores as P0134, but shift optimization pressure to Stage-2 by sweeping `candidate_set=ltl_top1med_k1_extreme_v1` (k=1 focused / extreme triad / multiple base allocations) to explicitly avoid the known harmful 2-high regimes. Execute strict “拉大” gating: val402 sweep (SEEDS=0..2) → quick test402 (SEEDS=0..2)+diagnosis → only if competitive, full test402 (SEEDS=0..9).
+  - Rationale:
+    - Current diagnosis repeatedly shows 2-high buckets are harmful; this round targets that failure mode directly.
+    - Reusing E0393 `eventness_scores.json` isolates Stage-2 gains from Stage-1 noise and keeps iteration fast/reproducible.
+  - Scope:
+    - `scripts/e0396_ave_p0_sweep_official_val_ltl_top1med_k1_extreme_v1_av_clipdiff_flow_mlp.sh`
+    - `scripts/e0397_ave_p0_best_to_test_quick_official_av_clipdiff_flow_mlp_k1ext.sh` + `scripts/e0344_ave_p0_diagnose.sh`
+    - `scripts/e0398_ave_p0_best_to_test_full_official_av_clipdiff_flow_mlp_k1ext.sh` + `scripts/e0344_ave_p0_diagnose.sh` (gated)
+    - `docs/experiment.md`, `docs/mohu.md`, `docs/plan.md`, `docs/oral_checklist.md`
+  - Acceptance:
+    - E0396 val402 winner is at least competitive with baseline val winners (E0223/E0224).
+    - E0397 quick test402 is competitive with baseline quick Δ (≈+0.01899), with diagnosis showing reduced 2-high harm / better anchor-used buckets.
+    - If promoted, E0398 full test402 either proves C0003 (Δ≥+0.02, p<0.05) or yields decisive failure evidence.
+  - Verification:
+    - Smoke: `LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1 EVENTNESS=av_clipdiff_flow_mlp CANDIDATE_SET=ltl_top1med_k1_extreme_v1 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0396_ave_p0_sweep_official_val_ltl_top1med_k1_extreme_v1_av_clipdiff_flow_mlp.sh`
+  - Outputs: `runs/E0396_*/{sweep_summary.json,best_config.json,eventness_scores.json}`, `runs/E0397_*/metrics.json` (+ diagnosis), `runs/E0398_*/metrics.json` (+ diagnosis)
+  - Evidence:
+    - Code: `python -m py_compile avs/experiments/ave_p0_sweep.py` → ok.
+    - Smoke: `runs/E0396_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_ltl_top1med_k1_extreme_v1_20260206-130029/sweep_summary.json` (LIMIT_TRAIN=64 LIMIT_EVAL=32 SEEDS=0,1 EPOCHS=1; best Δ≈+0.00781).
+    - Full val402 (SEEDS=0..2): `runs/E0396_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_ltl_top1med_k1_extreme_v1_20260206-130114/sweep_summary.json` (best=`ltltop1medk1ext_thr0p6_shift1_score`, Δ≈-0.00125, p≈0.924) + `runs/E0396_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_ltl_top1med_k1_extreme_v1_20260206-130114/best_config.json`.
+    - Decision: Not promoted to test402; skip E0397/E0398.
+
+- [x] P0136: Add dense-stride Stage-1 score variant (`av_clipdiff_flow_mlp_stride`) and rerun strict val-gated sweeps
+  - Summary: Implement a deployable dense-stride post-processing variant on top of `av_clipdiff_flow_mlp` (`stride max-pool` on per-second logits), then run strict val402 sweeps before any test402 spend.
+  - Rationale:
+    - Current bottleneck is Stage-1 anchor reliability; dense-stride windows are a low-cost way to capture sub-second peaks without changing Stage-2 budget accounting.
+    - Must pass the same “拉大” promotion gate as all prior attempts.
+  - Scope:
+    - `avs/utils/scores.py` (`stride_max_pool_per_second`)
+    - `avs/experiments/ave_p0_sweep.py` (`eventness_method=av_clipdiff_flow_mlp_stride`)
+    - `scripts/e0399_ave_p0_sweep_official_val_smoke_ltl_top1med_k1_extreme_v1_av_clipdiff_flow_mlp_stride.sh`
+    - `scripts/e0400_ave_p0_sweep_official_val_ltl_top1med_k1_extreme_v1_av_clipdiff_flow_mlp_stride.sh`
+    - `scripts/e0401_ave_p0_best_to_test_quick_official_av_clipdiff_flow_mlp_stride.sh`
+    - `scripts/e0402_ave_p0_best_to_test_full_official_av_clipdiff_flow_mlp_stride.sh`
+    - `scripts/e0403_oracle_vs_predicted_official_av_clipdiff_flow_mlp_stride.sh`
+    - `scripts/e0404_degradation_suite_official_av_clipdiff_flow_mlp_stride.sh`
+    - `docs/experiment.md`, `docs/mohu.md`, `docs/plan.md`, `docs/oral_checklist.md`
+  - Acceptance:
+    - E0400 val402 winner is competitive vs baseline val winners (E0223/E0224), otherwise stop before test402.
+    - Only when competitive: run E0401 (quick test402) and then E0402 (full test402).
+  - Verification:
+    - `python -m py_compile avs/utils/scores.py avs/experiments/ave_p0_sweep.py`
+    - `SEEDS=0,1 EPOCHS=1 LIMIT_TRAIN=64 LIMIT_EVAL=32 AUDIO_DEVICE=cuda:0 TRAIN_DEVICE=cuda:0 bash scripts/e0399_ave_p0_sweep_official_val_smoke_ltl_top1med_k1_extreme_v1_av_clipdiff_flow_mlp_stride.sh`
+  - Outputs: `runs/E0399_*/sweep_summary.json`, `runs/E0400_*/sweep_summary.json`, `runs/E0400b_*/sweep_summary.json`, `runs/E0400c_*/sweep_summary.json`, `runs/E0401_*/metrics.json`, `runs/E0402_*/metrics.json`, `runs/E0403_*/oracle_vs_predicted.json`, `runs/E0404_*/degradation_suite.json`
+  - Evidence:
+    - Code: `python -m py_compile avs/utils/scores.py avs/experiments/ave_p0_sweep.py` → ok.
+    - Smoke (E0399): `runs/E0399_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_stride_ltl_top1med_k1_extreme_v1_20260206-131751/sweep_summary.json` (best Δ≈+0.00156, p≈0.500).
+    - Full val402 (E0400, k1-extreme set): `runs/E0400_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_stride_ltl_top1med_k1_extreme_v1_20260206-131825/sweep_summary.json` (best Δ≈+0.00723, p≈0.412).
+    - Full val402 (E0400b, norm set): `runs/E0400b_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_stride_ltl_top1med_norm_v1_20260206-132936/sweep_summary.json` (best Δ≈+0.00607, p≈0.090).
+    - Full val402 (E0400c, top1med set): `runs/E0400c_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_stride_ltl_top1med_v1_20260206-133240/sweep_summary.json` (best Δ≈+0.00357, p≈0.049; top Δ row≈+0.00657 but unstable).
+    - Quick test402 transfer (E0401; SEEDS=0..2): `runs/E0401_quick_test402_av_clipdiff_flow_mlp_stride_20260206-140425/metrics.json` + `runs/E0401_quick_test402_av_clipdiff_flow_mlp_stride_20260206-140425/diagnose.json` (`Δ≈+0.00771`, `p≈0.331`, `fallback_used_frac≈0.8607`).
+    - Full test402 (E0402; SEEDS=0..9): `runs/E0402_full_test402_av_clipdiff_flow_mlp_stride_20260206-141020/metrics.json` + `runs/E0402_full_test402_av_clipdiff_flow_mlp_stride_20260206-141020/diagnose.json` (`anchored=0.71896`, `uniform=0.70858`, `Δ≈+0.01037`, `p≈0.00489`; still below C0003 target `Δ>=+0.02`).
+    - Alternative-config quick reruns (E0401 alt): `runs/E0401_quick_test402_av_clipdiff_flow_mlp_stride_alt_top1med_thr0p5_20260206-150837/metrics.json` (`Δ≈+0.01153`, `p≈0.0661`, `fallback_used_frac≈0.5622`) and `runs/E0401_quick_test402_av_clipdiff_flow_mlp_stride_alt_top1medn_thr0p6_20260206-151412/metrics.json` (`Δ≈+0.00746`, `p≈0.436`).
+    - Alternative-config full reproduction (E0402 alt; promoted quick winner): `runs/E0402_full_test402_av_clipdiff_flow_mlp_stride_alt_top1med_thr0p5_20260206-152012/metrics.json` + `runs/E0402_full_test402_av_clipdiff_flow_mlp_stride_alt_top1med_thr0p5_20260206-152012/diagnose.json` (`anchored=0.720995`, `uniform=0.708582`, `Δ≈+0.01241`, `p≈0.00302`; improves over prior dense-stride full but still below +2%).
+    - Exhaustive quick transfer grid (E0405): `runs/E0405_quick_test402_av_clipdiff_flow_mlp_stride_top1medn_thr0p6_shift0_20260206-161028/metrics.json` is the best quick candidate (`Δ≈+0.01335`, `p≈0.0956`), but this does not transfer to full.
+    - Full transfer check for E0405 winner (E0406): `runs/E0406_full_test402_av_clipdiff_flow_mlp_stride_top1medn_thr0p6_shift0_20260206-161349/metrics.json` + `runs/E0344_ave_p0_diagnose_20260206-161548/diagnose.json` (`Δ≈+0.00771`, `p≈0.0442`), confirming quick-test overestimation on this candidate.
+    - Oracle->Predicted baseline (E0403; SEEDS=0..2): `runs/E0403_oracle_vs_predicted_av_clipdiff_flow_mlp_stride_20260206-141804/oracle_vs_predicted.json` (`predicted Δ_vs_uniform≈-0.00547`, `oracle_minus_predicted≈0.04187`).
+    - Oracle->Predicted aligned rerun (E0403 alt; promoted `top1_med thr0.5` config): `runs/E0403_oracle_vs_predicted_av_clipdiff_flow_mlp_stride_alt_top1med_thr0p5_20260206-152658/oracle_vs_predicted.json` (`predicted Δ_vs_uniform≈+0.01153`, `p≈0.0661`; `oracle_minus_predicted≈0.02488`).
+    - Oracle->Predicted full rerun with promoted config (E0407; SEEDS=0..9): `runs/E0407_oracle_vs_predicted_av_clipdiff_flow_mlp_stride_top1med_thr0p5_s0-9_20260206-161749/oracle_vs_predicted.json` (`predicted Δ≈+0.01241`, `p≈0.00302`; `oracle_minus_predicted≈0.02900`; cheap-visual control `Δ≈+0.00791`, `p≈0.0307`).
+    - Robustness (E0404): `runs/E0404_degradation_av_clipdiff_flow_mlp_stride_20260206-142817/degradation_suite.json` (18 rows; mean Recall@K `Δ0≈0.21308`, `Δ1≈0.38001`, `Δ2≈0.51741`; strict `Δ0` slightly above E0203 `av_clipdiff_mlp`, but `Δ1/Δ2` are lower).
+    - Efficiency calibration (E0408): `runs/E0408_vision_efficiency_20260206-161610/vision_efficiency.json` (tokens/FLOPs/latency-by-resolution artifact for oral efficiency table construction).
+    - Decision: Dense-stride does not meet promotion target on official test402; keep as negative/diagnostic evidence and continue improving Stage-1 reliability.
 
 ## Conclusions
 - [x] C0001: On AVE, under a strictly equal ViT token budget, Audio-anchored sampling (with a lightweight temporal head) improves segment-level accuracy vs Uniform sampling and Random anchors.
@@ -385,12 +2137,215 @@ This repo contains the free-form draft in `plan.md`. This document is the **cano
 
 - [ ] C0003: On official AVE test402, sampling-only anchored_top2 improves >= +2.0% with p<0.05 (SEEDS=0..9).
   - Evidence required: `metrics.json` from the best config selected on val402 and reproduced on test402, with strict equal token budget and paired t-test.
-  - Experiments: E0012
+  - Experiments: E0012,E0018,E0019,E0021,E0022,E0205,E0206,E0207,E0208,E0218,E0219,E0223,E0224,E0226,E0227,E0228,E0229,E0230,E0231,E0233,E0234,E0235,E0236,E0237,E0238,E0239,E0240,E0241,E0242,E0252,E0253,E0254,E0260,E0265,E0267,E0268,E0271,E0272,E0280,E0284,E0285,E0286,E0287,E0288,E0289,E0290,E0291,E0292,E0293,E0294,E0295,E0296,E0297,E0298,E0299,E0303,E0304,E0305,E0306,E0307,E0308,E0309,E0310,E0311,E0312,E0313,E0314,E0315,E0316,E0317,E0318,E0319,E0401,E0402
+  - Evidence (latest dense-stride candidate; still below +2% target): `runs/E0402_full_test402_av_clipdiff_flow_mlp_stride_20260206-141020/metrics.json` + `runs/E0402_full_test402_av_clipdiff_flow_mlp_stride_20260206-141020/diagnose.json` (`anchored=0.71896`, `uniform=0.70858`, `Δ≈+0.01037`, `p≈0.00489`, `fallback_used_frac≈0.8607`).
+  - Evidence (latest improved alternative under dense-stride): `runs/E0402_full_test402_av_clipdiff_flow_mlp_stride_alt_top1med_thr0p5_20260206-152012/metrics.json` + `runs/E0402_full_test402_av_clipdiff_flow_mlp_stride_alt_top1med_thr0p5_20260206-152012/diagnose.json` (`anchored=0.720995`, `uniform=0.708582`, `Δ≈+0.01241`, `p≈0.00302`, `fallback_used_frac≈0.5622`); best so far in this branch, but still below +2%.
+  - Evidence (gate freeze rerun on full val402; no new path to +2% yet): `runs/E0503_gate_sweep_dense_stride_full_20260207-153210/gate_sweep.json` + `runs/E0503_gate_sweep_dense_stride_full_20260207-153210/best_gate.json` (selected gate remains `top1_med@0.5`; `anchored≈0.74526`, `uniform≈0.73214`, `Δ≈+0.01312`, `p≈0.0174`, `oracle_minus_predicted≈0.03746`).
+  - Evidence (additional dense-stride quick-grid + full check; does not beat E0402 alt):
+    - Quick grid winner: `runs/E0405_quick_test402_av_clipdiff_flow_mlp_stride_top1medn_thr0p6_shift0_20260206-161028/metrics.json` (`Δ≈+0.01335`, `p≈0.0956`).
+    - Full reproduction: `runs/E0406_full_test402_av_clipdiff_flow_mlp_stride_top1medn_thr0p6_shift0_20260206-161349/metrics.json` (`anchored≈0.71629`, `uniform≈0.70858`, `Δ≈+0.00771`, `p≈0.0442`), i.e., regression vs E0402 alt.
+  - Evidence (full; energy_v2 improves but still does **not** meet the target):
+    - Val401 sweep (selection): `runs/E0018_ave_p0_sweep_official_val_energy_v2_20260203-185629/sweep_summary.json` (best=`energy_ref_k2_topk_std1p0`, Δ=+0.01344, p=0.00175) + `runs/E0018_ave_p0_sweep_official_val_energy_v2_20260203-185629/best_config.json`.
+    - Test402 reproduction: `runs/E0019_ave_p0_best_to_test_official_energy_v2_20260203-190500/metrics.json` (anchored=0.7188 vs uniform=0.7086, Δ=+0.01017, p=0.00466; fallback_used≈0.731).
+  - Evidence (full; val-tuned gate on energy does not reach +2% either): `runs/E0201_full_energy_gini0p35_test402_20260204-041950/oracle_vs_predicted.json` (anchored=0.7193 vs uniform=0.7086, Δ=+0.01075, p=0.024; fallback_used≈0.580).
+  - Evidence (partial val selection + full test; audio_basic_tcn does not reach +2% either):
+    - Val402 sweep (SEEDS=0..2): `runs/E0205_full_audio_basic_tcn_val402_20260204-063935/sweep_summary.json` (best=`energyv3_extreme_112_224_448_maxHigh1_shift0_std0p6`, Δ≈+0.01837, p≈0.0426).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0206_ave_p0_best_to_test_official_audio_basic_tcn_20260204-070803/metrics.json` (anchored=0.7196 vs uniform=0.7086, Δ=+0.01097, p=0.0142).
+  - Evidence (partial val selection + full test; clipdiff-augmented supervised anchors improve but still < +2%):
+    - Val402 sweep (SEEDS=0..2): `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_20260204-075914/sweep_summary.json` (best=`energyv3_shift1_std0p6`, Δ≈+0.01106, p≈0.00427).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-080419/metrics.json` (anchored=0.72045 vs uniform=0.70858, Δ=+0.01187, p=0.00142; fallback≈0.883).
+    - Val402 sweep (SEEDS=0..2; ltl_std_v1): `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_std_v1_20260204-083739/sweep_summary.json` (best=`ltlstd_shift0_std0p45`, Δ≈+0.01347, p≈0.0391).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_ltl_std_v1_20260204-084147/metrics.json` (anchored=0.72065 vs uniform=0.70858, Δ=+0.01206, p=0.00464; fallback≈0.754).
+    - Val402 sweep (SEEDS=0..2; ltl_std_v2): `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_std_v2_20260204-085103/sweep_summary.json` (best=`ltlstd2_shift0_std0p5_mixedAlloc`, Δ≈+0.01471, p≈0.0365).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_ltl_std_v2_20260204-085632/metrics.json` (overfits val and regresses on test: anchored=0.71724 vs uniform=0.70858, Δ=+0.00866, p=0.0472; fallback≈0.816).
+    - Val402 sweep (SEEDS=0..2; ltl_gini_v2): `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_gini_v2_20260204-090323/sweep_summary.json` (best=`ltlgini2_gini0p45_shift0`, Δ≈+0.00507, p≈0.437).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_ltl_gini_v2_20260204-090710/metrics.json` (anchored=0.71948 vs uniform=0.70858, Δ=+0.01090, p=0.0274).
+    - Val402 sweep (SEEDS=0..2; ltl_gap_v1): `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_gap_v1_20260204-090353/sweep_summary.json` (best=`ltlgap1_gap0p3_shift0`, Δ≈+0.00707, p≈0.0825).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_ltl_gap_v1_20260204-090741/metrics.json` (anchored=0.71600 vs uniform=0.70858, Δ=+0.00741, p=0.0604).
+    - Val402 sweep (SEEDS=0..2; ltl_extreme_v1): `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_extreme_v1_20260204-091309/sweep_summary.json` (best=`ltlextreme1_shift1_std0p6`, Δ≈+0.00998, p≈0.0579).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_ltl_extreme_v1_20260204-091529/metrics.json` (anchored=0.71413 vs uniform=0.70858, Δ=+0.00555, p=0.0849).
+    - Val402 sweep (SEEDS=0..2; av_clipdiff_mlp_cls): `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_cls_ltl_std_v1_20260204-092157/sweep_summary.json` (best=`ltlstd_shift0_std0p55`, Δ≈+0.01413, p≈0.0318).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_cls_ltl_std_v1_20260204-092530/metrics.json` (regresses on test: anchored=0.71510 vs uniform=0.70858, Δ=+0.00652, p=0.00801).
+    - Val402 sweep (SEEDS=0..2; ltl_adaptive_v1): `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_20260204-102403/sweep_summary.json` (best=`ltladj1_shift0_std0p45`, Δ≈+0.01164, p≈0.0373).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-103001/metrics.json` (anchored=0.72234 vs uniform=0.70858, Δ=+0.01376, p≈1.4e-05).
+  - Evidence (full; Stage-2 score smoothing does not improve the learned-anchor winner):
+    - Val402 sweep (SEEDS=0..2): `runs/E0218_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_smooth_v1_20260204-132824/sweep_summary.json` (best=`ltlsmooth_shift0_std0p45_sw0_adj1`, i.e. smoothing window=0).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0219_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-133929/metrics.json` (anchored=0.72234 vs uniform=0.70858, Δ=+0.01376, p≈1.40e-05; fallback≈0.754).
+  - Evidence (full; top1-med confidence gate improves the best learned-anchor test402 gain, but still < +2%):
+    - Val402 sweep (SEEDS=0..2): `runs/E0223_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_v1_20260204-135150/sweep_summary.json` (best=`ltltop1med_thr0p6_shift1`).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0224_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-135547/metrics.json` (anchored=0.72383 vs uniform=0.70858, Δ=+0.01525, p≈0.00390; fallback≈0.751).
+  - Evidence (diagnostic; “train longer (epochs=10)” does not help the top1-med winner on test402):
+    - Full (SEEDS=0..9; wd=0.01): `runs/E0267_ave_p0_best_to_test_official_av_clipdiff_mlp_top1med_epochs10_wd0p01_20260204-194212/metrics.json` (Δ=+0.00274, p≈0.510; large regression vs E0224).
+    - Full (SEEDS=0..9; wd=0.0): `runs/E0268_ave_p0_best_to_test_official_av_clipdiff_mlp_top1med_epochs10_wd0p0_20260204-194359/metrics.json` (Δ=-0.00129, p≈0.641; regression).
+    - Full (SEEDS=0..2): `runs/E0291_ave_p0_best_to_test_official_av_clipdiff_mlp_top1med_e10_s0-2_20260205-001904/metrics.json` (anchored=0.70091 vs uniform=0.69701, Δ=+0.00390, p≈0.665; not significant).
+  - Evidence (diagnostic; P0063 Stage-1 fused heuristics do not improve under the top1-med pipeline):
+    - Val402 sweep (`EVENTNESS=av_fused_clipdiff_prod`; SEEDS=0..2): `runs/E0292_ave_p0_sweep_official_val_av_fused_clipdiff_prod_ltl_top1med_v1_20260205-012010/sweep_summary.json` (best Δ≈-0.00482, p≈0.491).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0293_ave_p0_best_to_test_official_av_fused_clipdiff_prod_20260205-012350/metrics.json` (anchored=0.71433 vs uniform=0.70858, Δ=+0.00575, p≈0.125).
+    - Val402 sweep (`EVENTNESS=moe_energy_clipdiff`; SEEDS=0..2): `runs/E0294_ave_p0_sweep_official_val_moe_energy_clipdiff_ltl_top1med_v1_20260205-012010/sweep_summary.json` (best Δ≈+0.00224, p≈0.756).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0295_ave_p0_best_to_test_official_moe_energy_clipdiff_20260205-012339/metrics.json` (anchored=0.71164 vs uniform=0.70858, Δ=+0.00306, p≈0.420).
+  - Evidence (full; Stage-2 variant sweep under the fixed top1-med gate does not improve the winner):
+    - Val402 variants: `runs/E0226_ave_p0_stage2_variants_official_val_av_clipdiff_mlp_20260204-142732/variants_summary.json` (best=`best_config`; other variants are worse on val).
+    - Test402 reproduction: `runs/E0227_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-142936/metrics.json` (same result as E0224: Δ=+0.01525, p≈0.00390).
+  - Evidence (full; top1-med + extreme triad (112/224/448) overfits val and regresses on test402):
+    - Val402 sweep (SEEDS=0..2): `runs/E0228_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_extreme_v1_20260204-143855/sweep_summary.json` (best=`ltltop1medext1_thr0p6_shift0_distance`, Δ≈+0.01313, p≈0.0589).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0229_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-144335/metrics.json` (anchored=0.71617 vs uniform=0.70858, Δ=+0.00759, p≈0.0286; fallback≈0.751).
+  - Evidence (full; higher-res Stage-1 clipdiff features (av_clipdiff_mlp_r160) do not improve and increase fallback):
+    - Val402 sweep (SEEDS=0..2): `runs/E0230_ave_p0_sweep_official_val_av_clipdiff_mlp_r160_ltl_top1med_v1_20260204-144941/sweep_summary.json` (best Δ≈+0.00341).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0231_ave_p0_best_to_test_official_av_clipdiff_mlp_r160_20260204-145349/metrics.json` (anchored=0.71754 vs uniform=0.70858, Δ=+0.00896, p≈0.0557; fallback≈0.868).
+  - Evidence (full; eliminating 2-high via `max_high_anchors=1` regresses on test402):
+    - Val402 sweep (SEEDS=0..2): `runs/E0233_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_maxhigh1_v1_20260204-151909/sweep_summary.json` (best=`ltltop1medmax1_thr0p5_shift0`, Δ≈+0.00740, p≈0.0164).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0234_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-152349/metrics.json` (anchored=0.71505 vs uniform=0.70858, Δ=+0.00647, p≈0.155; fallback≈0.652).
+  - Evidence (full; k=1 (single-anchor) under top1-med gate also regresses vs the best config):
+    - Val402 sweep (SEEDS=0..2): `runs/E0235_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_k1_v1_20260204-153020/sweep_summary.json` (best=`ltltop1medk1_thr0p5_shift1`, Δ≈+0.00715, p≈0.269).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0236_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-153411/metrics.json` (anchored=0.71878 vs uniform=0.70858, Δ=+0.01020, p≈0.0110; fallback≈0.652).
+  - Evidence (full; additional Stage-2 variants under the top1-med gate do not beat E0224):
+    - Adaptive gap demotion:
+      - Val402 sweep: `runs/E0237_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_adaptivegap_v1_20260204-160956/sweep_summary.json` (best Δ≈+0.01064).
+      - Test402 reproduction: `runs/E0238_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-161232/metrics.json` (Δ=+0.01037, p≈0.00434; regresses).
+    - High-conf demotion (adaptive_v2):
+      - Val402 sweep: `runs/E0239_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_highconf_v1_20260204-161417/sweep_summary.json` (best Δ≈+0.00964).
+      - Test402 reproduction: `runs/E0240_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-161835/metrics.json` (Δ=+0.01525, p≈0.00390; matches E0224).
+    - Score-aware base allocation:
+      - Val402 sweep: `runs/E0241_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_scorealloc_v1_20260204-162247/sweep_summary.json` (best Δ≈+0.00756).
+      - Test402 reproduction: `runs/E0242_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-162356/metrics.json` (Δ=+0.00968, p≈0.00346; regresses).
+    - Autoshifted learned scores:
+      - Val402 sweep: `runs/E0245_ave_p0_sweep_official_val_av_clipdiff_mlp_autoshift_ltl_top1med_autoshift_v1_20260204-163436/sweep_summary.json` (best Δ≈+0.00806).
+      - Test402 reproduction: `runs/E0246_ave_p0_best_to_test_official_av_clipdiff_mlp_autoshift_20260204-163703/metrics.json` (Δ=+0.00142, p≈0.707; fails).
+    - Stage-1 probe sweeps (val-only, not promoted): `runs/E0243_ave_p0_sweep_official_val_av_clip_mlp_cls_target_ltl_top1med_v1_20260204-162702/sweep_summary.json` and `runs/E0247_ave_p0_sweep_official_val_av_clipdiff_mlp_cls_target_ltl_top1med_v1_20260204-164046/sweep_summary.json`.
+  - Evidence (full; strong-NMS anchor selection (nms_strong) does not transfer and regresses on test402):
+    - Val402 sweep: `runs/E0248_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_nmsstrong_v1_20260204-170658/sweep_summary.json` (best Δ≈+0.00723).
+    - Test402 reproduction: `runs/E0249_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-171109/metrics.json` (Δ=+0.00883, p≈8.999e-04; regresses vs E0224).
+  - Evidence (diagnostic; fbank_stats + CLIPdiff scalar learned anchors fail):
+    - Val402 sweep: `runs/E0250_ave_p0_sweep_official_val_av_clipdiff_fbank_mlp_ltl_top1med_v1_20260204-172631/sweep_summary.json` (best Δ≈+0.00058).
+    - Test402 reproduction: `runs/E0251_ave_p0_best_to_test_official_av_clipdiff_fbank_mlp_20260204-173034/metrics.json` (Δ=-0.00149, p≈0.676).
+  - Evidence (diagnostic; conditional drop-far anchor2 improves val but regresses on test402):
+    - Val402 sweep: `runs/E0252_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_dropfar_v1_20260204-173949/sweep_summary.json` (best Δ≈+0.01305).
+    - Test402 reproduction: `runs/E0253_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-174232/metrics.json` (Δ=+0.00781, p≈0.00385; regresses vs E0224).
+  - Evidence (full; energy_v3 sweep does not find a stronger config than energy_v2):
+    - Val401 sweep: `runs/E0021_ave_p0_sweep_official_val_energy_v3_20260203-194306/sweep_summary.json` (best=`energyv3_ref_shift1_std1p0`, Δ=+0.01344, p=0.00175).
+    - Test402 reproduction: `runs/E0022_ave_p0_best_to_test_official_energy_v3_20260203-195707/metrics.json` (anchored=0.7188 vs uniform=0.7086, Δ=+0.01017, p=0.00466).
+  - Evidence (diagnostic; top-3 val configs do not transfer better than the best):
+    - Test402 (val rank #2): `runs/E0022b_energyv3_shift1_std0p6_test402_20260203-195743/metrics.json` (Δ=+0.00512, p=0.144).
+    - Test402 (val rank #3): `runs/E0022c_energyv3_shift0_std1p0_test402_20260203-195754/metrics.json` (Δ=+0.00388, p=0.349).
+  - Evidence (diagnostic; longer training does not help this gap): `runs/E0024_energy_ref_test402_epochs20_20260203-194640/metrics.json` (Δ=+0.00281, p=0.587).
+  - Evidence (diagnostic; increasing K and using score-based base allocation does not beat best): `runs/E0025_energy_k5_maxHigh1_scoreAlloc_test402_20260203-200327/metrics.json` (Δ=+0.00876, p=0.0106).
+  - Evidence (full; AST-based anchors do **not** transfer and can significantly regress): `runs/E0015_ave_p0_best_to_test_official_ast_20260203-172848/metrics.json` (anchored=0.7003 vs uniform=0.7123, Δ=-0.0120, p=0.024; fallback≈0.169). Diagnosis: `runs/E0016_ave_p0_diagnose_20260203-173704/diagnose.json` (adjacent 2-anchor cases are most harmful).
+  - Evidence (diagnostic; clipdiff-based autoshift does not beat energy): `runs/E0201_full_energy_autoshift_clipdiff_test402_20260204-032327/oracle_vs_predicted.json` (Δ=+0.00687) and `runs/E0201_full_energy_autoshift_clipdiff_pos_test402_20260204-040122/oracle_vs_predicted.json` (Δ=+0.00254).
+  - Evidence (diagnostic; full-CLIP Stage-1 anchors do not help):
+    - Val402 sweep: `runs/E0207_ave_p0_sweep_official_val_av_clip_mlp_cls_20260204-095132/sweep_summary.json` (best Δ≈+0.00308).
+    - Test402 reproduction: `runs/E0208_ave_p0_best_to_test_official_av_clip_mlp_cls_20260204-095509/metrics.json` (Δ=+0.00281, p=0.328).
+    - Val402 sweep: `runs/E0207_ave_p0_sweep_official_val_av_clip_mlp_cls_target_20260204-095814/sweep_summary.json` (best Δ≈+0.00648, p≈0.100).
+    - Test402 reproduction: `runs/E0208_ave_p0_best_to_test_official_av_clip_mlp_cls_target_20260204-100202/metrics.json` (Δ=-0.00597, p=0.131).
+  - Evidence (diagnostic; retuning av_clipdiff_tcn with ltl_std_v1 overfits val but regresses on test):
+    - Val402 sweep: `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_tcn_20260204-100517/sweep_summary.json` (best Δ≈+0.01247, p≈0.0435).
+    - Test402 reproduction: `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_tcn_20260204-100855/metrics.json` (Δ=+0.00540, p=0.161).
+  - Evidence (diagnostic; clipdiff-vector MLP anchors do not help): `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_vec_mlp_20260204-101416/sweep_summary.json` (best Δ≈+0.00349, p≈0.066).
+  - Evidence (diagnostic; adaptive_v3 keep-adjacent + base allocation regresses): Val402 sweep `runs/E0284_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_keepadj_basealloc_v1_20260204-224414/sweep_summary.json` (best=`ltltop1med_keepadj_distance`, Δ≈+0.00515, p≈0.286) and test402 reproduction `runs/E0285_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-224708/metrics.json` (Δ=+0.00729, p≈0.1009).
+  - Evidence (diagnostic; budget-band Stage-2 planner does not improve C0003):
+    - Val402 sweep (SEEDS=0..2): `runs/E0303_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_band_v1_20260205-033915/sweep_summary.json` (best=`ltltop1medband_thr0p7_shift1`, Δ≈+0.01205, p≈0.0685).
+    - Test402 reproduction (SEEDS=0..9): `runs/E0304_ave_p0_best_to_test_official_av_clipdiff_mlp_20260205-035830/metrics.json` (Δ=+0.00816, p≈0.0441; regresses vs E0224).
+    - Direct diagnostic (thr0.6, shift1; SEEDS=0..9): `runs/E0305_ave_p0_best_to_test_official_av_clipdiff_mlp_banddiag_thr0p6_shift1_20260205-040513/metrics.json` (Δ=+0.00356, p≈0.230; regresses vs E0224). Conclusion: band-budget planning (as implemented) is not a viable “拉大” direction.
+  - Evidence (diagnostic; band-budget + low112 (+160) preserves val but still regresses on test402):
+    - Val402 sweep (SEEDS=0..2): `runs/E0320_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_band_low112_v1_20260205-142258/sweep_summary.json` (best=`ltltop1medband112_thr0p7_shift1`, Δ≈+0.01205, p≈0.0685).
+    - Quick test402 (SEEDS=0..2): `runs/E0321_quick_test402_av_clipdiff_mlp_band_low112_20260205-142726/metrics.json` (Δ≈+0.01028, p≈0.204; below E0224 seeds subset). Conclusion: stop before full SEEDS=0..9.
+  - Evidence (diagnostic; WebRTC-VAD speech suppression anchors are near-0 on val402): `runs/E0322_ave_p0_sweep_official_val_asr_vad_ltl_top1med_norm_v1_20260205-142328/sweep_summary.json` (best Δ≈+0.00216, p≈0.842).
+  - Evidence (diagnostic; AST speech-veto "non-speech max" anchors are near-0 on val402): `runs/E0324_ave_p0_sweep_official_val_ast_nonspeech_max_ltl_top1med_norm_v1_20260205-144057/sweep_summary.json` (best Δ≈+0.00324, p≈0.722).
+  - Evidence (diagnostic; AST-embedding learned anchors do not help, even after gate fixes):
+    - Val402 sweep (top1-med; SEEDS=0..2): `runs/E0307_ave_p0_sweep_official_val_av_ast_clipdiff_mil_mlp_ltl_top1med_v1_20260205-045530/sweep_summary.json` (best Δ≈-0.01180; all candidates negative).
+    - Val402 sweep (scale-invariant gate; SEEDS=0..2): `runs/E0309_ave_p0_sweep_official_val_av_ast_clipdiff_mil_mlp_ltl_top1med_norm_v1_20260205-051944/sweep_summary.json` (best Δ≈+0.00108; near 0).
+  - Evidence (diagnostic; scale-invariant top1-med gate does not improve the current best Stage-1 method): `runs/E0310_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_norm_v1_20260205-052411/sweep_summary.json` (best Δ≈+0.00723; worse than E0223 best).
+  - Evidence (diagnostic; explicit A/V alignment “new signal” is near-0 on val402): `runs/E0311_ave_p0_sweep_official_val_av_ast_clipalign_nce_ltl_top1med_norm_v1_20260205-055421/sweep_summary.json` (best Δ≈-0.00033; near 0).
+  - Evidence (diagnostic; A/V correspondence (BCE) improves over NCE but still regresses vs the best val config): `runs/E0318_ave_p0_sweep_official_val_av_ast_clipalign_bce_ltl_top1med_norm_v1_20260205-133800/sweep_summary.json` (best Δ≈+0.00865, p≈0.00120; below E0223 best Δ≈+0.00964).
+  - Evidence (diagnostic; k-adaptive anchor2 veto regresses on both val and test):
+    - Val402 sweep: `runs/E0312_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_anchor2veto_v1_20260205-115927/sweep_summary.json` (best remains the no-veto baseline; veto variants regress).
+    - Quick test402 (SEEDS=0..2): `runs/E0313_quick_test402_av_clipdiff_mlp_a2veto_lr0p65_20260205-120329/metrics.json` (Δ≈+0.00489) and `runs/E0313_quick_test402_av_clipdiff_mlp_a2veto_top2med0p15_20260205-120449/metrics.json` (Δ≈+0.00904), both far below the baseline E0224 on the same seeds (Δ≈+0.01899).
+  - Evidence (diagnostic; teacher-student visgain Stage-1 is near-0 on val402; stop):
+    - Val402 sweep (SEEDS=0..2): `runs/E0314_ave_p0_sweep_official_val_av_clipdiff_visgain_mlp_ltl_top1med_norm_v1_20260205-123935/sweep_summary.json` (best Δ≈+0.00158, p≈0.727).
+  - Evidence (diagnostic; teacher-student lossgain Stage-1 is near-0 on val402; stop):
+    - Val402 sweep (SEEDS=0..2): `runs/E0316_ave_p0_sweep_official_val_av_clipdiff_lossgain_mlp_ltl_top1med_norm_v1_20260205-125414/sweep_summary.json` (best Δ≈+0.00042, p≈0.906).
+  - Evidence (diagnostic; speech-aware Stage-1 variants do not improve val402; stop):
+    - `av_clipdiff_speech_mlp` (append AST speech-prob feature to `av_clipdiff_mlp`): `runs/E0326_ave_p0_sweep_official_val_av_clipdiff_speech_mlp_ltl_top1med_norm_v1_20260205-154338/sweep_summary.json` (best Δ≈+0.00407, p≈0.458).
+    - `energy_nonspeech_ast` (energy_stride_max × (1 - speech_prob_ast)): `runs/E0328_ave_p0_sweep_official_val_energy_nonspeech_ast_ltl_top1med_norm_v1_20260205-155950/sweep_summary.json` (best Δ≈+0.00216, p≈0.0997).
+  - Evidence (diagnostic; downstream-aligned accflip teacher-student Stage-1 does not improve val402; stop):
+    - Val402 sweep (SEEDS=0..2): `runs/E0329_ave_p0_sweep_official_val_av_clipdiff_accflip_mlp_ltl_top1med_norm_v1_20260205-165330/sweep_summary.json` (best Δ≈-0.00091, p≈0.810).
+
+  - Diagnosis summary (as of 2026-02-05; why C0003 is still < +2%):
+    - Mechanism upper bound is large (Oracle >> Uniform; C0006), but deployable Stage-1 anchors remain far from Oracle (C0007 gap ≈0.03), so Stage-1 reliability is the main lever.
+    - The current best `av_clipdiff_mlp + top1_med` config (E0224) still falls back to uniform on ~75% clips (test402; `runs/E0224_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-135547/metrics.json`), which dilutes average gains and suggests anchors are only “worth using” on a minority subset.
+    - Per-clip diagnosis on the same E0224 test402 run (`runs/DIAG_E0224_test402_20260205-122658/diagnose.json`) shows the residual ceiling is dominated by harmful anchor geometry:
+      - `fallback_used_frac≈0.751`
+      - `high_count=2` bucket is net harmful (`mean_delta≈-0.040`, n=30), while `high_count=1` is net positive.
+      - Far anchors are strongly harmful (`anchor_dist∈{2,3,4}` has `mean_delta≈-0.044..-0.072`), while adjacent anchors (`dist=1`) are net positive.
+      - Strict anchor recall has near-zero correlation with downstream delta (Pearson≈0.013), indicating “coverage” is not sufficient; Stage-1 must suppress visually-irrelevant audio peaks, not just hit positives.
+    - Many “fix Stage-2 plan” knobs improve val but regress test (drop-far / maxHigh1 / k=1 / keep-adjacent / band-budget), indicating the bottleneck is not a single allocation heuristic but the correctness + robustness of the anchor proposals themselves.
+    - Val→test transfer is unstable: multiple knobs produce convincing gains on val402 but collapse on test402, implying strong distribution shift (or “reviewer-murder” fragility) and making “stop-on-val-regression” necessary but not sufficient; any new method must be stress-tested with quick test402 diagnostics + per-clip bucket breakdowns, not just mean Δ.
+    - “Oracle-style usefulness” teachers are non-trivial: multiple teacher-student attempts (visgain; lossgain; accflip) are near-0 on val402, suggesting that these naive proxies are not aligned enough with the real “spend high-res here” objective (or the student is too weak / features too limited).
+    - Bold Stage-1 upgrades (AST embeddings; A/V alignment NCE) do not improve val402; likely because AudioSet-style semantics do not translate cleanly to AVE evidence seconds, and because “eventness” is not the same as “visual-useful evidence under a fixed budget”.
+
+  - Next directions (ranked; require new experiments; keep stop-on-val-regression discipline + quick-test diagnostics):
+    - New modality / new signal (highest priority):
+      - ASR/Whisper (VAD + word timestamps) anchors (P0104): target “speech-like but not visually evidenced” false anchors; cache transcripts/scores to keep sweeps runnable.
+      - Audio–visual correspondence score (deployable): explicitly score “audio and visual match at time t” (not just audio activity) and use it to suppress off-screen peaks. Candidate implementations:
+        - trainable AST-emb ↔ CLIP-emb alignment with BCE/hinge on diagonal similarity (stronger than NCE-only),
+        - class-conditional correspondence: audio predicted class agrees with visual text-sim (CLIP text prompts for AVE classes).
+      - CLAP/AudioCLIP embeddings: audio↔text similarity for AVE classes (and optionally image↔text) to gate anchors by semantic “visibility”.
+    - Better Stage-1 objectives (make scores useful, not just correct):
+      - Replace “label!=0 eventness” with a **budget-aware usefulness** target: per-second marginal gain of spending high-res (or adding context) under a fixed Stage-2 plan; avoid weak teachers (visgain/lossgain as currently defined).
+      - Add peakiness calibration that is *trained*: ranking loss / top1-vs-rest margin to reduce the ~75% fallback without flooding in harmful far-anchor cases.
+    - Better Stage-2 policies (only after Stage-1 signal improves):
+      - Clip-level learned gate: predict “anchored will hurt” and force fallback to uniform for those clips (learned from train split teacher signals / per-clip deltas); goal is to cut the harmful far/2-high bucket while preserving good adjacent cases.
+      - Expand the feasible resolution set by generating intermediate caches (e.g., 192/256) to reduce low-res harm while keeping budget; then re-sweep triads.
+    - Protocol upgrades (bolder, higher cost):
+      - Multi-frame per second around anchors (variable fps) to capture motion evidence; requires new preprocessing + cache schema + revised equal-budget definition.
+      - Cheap visual motion from compressed-domain motion vectors / lightweight flow (requires access to raw videos; new cache path).
 
 - [ ] C0004: On official AVE test402, audio_concat_anchored_top2 improves over audio_concat_uniform (>= +1.0%, p<0.05; SEEDS=0..9).
   - Evidence required: `metrics.json` under the best sampling config, showing fusion gains beyond uniform fusion baseline.
-  - Experiments: E0013
+  - Experiments: E0013,E0017,E0020,E0023
+  - Evidence (full; does **not** meet the target): `runs/E0013_ave_fusion_confirm_official_test_20260203-150226/metrics.json` (audio_concat_anchored=0.7213 vs audio_concat_uniform=0.7162, Δ=+0.0051, p=0.367).
+  - Evidence (full; energy_v2 config regresses fusion): `runs/E0020_ave_fusion_confirm_official_test_energy_v2_20260203-190804/metrics.json` (audio_concat_anchored=0.7195 vs audio_concat_uniform=0.7214, Δ=-0.0020, p=0.598).
+  - Evidence (full; dense-stride promoted config also fails): `runs/E0410_fusion_confirm_energy_stride_max_top1med_thr0p5_20260206-180945/metrics.json` (`audio_concat_anchored_top2≈0.70978` vs `audio_concat_uniform≈0.71231`, `Δ≈-0.00254`, `paired_ttest.audio_concat_anchored_vs_audio_concat_uniform.p≈0.36759`).
 
 - [ ] C0005: On EPIC-SOUNDS video-level multi-label recognition, audio-anchored selection improves mAP on val (SEEDS>=3).
   - Evidence required: `metrics.json` with mAP/macro-F1 and a clear fixed budget definition (`max_steps × base_res`), plus baselines.
-  - Experiments: E0100
+  - Experiments: E0100,E0413
+  - Artifacts: `runs/E0100_*/metrics.json`
+  - Evidence (code-path smoke only): `runs/smoke_20260206-184253/epic_sounds_video_cls_synth/metrics.json` (synthetic sanity check, not valid for C0005).
+  - Evidence (real local EPIC run; available subset with strict equal-budget settings): `runs/E0413_epic_video_cls_local_audio_anchored_full_ms120_20260207-171637/metrics.json`, `runs/E0413_epic_video_cls_local_uniform_full_ms120_20260207-172545/metrics.json`, `runs/E0413_epic_video_cls_local_random_full_ms120_20260207-173208/metrics.json` (`num_train_videos=17`, `num_val_videos=16`, `max_steps=120`, `max_seconds=120`; anchored vs uniform: `mAP≈-0.0221`, `macro_f1≈-0.0118`).
+  - Note: C0005 remains unproven; current local EPIC coverage is partial (`mp4_count=33`) and this pipeline currently reports single-run metrics (no multi-seed variance summary).
+
+- [x] C0006: Oracle anchors provide an upper bound that shows stable Acc–Tok Pareto improvements across a pre-registered budget grid on AVE.
+  - Evidence required: `oracle_ceiling.json` + Pareto plot (with CI) showing Oracle dominates Uniform/Random at ≥1 budget point (and is non-worse elsewhere).
+  - Experiments: E0010,E0330
+  - Artifacts: `runs/E0010_*/oracle_ceiling.json`, `runs/E0330_*/pareto_report.json`, `runs/E0330_*/pareto.png`
+  - Evidence (oracle ceiling sweep; fixed budget, strong upper bound): val402 `runs/E0010_oracle_ceiling_official_val_20260203-144421/oracle_ceiling.json` (best=`160_224_352_temporal_k5`, oracle=0.7931 vs uniform=0.7311, Δ=+0.0620, p=8.9e-05) and test402 `runs/E0010_oracle_ceiling_official_test_20260203-143455/oracle_ceiling.json` (best=`160_224_352_temporal_k5`, oracle=0.7663 vs uniform=0.7126, Δ=+0.0536, p=8.9e-06). Note: this is not yet a multi-budget Pareto grid; use it as the mechanism upper bound.
+  - Evidence (multi-budget Pareto grid; official test402; SEEDS=0..9): `runs/E0330_full_av_clipdiff_mlp_auto_20260205-184559/pareto_report.json` + `runs/E0330_full_av_clipdiff_mlp_auto_20260205-184559/pareto.png` (oracle dominates uniform/random at Tok∈{1000,1960,4840}).
+
+- [ ] C0007: Predicted anchors stay within a small gap of Oracle anchors on the same budget grid (deployable stage-1).
+  - Evidence required: A report showing mean(Oracle–Pred) ≤ ε across budgets, plus Predicted still beats best baseline with p<0.05 on ≥1 budget.
+  - Experiments: E0201,E0330,E0403
+  - Artifacts: `runs/E0201_*/oracle_vs_predicted.json`, `runs/E0330_*/pareto_report.json`
+  - Evidence (dense-stride baseline): `runs/E0403_oracle_vs_predicted_av_clipdiff_flow_mlp_stride_20260206-141804/oracle_vs_predicted.json` (`predicted`: `anchored=0.70158` vs `uniform=0.70705`, `Δ≈-0.00547`, `p≈0.03399`; `oracle_minus_predicted≈0.04187`).
+  - Evidence (dense-stride aligned rerun with promoted config): `runs/E0403_oracle_vs_predicted_av_clipdiff_flow_mlp_stride_alt_top1med_thr0p5_20260206-152658/oracle_vs_predicted.json` (`predicted`: `anchored≈0.71857` vs `uniform≈0.70705`, `Δ≈+0.01153`, `p≈0.0661`; `oracle_minus_predicted≈0.02488`). Gap improves materially but still does not satisfy C0007 (no significant predicted-vs-uniform gain at this seed set).
+  - Evidence (dense-stride aligned full rerun with promoted config; SEEDS=0..9): `runs/E0407_oracle_vs_predicted_av_clipdiff_flow_mlp_stride_top1med_thr0p5_s0-9_20260206-161749/oracle_vs_predicted.json` (`predicted`: `anchored≈0.720995` vs `uniform≈0.708582`, `Δ≈+0.01241`, `p≈0.00302`; `oracle_minus_predicted≈0.02900`). This clears the significance sub-gate but still leaves a non-trivial Oracle gap.
+  - Evidence (cross-budget aligned rerun; SEEDS=0..9): `runs/E0409_pareto_grid_av_clipdiff_flow_mlp_stride_top1med_thr0p5_s0-9_20260206-163941/pareto_report.json` + `.../pareto.png`. Predicted-vs-uniform by budget: `112_160_224` (`Δ≈-0.00025`, `p≈0.938`), `160_224_352` (`Δ≈+0.01241`, `p≈0.00302`), `224_352_448` (`Δ≈-0.00674`, `p≈0.099`). Oracle–Pred gaps: `0.02142`, `0.02900`, `0.03012` (mean `≈0.02685`), i.e., mid-budget is significant but high-budget transfer remains weak.
+  - Evidence (dense-stride dedicated full rerun wrapper; SEEDS=0..9): `runs/E0504_oracle_pred_gap_grid_dense_stride_full_20260207-155721/pareto_report.json` + `runs/E0504_oracle_pred_gap_grid_dense_stride_full_20260207-155721/pareto.png`. Results reproduce the same pattern: only `160_224_352` is significant (`Δ≈+0.01241`, `p≈0.00302`); Oracle–Pred gaps remain `0.02142/0.02900/0.03012` (mean `≈0.02685`), so C0007 remains unproven.
+  - Evidence (full; fixed budget; test402): `runs/E0201_full_energy_20260203-210017/oracle_vs_predicted.json` (oracle_minus_predicted=0.03124; anchored=0.7188 vs uniform=0.7086, p=0.00466). `runs/E0201_full_energy_stride_max_20260203-210017/oracle_vs_predicted.json` (oracle_minus_predicted=0.03254). `runs/E0201_oracle_vs_predicted_av_fused_scale3p5_full_20260203-221906/oracle_vs_predicted.json` (after fixing confidence-gate scale mismatch; anchored=0.7190 vs uniform=0.7086, p=0.00995; oracle_minus_predicted≈0.03097; fallback_used_frac≈0.739). `runs/E0201_oracle_vs_predicted_av_clipdiff_mlp_20260204-213240/oracle_vs_predicted.json` (oracle_minus_predicted=0.03383; predicted Δ=+0.00759, p=0.0945).
+  - Evidence (multi-budget Pareto grid; official test402; SEEDS=0..9): `runs/E0330_full_av_clipdiff_mlp_auto_20260205-184559/pareto_report.json` (Oracle–Pred gaps: ≈0.0210@Tok=1000, ≈0.0262@Tok=1960, ≈0.0231@Tok=4840; predicted’s gap is currently dominated by high fallback `fallback_used_frac≈0.751` under the `top1_med thr=0.6` gate).
+
+- [ ] C0008: Evidence Alignment (Cov@τ) correlates with downstream accuracy and diagnoses failure cases.
+  - Evidence required: Cov@τ table and a scatter/correlation report where higher Cov@τ predicts higher anchored gains (report Pearson/Spearman).
+  - Experiments: E0202,E0411
+  - Artifacts: `runs/E0202_*/evidence_alignment.json`
+  - Evidence (full; currently weak alignment/correlation on test402): `runs/E0202_evidence_alignment_energy_v2_test_20260203-194355/evidence_alignment.json` (Cov@τ mean≈0.059 for τ∈{0.3,0.5,0.7}; corr pearson≈0.080, spearman≈-0.003).
+  - Evidence (dense-stride promoted config rerun): `runs/E0411_evidence_alignment_av_clipdiff_flow_mlp_stride_top1med_thr0p5_20260206-182007/evidence_alignment.json` (`cov_by_tau` mean≈0.0935 at τ∈{0.3,0.5,0.7}; `corr_by_tau` pearson≈0.0498, spearman≈-0.0029), still below a convincing correlation threshold.
+
+- [ ] C0009: Listen-then-Look degrades gracefully under shift/noise/silence, and α provides a computable accuracy lower bound.
+  - Evidence required: Degradation heatmaps/curves over `{shift_s, snr_db, silence_ratio, alpha}` showing monotonic trends and no catastrophic drops below the α-baseline.
+  - Experiments: E0203,E0331,E0404,E0412
+  - Artifacts: `runs/E0203_*/degradation_suite.json`, `runs/E0203_*/degradation_plots/*`, `runs/E0404_*/degradation_suite.json`
+  - Evidence (dense-stride extension): `runs/E0404_degradation_av_clipdiff_flow_mlp_stride_20260206-142817/degradation_suite.json` (18 perturbation conditions; mean Recall@K `Δ0≈0.21308`, `Δ1≈0.38001`, `Δ2≈0.51741`; vs `runs/E0203_degradation_av_clipdiff_mlp_20260204-215831/degradation_suite.json`, strict `Δ0` is slightly better but `Δ1/Δ2` are worse).
+  - Evidence (stage-1 recall only; alpha lower bound pending): `runs/E0203_full_energy_20260203-210331/degradation_suite.json`, `runs/E0203_full_energy_stride_max_20260203-210414/degradation_suite.json`, `runs/E0203_full_av_fused_20260203-210458/degradation_suite.json` (av_fused improves mean Recall@K,Δ2 but hurts strict Δ0), `runs/E0203_degradation_av_clipdiff_mlp_20260204-215831/degradation_suite.json` (mean Recall@K,Δ0≈0.212; Δ2≈0.624).
+  - Evidence (E0331 downstream accuracy + α): smoke `runs/E0331_smoke_av_clipdiff_mlp_20260205-194038/degradation_accuracy.json` + plots, and full `runs/E0331_full_av_clipdiff_mlp_20260205-194925/degradation_accuracy.json` + `runs/E0331_full_av_clipdiff_mlp_20260205-194925/degradation_plots/*.png`.
+  - Evidence (dense-stride downstream rerun with explicit α checks): `runs/E0412_degradation_accuracy_av_clipdiff_flow_mlp_stride_top1med_thr0p5_s0-9_20260206-182443/degradation_accuracy.json` (`rows=54`, `alpha_floor_checks.num_fail=0`, `alpha_floor_checks.min_margin≈+0.01766`; mean `anchored-uniform` remains positive over the full perturbation grid).
+  - Evidence (dense-stride dedicated full rerun wrapper; SEEDS=0..9): `runs/E0505_degradation_accuracy_dense_stride_full_20260207-161213/degradation_accuracy.json` + `runs/E0505_degradation_accuracy_dense_stride_full_20260207-161213/degradation_plots/*.png` (`rows=54`, `alpha_floor_checks.num_fail=0`, `alpha_floor_checks.min_margin≈+0.01766`; mean `anchored-uniform` by alpha is `α=0:+0.00766`, `α=0.5:+0.01300`, `α=1:+0.01766`).

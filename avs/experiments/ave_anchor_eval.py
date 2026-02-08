@@ -8,10 +8,16 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from avs.audio.ast_probe import ASTEventnessProbe, ASTProbeConfig
-from avs.audio.eventness import anchors_from_scores, compute_eventness_wav_energy, compute_eventness_wav_energy_delta
+from avs.audio.eventness import (
+    anchors_from_scores,
+    compute_eventness_wav_energy,
+    compute_eventness_wav_energy_delta,
+    compute_eventness_wav_energy_stride_max,
+)
 from avs.datasets.ave import AVEIndex, ensure_ave_meta
 from avs.datasets.layout import ave_paths
 from avs.metrics.anchors import recall_at_k
+from avs.utils.scores import AV_FUSED_SCORE_SCALE, fuse_max, fuse_prod, minmax_01, scale
 from avs.utils.paths import data_dir
 
 
@@ -20,6 +26,7 @@ class AnchorEvalClip:
     clip_id: str
     wav_path: Path
     gt_segments: list[int]
+    frames_dir: Path | None = None
 
 
 def _gt_segments_from_labels(segment_labels: list[int]) -> list[int]:
@@ -86,6 +93,42 @@ def evaluate_anchor_quality(
         elif method == "energy_delta":
             ev = compute_eventness_wav_energy_delta(clip.wav_path, num_segments=10)
             scores = ev.scores
+        elif method == "energy_stride_max":
+            ev = compute_eventness_wav_energy_stride_max(clip.wav_path, num_segments=10, stride_s=0.2, win_s=0.4)
+            scores = ev.scores
+        elif method == "cheap_visual":
+            from avs.vision.cheap_eventness import frame_diff_eventness, list_frames
+
+            if clip.frames_dir is None:
+                continue
+            frames = list_frames(clip.frames_dir)
+            if len(frames) != 10:
+                continue
+            scores = frame_diff_eventness(frames)
+        elif method == "av_fused":
+            from avs.vision.cheap_eventness import frame_diff_eventness, list_frames
+
+            ev = compute_eventness_wav_energy_stride_max(clip.wav_path, num_segments=10, stride_s=0.2, win_s=0.4)
+            a = minmax_01([float(x) for x in ev.scores])
+
+            frames: list[Path] = []
+            if clip.frames_dir is not None and clip.frames_dir.exists():
+                frames = list_frames(clip.frames_dir)
+            v = frame_diff_eventness(frames, size=32) if frames else []
+            v = minmax_01([float(x) for x in v])
+            scores = scale(fuse_max(a, v, num_segments=10), AV_FUSED_SCORE_SCALE)
+        elif method == "av_fused_prod":
+            from avs.vision.cheap_eventness import frame_diff_eventness, list_frames
+
+            ev = compute_eventness_wav_energy_stride_max(clip.wav_path, num_segments=10, stride_s=0.2, win_s=0.4)
+            a = minmax_01([float(x) for x in ev.scores])
+
+            frames: list[Path] = []
+            if clip.frames_dir is not None and clip.frames_dir.exists():
+                frames = list_frames(clip.frames_dir)
+            v = frame_diff_eventness(frames, size=32) if frames else []
+            v = minmax_01([float(x) for x in v])
+            scores = scale(fuse_prod(a, v, num_segments=10), AV_FUSED_SCORE_SCALE)
         elif method == "ast":
             assert ast_probe is not None
             scores = ast_probe.eventness_per_second(clip.wav_path, num_segments=10)
@@ -147,6 +190,7 @@ def _load_custom_clips(jsonl_path: Path) -> list[AnchorEvalClip]:
                 clip_id=str(obj["clip_id"]),
                 wav_path=Path(obj["wav_path"]),
                 gt_segments=[int(x) for x in obj["gt_segments"]],
+                frames_dir=Path(obj["frames_dir"]) if "frames_dir" in obj and obj["frames_dir"] is not None else None,
             )
         )
     return clips
@@ -163,17 +207,33 @@ def _build_ave_clips(meta_dir: Path, processed_dir: Path, split: str, limit: int
     for idx in ids:
         clip = index.clips[int(idx)]
         wav_path = processed_dir / clip.video_id / "audio.wav"
+        frames_dir = processed_dir / clip.video_id / "frames"
         if not wav_path.exists():
             continue
         seg_labels = index.segment_labels(clip)
         gt = _gt_segments_from_labels(seg_labels)
-        clips.append(AnchorEvalClip(clip_id=clip.video_id, wav_path=wav_path, gt_segments=gt))
+        clips.append(AnchorEvalClip(clip_id=clip.video_id, wav_path=wav_path, gt_segments=gt, frames_dir=frames_dir))
     return clips
 
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Evaluate anchor quality (Recall@K / Recall@K,Δ).")
-    p.add_argument("--method", type=str, default="energy", choices=["energy", "energy_delta", "ast", "panns", "audiomae"])
+    p.add_argument(
+        "--method",
+        type=str,
+        default="energy",
+        choices=[
+            "energy",
+            "energy_delta",
+            "energy_stride_max",
+            "cheap_visual",
+            "av_fused",
+            "av_fused_prod",
+            "ast",
+            "panns",
+            "audiomae",
+        ],
+    )
     p.add_argument("--k", type=int, default=2)
     p.add_argument("--deltas", type=str, default="0,1,2")
     p.add_argument("--seed", type=int, default=0)

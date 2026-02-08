@@ -12,8 +12,14 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 if [[ -z "${BEST_CONFIG_JSON:-}" ]]; then
-  echo "ERROR: BEST_CONFIG_JSON is required (path to best_config.json from E0011)" >&2
-  exit 2
+  latest_best="$(ls -t runs/E0011_*/best_config.json 2>/dev/null | head -n 1 || true)"
+  if [[ -n "${latest_best}" && -f "${latest_best}" ]]; then
+    BEST_CONFIG_JSON="${latest_best}"
+    echo "[e0012] BEST_CONFIG_JSON not set; using ${BEST_CONFIG_JSON}"
+  else
+    echo "ERROR: BEST_CONFIG_JSON is required (path to best_config.json from E0011)" >&2
+    exit 2
+  fi
 fi
 if [[ ! -f "${BEST_CONFIG_JSON}" ]]; then
   echo "ERROR: BEST_CONFIG_JSON not found: ${BEST_CONFIG_JSON}" >&2

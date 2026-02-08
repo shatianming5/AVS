@@ -5,7 +5,7 @@ __pycache__/
 
 data/
 runs/
+.rd_queue*/
 
 .venv/
 .DS_Store
-

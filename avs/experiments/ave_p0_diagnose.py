@@ -72,6 +72,12 @@ def _spearman(x: np.ndarray, y: np.ndarray) -> float:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Diagnose why anchored gains are small using per-clip deltas and anchor recall correlation.")
     p.add_argument("--in-metrics", type=Path, required=True, help="Path to ave_p0_end2end metrics.json (or ave_p0.py metrics.json).")
+    p.add_argument(
+        "--meta-dir",
+        type=Path,
+        default=None,
+        help="AVE meta dir. If not provided, attempts to infer from the metrics file (ave_p0_end2end format only).",
+    )
     p.add_argument("--out-dir", type=Path, default=Path("runs") / f"AVE_P0_DIAGNOSE_{time.strftime('%Y%m%d-%H%M%S')}")
     p.add_argument("--top-n", type=int, default=20)
     p.add_argument("--deltas", type=str, default="0,1,2", help="Comma-separated dilation deltas for Recall@K,Δ.")
@@ -140,7 +146,9 @@ def main(argv: list[str] | None = None) -> int:
 
     meta_dir = run.get("meta_dir")
     if meta_dir is None:
-        raise SystemExit("metrics missing meta_dir (need AVE annotations for GT segments)")
+        meta_dir = args.meta_dir
+    if meta_dir is None:
+        raise SystemExit("need --meta-dir (or pass ave_p0_end2end metrics.json that contains meta_dir)")
     meta_dir = Path(meta_dir)
     ensure_ave_meta(meta_dir)
     index = AVEIndex.from_meta_dir(meta_dir)

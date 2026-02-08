@@ -60,6 +60,17 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("anchors", help="Smoke: anchors + Recall@K")
     sub.add_parser("anchors_dataset", help="Smoke: dataset-wide anchor evaluation")
     sub.add_parser("epic_sounds_anchor_eval", help="Smoke: EPIC-SOUNDS-style long-audio anchor evaluation")
+    sub.add_parser("evidence_windows", help="Smoke: time-window IoU + Coverage@τ (Evidence Alignment)")
+    sub.add_parser("ltl_budget_allocator", help="Smoke: Listen-then-Look budget allocator (toy)")
+    sub.add_parser("ltl_anchor_windows", help="Smoke: stride-based eventness + anchor windows (toy)")
+    sub.add_parser("ltl_eventness_stride_max", help="Smoke: stride-max per-second eventness (Listen-then-Look Stage-1)")
+    sub.add_parser("ltl_eventness_av_fused", help="Smoke: AV-fused eventness (audio silent, visual change)")
+    sub.add_parser("ltl_eventness_autoshift", help="Smoke: auto-shift (audio↔visual alignment) helper")
+    sub.add_parser("cheap_visual_eventness", help="Smoke: cheap visual eventness (frame diff)")
+    sub.add_parser("mde_pareto_toy", help="Smoke: MDE Pareto report (toy)")
+    sub.add_parser("ltl_degradation_suite_toy", help="Smoke: Listen-then-Look degradation suite (toy)")
+    sub.add_parser("dataset_integrity_audit", help="Smoke: video integrity audit (ffprobe + decode)")
+    sub.add_parser("root_cause_report", help="Smoke: root-cause report aggregation")
     sub.add_parser("sampling_plan", help="Smoke: token-budgeted sampling plan")
     sub.add_parser("plan_jsonl", help="Smoke: generate plan.jsonl from wav(s)")
     sub.add_parser("plan_jsonl_long", help="Smoke: generate plan.jsonl for long wavs (infer segments)")
@@ -107,6 +118,17 @@ def main(argv: list[str] | None = None) -> int:
             "anchors",
             "anchors_dataset",
             "epic_sounds_anchor_eval",
+            "evidence_windows",
+            "ltl_budget_allocator",
+            "ltl_anchor_windows",
+            "ltl_eventness_stride_max",
+            "ltl_eventness_av_fused",
+            "ltl_eventness_autoshift",
+            "cheap_visual_eventness",
+            "mde_pareto_toy",
+            "ltl_degradation_suite_toy",
+            "dataset_integrity_audit",
+            "root_cause_report",
             "sampling_plan",
             "plan_jsonl",
             "plan_jsonl_long",
