@@ -138,3 +138,30 @@ For any new Stage-1 signal / method targeting C0003:
 - [x] **Oral narrative closure**: update Fig.2/Fig.3/Fig.4 and Table-1 evidence pointers using E0402/E0403/E0404; C0003 remains unproven, so lock revised claim around reproducible ~+1% test402 gain with explicit Oracle-Pred gap and degradation boundary conditions.
 - [x] **E0405→E0406 (quick-grid sanity check)**: exhaustive quick-transfer winner (`top1medn_thr0p6_shift0`) fails to transfer on full test402; keep `E0402 alt` as dense-stride best.
 - [x] **E0407→E0409 (C0007 tightening)**: full Oracle→Pred rerun gives significant mid-budget gain (`p≈0.003` at Tok=1960), but cross-budget Pareto still shows weak high-budget transfer (negative predicted-vs-uniform at Tok≈1000/4840), so C0007 remains not fully proven.
+
+---
+
+## 5) Long-Video QA Add-on (Minimum, Oral-Ready)
+
+This section is **optional** for the core AVE oral pack, but is a high-leverage add-on to preempt “does it transfer beyond AVE?” objections.
+
+### A. Minimum baselines (no-cherry-pick)
+
+- [ ] **Question-only baseline** (no frames) on IntentQA/EgoSchema/AVQA to quantify language bias (report acc + invalid_rate).
+- [x] **ql2l_clip baseline added** (query→CLIP text-image relevance; cached image embeddings per video) and evaluated on IntentQA val:
+  - `runs/E0609_intentqa_vlm_eval_val_clip_20260211-011407/metrics.json` (`ql2l_clip` is worse than uniform; keep as negative-but-clean evidence).
+
+### B. Minimum cross-dataset runs (small but decisive)
+
+- [ ] **AVQA (val subset)**: run `scripts/e0615_avqa_vlm_eval.sh` on a downloaded val subset (target `n>=128` after skipping missing videos), and report:
+  - `uniform` / `random` / `audio` / `cheap_visual` / `fused` / `ql2l_clap` / `ql2l_asr_bm25` / `ql2l_clip`
+  - skipped_videos + invalid_rate
+- [ ] **EgoSchema Subset (n=500)**: finish `ql2l_clip` baseline run and backfill metrics:
+  - running: `E0606` (`artifacts/experiments/E0606/run.log` → `runs/E0606_egoschema_eval_subset500_clip_*/metrics.json`).
+
+### C. Narrative glue (one page, no new methods)
+
+- [ ] Add a short “when does audio help?” bucketed analysis:
+  - AVQA: group by `question_type` / `question_relation`
+  - IntentQA: group by the dataset’s provided type fields (if present)
+  - EgoSchema: at least by video duration / option entropy proxy (if no types)

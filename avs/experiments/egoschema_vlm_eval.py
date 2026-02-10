@@ -91,6 +91,17 @@ def _eval_one(
             q_bar=0.0,
             reliability_metric="n/a",
         )
+    elif m == "text_only":
+        # Language-bias baseline: evaluate the VLM without providing any frames.
+        sel = QASecSelection(
+            selected_seconds=[],
+            background_seconds=[],
+            anchor_seconds=[],
+            anchors=[],
+            alpha=1.0,
+            q_bar=0.0,
+            reliability_metric="n/a",
+        )
     else:
         scores_debug = build_scores(
             processed_dir=processed_dir,
@@ -106,7 +117,7 @@ def _eval_one(
         sel = select_seconds_alpha_mixture(scores=scores, budget_frames=int(budget_frames), seed=int(seed))
 
     stage1_s = float(time.time() - t0)
-    img_paths = _frame_paths(processed_dir, sel.selected_seconds)
+    img_paths = [] if m == "text_only" else _frame_paths(processed_dir, sel.selected_seconds)
 
     if str(strategy) == "ppl":
         ans = model.answer_mcq_ppl(image_paths=img_paths, question=item.question, options=item.options)

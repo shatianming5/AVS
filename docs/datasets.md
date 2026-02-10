@@ -89,4 +89,29 @@ bash scripts/datasets/egoschema_extract_videos.sh
 
 ## 4) AVQA (Audio-Visual Question Answering)
 
-**Status:** Metadata IO + prompt templates are implemented (`P0020`), but it is not currently the primary “final QA” benchmark in `docs/plan.md`.
+**Required for:** Optional extra long-video QA benchmark (audio-visual MCQ); useful as an additional dataset beyond IntentQA/EgoSchema.
+
+**Auto-download supported:** Partial.
+- Metadata: Yes (GitHub).
+- Raw clips: Best-effort (yt-dlp slices VGGSound clips from YouTube; availability may degrade over time).
+
+Expected local layout:
+- Metadata: `data/AVQA/meta/{train_qa.json,val_qa.json}`
+- Raw clips: `data/AVQA/raw/videos/<video_name>.mp4`
+- Processed (fps=1 + audio): `data/AVQA/processed/<video_name>/{audio.wav,frames/*.jpg}`
+
+Install metadata:
+
+```bash
+python -c "from pathlib import Path; from avs.datasets.avqa import ensure_avqa_meta; ensure_avqa_meta(Path('data/AVQA/meta'))"
+```
+
+Download a small val subset (recommended first run):
+
+```bash
+python -m avs.datasets.avqa_download --split val --limit 256 --jobs 8
+```
+
+Notes:
+- This repo includes a local ffmpeg bundle under `data/tools/ffmpeg/bin/` that is auto-added to PATH by our download/preprocess helpers.
+- For full-scale runs, expect some download failures due to removed/private YouTube videos; use `--write-meta-lists` to log ok/fail ids.

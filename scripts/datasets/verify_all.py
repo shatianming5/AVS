@@ -368,6 +368,42 @@ def check_intentqa(*, root: Path) -> DatasetStatus:
     )
 
 
+def check_avqa(*, root: Path) -> DatasetStatus:
+    meta_dir = root / "data" / "AVQA" / "meta"
+    raw_videos_dir = root / "data" / "AVQA" / "raw" / "videos"
+    train = meta_dir / "train_qa.json"
+    val = meta_dir / "val_qa.json"
+
+    has_meta = train.exists() and val.exists()
+    mp4_count = _count_mp4_dir(raw_videos_dir) if raw_videos_dir.exists() else 0
+    mp4_pointer = _count_small_files(raw_videos_dir, "*.mp4", max_bytes=1024) if raw_videos_dir.exists() else 0
+
+    # For VLM eval, both meta + raw clips are required.
+    ok = has_meta and mp4_count > 0 and mp4_pointer == 0
+
+    next_steps: list[str] = []
+    if not has_meta:
+        next_steps.append(
+            "Download AVQA metadata: python -c \"from pathlib import Path; from avs.datasets.avqa import ensure_avqa_meta; ensure_avqa_meta(Path('data/AVQA/meta'))\""
+        )
+    if has_meta and (mp4_count == 0 or mp4_pointer > 0):
+        next_steps.append("Download AVQA clips (yt-dlp, VGGSound slicing): python -m avs.datasets.avqa_download --split val --limit 256")
+
+    return DatasetStatus(
+        name="AVQA",
+        required=False,
+        ok=ok,
+        details={
+            "meta_dir": str(meta_dir),
+            "raw_videos_dir": str(raw_videos_dir),
+            "has_meta": bool(has_meta),
+            "mp4_count": int(mp4_count),
+            "mp4_pointer_files": int(mp4_pointer),
+        },
+        next_steps=next_steps,
+    )
+
+
 def main() -> int:
     root = _repo_root()
     out_dir = root / "runs" / f"datasets_verify_{time.strftime('%Y%m%d-%H%M%S')}"
@@ -378,6 +414,7 @@ def main() -> int:
         check_epic_sounds(root=root),
         check_egoschema(root=root),
         check_intentqa(root=root),
+        check_avqa(root=root),
     ]
 
     ok = all((not s.required) or s.ok for s in statuses)

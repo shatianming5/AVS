@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import shutil
 import urllib.request
 from pathlib import Path
 
@@ -38,7 +39,12 @@ def download_url(url: str, dest: Path, *, sha256: str | None = None, overwrite: 
     if "127.0.0.1" in proxy_env or "localhost" in proxy_env:
         urllib.request.install_opener(urllib.request.build_opener(urllib.request.ProxyHandler({})))
 
-    urllib.request.urlretrieve(url, tmp)  # noqa: S310 - controlled URL in our code
+    # NOTE: urlretrieve has no reliable per-request timeout and can hang indefinitely
+    # in some network environments. Use urlopen+stream copy with an explicit timeout.
+    req = urllib.request.Request(str(url), headers={"User-Agent": "Mozilla/5.0"})  # noqa: S310 - controlled URL in our code
+    with urllib.request.urlopen(req, timeout=60.0) as r:  # noqa: S310 - controlled URL in our code
+        with tmp.open("wb") as f:
+            shutil.copyfileobj(r, f, length=1024 * 1024)
     os.replace(tmp, dest)
 
     if sha256 is not None:

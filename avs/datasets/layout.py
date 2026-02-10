@@ -108,6 +108,41 @@ def vggsound_paths() -> VGGSoundPaths:
 
 
 @dataclass(frozen=True)
+class AVQAPaths:
+    """
+    Default AVQA layout.
+
+    - Metadata: data/AVQA/meta/{train_qa.json,val_qa.json}
+    - Raw clips: data/AVQA/raw/videos/<video_name>.mp4
+    - Processed: data/AVQA/processed/<video_name>/{audio.wav,frames/*.jpg}
+    """
+
+    root: Path
+
+    @property
+    def meta_dir(self) -> Path:
+        return self.root / "meta"
+
+    @property
+    def raw_videos_dir(self) -> Path:
+        return self.root / "raw" / "videos"
+
+    @property
+    def processed_dir(self) -> Path:
+        return self.root / "processed"
+
+    def raw_video_path(self, video_name: str) -> Path:
+        return self.raw_videos_dir / f"{str(video_name)}.mp4"
+
+    def processed_video_dir(self, video_name: str) -> Path:
+        return self.processed_dir / str(video_name)
+
+
+def avqa_paths() -> AVQAPaths:
+    return AVQAPaths(root=data_dir() / "AVQA")
+
+
+@dataclass(frozen=True)
 class IntentQAPaths:
     """
     Default IntentQA layout.

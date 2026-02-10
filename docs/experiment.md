@@ -124,6 +124,43 @@
   - logs: `artifacts/experiments/E0608_egoschema_eval_subset256_s1/run.log`
   - backfill: done (see `### E0608`).
 
+- [ ] E0606 (real; ppl; seed=0; CONFIG=Subset full; +ql2l_clip): EgoSchema VLM eval (labeled Subset; full n=500)
+  - command: `OUT_DIR=runs/E0606_egoschema_eval_subset500_clip_$(date +%Y%m%d-%H%M%S) CONFIG=Subset SPLIT=test LIMIT=0 METHODS=uniform,ql2l_clap,ql2l_asr_bm25,ql2l_clip B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu QL2L_CLIP_DEVICE=cuda:3 bash scripts/e0602_egoschema_predict.sh`
+  - configs: []
+  - seeds: [0]
+  - required_artifacts:
+    - `runs/E0606_egoschema_eval_subset500_clip_20260211-031138/metrics.json`
+    - `runs/E0606_egoschema_eval_subset500_clip_20260211-031138/predictions.jsonl`
+    - `runs/E0606_egoschema_eval_subset500_clip_20260211-031138/preprocess_meta.json`
+  - required_metrics:
+    - `metrics.json`: `summary[*].acc` (not null for all methods), `summary[*].invalid_rate`
+  - logs: `artifacts/experiments/E0606/run.log`
+
+- [x] E0609 (real; ppl; seed=0; +ql2l_clip): IntentQA VLM evaluation under budgeted frame selection (val n=253)
+  - command: `OUT_DIR=runs/E0609_intentqa_vlm_eval_val_clip_20260211-011407 SPLIT=val LIMIT=256 METHODS=uniform,random,audio,cheap_visual,fused,ql2l_clap,ql2l_asr_bm25,ql2l_clip B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu QL2L_CLIP_DEVICE=cuda:3 ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=250 bash scripts/e0600_intentqa_vlm_eval.sh`
+  - configs: []
+  - seeds: [0]
+  - required_artifacts:
+    - `runs/E0609_intentqa_vlm_eval_val_clip_20260211-011407/metrics.json`
+    - `runs/E0609_intentqa_vlm_eval_val_clip_20260211-011407/predictions.jsonl`
+    - `runs/E0609_intentqa_vlm_eval_val_clip_20260211-011407/preprocess_meta.json`
+  - required_metrics:
+    - `metrics.json`: `summary[*].{acc,invalid_rate}`, `delta_vs_uniform`, `skipped_videos`
+  - logs: `artifacts/experiments/E0609/run.log`
+  - backfill: done (see `### E0609`).
+
+- [ ] E0615 (real; ppl; seed=0): AVQA VLM evaluation under budgeted frame selection (val subset; download drift allowed)
+  - command: `OUT_DIR=runs/E0615_avqa_vlm_eval_val_$(date +%Y%m%d-%H%M%S) SPLIT=val LIMIT=256 METHODS=uniform,random,audio,cheap_visual,fused,ql2l_clap,ql2l_asr_bm25,ql2l_clip,text_only B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu QL2L_CLIP_DEVICE=cuda:3 ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=200 bash scripts/e0615_avqa_vlm_eval.sh`
+  - configs: []
+  - seeds: [0]
+  - required_artifacts:
+    - `runs/E0615_avqa_vlm_eval_val_*/metrics.json`
+    - `runs/E0615_avqa_vlm_eval_val_*/predictions.jsonl`
+    - `runs/E0615_avqa_vlm_eval_val_*/preprocess_meta.json`
+  - required_metrics:
+    - `metrics.json`: `summary[*].{acc,invalid_rate}`, `delta_vs_uniform`, `skipped_videos`
+  - logs: `artifacts/experiments/E0615/run.log`
+
 - [x] E0003: Official AVE full-dataset validation (multi-GPU)
   - command: `RUN_ROOT=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402 bash scripts/ave_verify_official_after_install.sh`
   - configs: []
@@ -205,6 +242,9 @@
 | E0605 | success | EgoSchema Subset test (n=500; seeds=0,1): uniform acc=0.5880; ql2l_clap acc=0.5480; ql2l_asr_bm25 acc=0.5560 (invalid_rate=0) | `runs/E0605_egoschema_eval_subset500_s0_20260210-125048/` `runs/E0605_egoschema_eval_subset500_s1_20260210-183504/` | identical metrics across seeds; seed0 resumed after partial run |
 | E0607 | success | IntentQA faithfulness (n=253; ql2l_clap; seed1): acc=0.9486; acc_drop=0.0000; pred_change_rate=0.0316 | `runs/E0607_intentqa_faithfulness_val_s1_20260210-194732/` | matches seed0; invalid_rate=0 |
 | E0608 | success | EgoSchema Subset test (n=256; seed1): uniform acc=0.5859; ql2l_clap acc=0.5352; ql2l_asr_bm25 acc=0.5469 | `runs/E0608_egoschema_eval_subset256_s1_20260210-201700/` | matches seed0; invalid_rate=0 |
+| E0606 | pending | EgoSchema Subset test (n=500; seed0): add `ql2l_clip` baseline (uniform/ql2l_clap/ql2l_asr_bm25/ql2l_clip) | `runs/E0606_egoschema_eval_subset500_clip_20260211-031138/` | running (see `artifacts/experiments/E0606/run.log`) |
+| E0609 | success | IntentQA val (n=253): uniform acc=0.9447; ql2l_clap acc=0.9486; cheap_visual acc=0.9526; ql2l_clip acc=0.9368 (Δ=-0.0079) | `runs/E0609_intentqa_vlm_eval_val_clip_20260211-011407/` | adds CLIP query-relevance baseline; skipped_videos=1 |
+| E0615 | pending | AVQA val subset: add extra dataset + include `text_only` baseline; download drift allowed | `runs/E0615_avqa_vlm_eval_val_*/` | requires AVQA clips (see `data/AVQA/meta/download_ok_val_auto.txt`) |
 
 > Note: The authoritative runnable queue for the current `docs/plan.md` is the checklist above. The `## Experiments` catalog below is an archive; its internal `[ ]` fields are not a TODO list.
 
@@ -5240,3 +5280,52 @@ Notes (2026-02-10 rerun; artifact paths locally present):
 | Logs | `artifacts/experiments/E0608_egoschema_eval_subset256_s1/run.log` |
 | Artifacts | `runs/E0608_egoschema_eval_subset256_s1_20260210-201700/*` |
 | Results | Matches seed0: uniform acc=0.5859, ql2l_clap=0.5352, ql2l_asr_bm25=0.5469 (invalid_rate=0; n=256). |
+
+### E0609: IntentQA VLM evaluation under budgeted frame selection (+ql2l_clip baseline)
+| Field | Value |
+| --- | --- |
+| Objective | Add a strong query-aware *visual* baseline (`ql2l_clip`: query→CLIP text-image relevance) to the IntentQA long-video QA evaluation. |
+| Dataset | IntentQA (val). |
+| Model | VLM: Qwen2-VL (default). |
+| Code path | `avs/experiments/intentqa_vlm_eval.py`, `scripts/e0600_intentqa_vlm_eval.sh` |
+| Params | Same as E0600, plus `METHODS+=ql2l_clip` and `QL2L_CLIP_DEVICE`. |
+| Metrics (must save) | `metrics.json` + `predictions.jsonl` + `preprocess_meta.json` |
+| Full cmd | See the checklist entry (1 exact command with fixed OUT_DIR). |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `artifacts/experiments/E0609/run.log` |
+| Artifacts | `runs/E0609_intentqa_vlm_eval_val_clip_20260211-011407/*` |
+| Results | (n=253; seed=0; invalid_rate=0): uniform acc=0.944664; ql2l_clap acc=0.948617; cheap_visual acc=0.952569; ql2l_clip acc=0.936759 (Δ=-0.007905). |
+| Notes | skipped_videos=1. Keep as negative-but-clean baseline coverage (no cherry-pick). |
+
+### E0606: EgoSchema VLM evaluation under budgeted frame selection (+ql2l_clip baseline; full Subset n=500)
+| Field | Value |
+| --- | --- |
+| Objective | Add `ql2l_clip` to the full labeled EgoSchema Subset split (n=500) to test whether CLIP query relevance helps on EgoSchema (where `ql2l_clap` and `ql2l_asr_bm25` underperform uniform). |
+| Dataset | EgoSchema (Subset config; test split; labeled subset). |
+| Model | VLM: Qwen2-VL (default). |
+| Code path | `avs/experiments/egoschema_vlm_eval.py`, `scripts/e0602_egoschema_predict.sh` |
+| Params | `CONFIG=Subset`, `SPLIT=test`, `LIMIT=0`, `SEED=0`, `METHODS=uniform,ql2l_clap,ql2l_asr_bm25,ql2l_clip`. |
+| Metrics (must save) | `metrics.json` + `predictions.jsonl` + `preprocess_meta.json`. |
+| Full cmd | See the checklist entry (OUT_DIR uses `runs/E0606_egoschema_eval_subset500_clip_*`). |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `artifacts/experiments/E0606/run.log` |
+| Artifacts | `runs/E0606_egoschema_eval_subset500_clip_20260211-031138/metrics.json` (pending). |
+| Results | Pending. |
+
+### E0615: AVQA VLM evaluation under budgeted frame selection (val subset; download drift allowed)
+| Field | Value |
+| --- | --- |
+| Objective | Add an extra audio-visual MCQ dataset (AVQA) to validate the long-video QA frame-selection baselines beyond IntentQA/EgoSchema, and include a `text_only` (no frames) language-bias baseline. |
+| Dataset | AVQA (val). |
+| Model | VLM: Qwen2-VL (default). |
+| Code path | `avs/experiments/avqa_vlm_eval.py`, `scripts/e0615_avqa_vlm_eval.sh`, `avs/datasets/avqa_download.py` |
+| Params | `SPLIT=val`, `LIMIT=256` (matches downloaded subset), `B_FRAMES=16`, `MAX_SECONDS=120`, `SEED=0`, `METHODS=...+text_only`, `ALLOW_MISSING_VIDEOS=1`, `MIN_ITEMS=200`. |
+| Metrics (must save) | `metrics.json` + `predictions.jsonl` + `preprocess_meta.json`. |
+| Full cmd | See the checklist entry (OUT_DIR uses `runs/E0615_avqa_vlm_eval_val_*`). |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `artifacts/experiments/E0615/run.log` |
+| Artifacts | `runs/E0615_avqa_vlm_eval_val_*/metrics.json` (pending). |
+| Results | Pending. |
