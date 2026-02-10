@@ -17,6 +17,7 @@ _WORD_RE = re.compile(r"[A-Za-z0-9]+")
 # This keeps evaluation deterministic (no randomness introduced) and drastically reduces overhead.
 _ASR_MODEL_CACHE: dict[tuple[str, str, str], object] = {}
 _CLAP_PROBE_CACHE: dict[tuple[str, str, str, bool], object] = {}
+_CLIP_TEXT_PROBE_CACHE: dict[tuple[str, str, str, bool], object] = {}
 
 
 def _tokenize(text: str) -> list[str]:
@@ -260,6 +261,130 @@ def clap_query_relevance_from_embeddings(audio_emb: np.ndarray, query: str, *, m
     a = np.asarray(audio_emb, dtype=np.float32)
     t = np.asarray(text_emb[0], dtype=np.float32)
     # audio_emb and text_emb are already L2-normalized in ClapProbe.
+    sims = a @ t.reshape(-1, 1)
+    sims = sims.reshape(-1)
+    return [float(x) for x in sims.tolist()]
+
+
+def load_or_compute_clip_image_embeddings(
+    *,
+    frames_dir: Path,
+    num_segments: int,
+    cache_path: Path,
+    model_name: str = "openai/clip-vit-base-patch16",
+    device: str = "cpu",
+    dtype: str = "float32",
+    resolution: int = 224,
+    batch_size: int = 32,
+    pretrained: bool = True,
+) -> tuple[np.ndarray, RelevanceArtifact]:
+    """
+    Compute CLIP projected image embeddings per second (fps=1 frames) and cache to npz.
+
+    Cache schema:
+      - emb: float32 [T, D] (joint embedding space; typically D=512)
+      - meta.json sidecar with config
+    """
+    cache_path = Path(cache_path)
+    meta_path = cache_path.with_suffix(".json")
+    if cache_path.exists() and meta_path.exists():
+        with np.load(cache_path) as z:
+            emb = np.asarray(z["emb"], dtype=np.float32)
+        if emb.ndim == 2 and int(emb.shape[0]) >= int(num_segments):
+            return emb[: int(num_segments)], RelevanceArtifact(
+                kind="clip_image_emb",
+                cache_path=cache_path,
+                num_segments=int(num_segments),
+                ok=True,
+                details={"cached": True, "meta": json.loads(meta_path.read_text(encoding="utf-8"))},
+            )
+
+    from PIL import Image  # heavy-ish import
+
+    from avs.vision.clip_text import ClipTextProbe, ClipTextProbeConfig
+
+    # Load frames 0..T-1.jpg (repo's canonical processed layout).
+    fs = []
+    for t in range(int(num_segments)):
+        p = Path(frames_dir) / f"{int(t)}.jpg"
+        if p.exists():
+            fs.append(p)
+        else:
+            # If frames are missing, fall back to glob sorting (best-effort).
+            fs = sorted(Path(frames_dir).glob("*.jpg"), key=lambda x: int(x.stem) if x.stem.isdigit() else x.stem)
+            break
+    if not fs:
+        raise FileNotFoundError(f"no frames found under: {frames_dir}")
+
+    # Ensure we have at least num_segments frames; if longer, take the first T.
+    if len(fs) < int(num_segments):
+        # Pad by repeating the last available frame to keep shapes stable.
+        fs = fs + [fs[-1]] * (int(num_segments) - len(fs))
+    fs = fs[: int(num_segments)]
+
+    t0 = time.time()
+    key = (str(model_name), str(device), str(dtype), bool(pretrained))
+    probe = _CLIP_TEXT_PROBE_CACHE.get(key)
+    if probe is None:
+        probe = ClipTextProbe(ClipTextProbeConfig(model_name=str(model_name), pretrained=bool(pretrained), device=str(device), dtype=str(dtype)))
+        _CLIP_TEXT_PROBE_CACHE[key] = probe
+
+    # Compute embeddings in batches to avoid huge memory spikes.
+    images: list[Image.Image] = []
+    for p in fs:
+        images.append(Image.open(p).convert("RGB"))
+    emb = probe.image_features(images, resolution=int(resolution), batch_size=int(batch_size))
+    emb = np.asarray(emb, dtype=np.float32)
+
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(cache_path, emb=emb)
+    meta = {
+        "ok": True,
+        "kind": "clip_image_emb",
+        "frames_dir": str(frames_dir),
+        "num_segments": int(num_segments),
+        "model_name": str(model_name),
+        "device": str(device),
+        "dtype": str(dtype),
+        "resolution": int(resolution),
+        "batch_size": int(batch_size),
+        "pretrained": bool(pretrained),
+        "elapsed_s": float(time.time() - t0),
+        "shape": [int(x) for x in emb.shape],
+    }
+    _write_json(meta_path, meta)
+    return emb, RelevanceArtifact(
+        kind="clip_image_emb",
+        cache_path=cache_path,
+        num_segments=int(num_segments),
+        ok=True,
+        details={"cached": False, "elapsed_s": meta["elapsed_s"], "shape": meta["shape"]},
+    )
+
+
+def clip_query_relevance_from_embeddings(
+    image_emb: np.ndarray,
+    query: str,
+    *,
+    model_name: str = "openai/clip-vit-base-patch16",
+    device: str = "cpu",
+) -> list[float]:
+    """
+    Compute per-second CLIP query relevance: cos(image_emb[t], text_emb(query)).
+
+    Assumes image_emb rows are already L2-normalized (as saved by `load_or_compute_clip_image_embeddings`).
+    """
+    from avs.vision.clip_text import ClipTextProbe, ClipTextProbeConfig
+
+    key = (str(model_name), str(device), "float32", True)
+    probe = _CLIP_TEXT_PROBE_CACHE.get(key)
+    if probe is None:
+        probe = ClipTextProbe(ClipTextProbeConfig(model_name=str(model_name), pretrained=True, device=str(device), dtype="float32"))
+        _CLIP_TEXT_PROBE_CACHE[key] = probe
+    text_emb = probe.text_features([str(query)])  # [1, D]
+    a = np.asarray(image_emb, dtype=np.float32)
+    t = np.asarray(text_emb[0], dtype=np.float32)
+    # Both are already L2-normalized.
     sims = a @ t.reshape(-1, 1)
     sims = sims.reshape(-1)
     return [float(x) for x in sims.tolist()]

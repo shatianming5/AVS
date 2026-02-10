@@ -11,8 +11,10 @@ import numpy as np
 from avs.audio.eventness import anchors_from_scores, compute_eventness_wav_energy_stride_max
 from avs.qa.query_relevance import (
     clap_query_relevance_from_embeddings,
+    clip_query_relevance_from_embeddings,
     load_or_compute_asr_per_sec_text,
     load_or_compute_clap_audio_embeddings,
+    load_or_compute_clip_image_embeddings,
     normalize_relevance,
     relevance_from_bm25,
     relevance_from_tfidf,
@@ -226,6 +228,10 @@ def build_scores(
     ql2l_backend: str = "clap",
     clap_model_name: str = "laion/clap-htsat-fused",
     clap_device: str = "cpu",
+    clip_model_name: str = "openai/clip-vit-base-patch16",
+    clip_device: str = "cpu",
+    clip_dtype: str = "float32",
+    clip_resolution: int = 224,
     asr_model_size: str = "tiny.en",
     asr_device: str = "cpu",
     cheap_visual: str = "frame_diff",
@@ -316,6 +322,27 @@ def build_scores(
                 rel_raw = relevance_from_tfidf(per_sec_text, str(query))
             rel = normalize_relevance(rel_raw)
 
+        scores = minmax_01(_combine_q_l2l(base, rel))
+        details["relevance_artifact"] = None if rel_art is None else {"kind": rel_art.kind, "path": str(rel_art.cache_path), **rel_art.details}
+        details["relevance_norm"] = rel
+        details["base_norm"] = base
+    elif m == "ql2l_clip":
+        base = minmax_01(fuse_max(audio_norm, vis_norm, num_segments=int(num_segments)))
+        cache_dir = proc / "q_l2l"
+        emb_path = cache_dir / f"clip_image_emb_T{int(num_segments)}_r{int(clip_resolution)}.npz"
+        emb, rel_art = load_or_compute_clip_image_embeddings(
+            frames_dir=frames_dir,
+            num_segments=int(num_segments),
+            cache_path=emb_path,
+            model_name=str(clip_model_name),
+            device=str(clip_device),
+            dtype=str(clip_dtype),
+            resolution=int(clip_resolution),
+            batch_size=32,
+            pretrained=True,
+        )
+        rel_raw = clip_query_relevance_from_embeddings(emb[: int(num_segments)], str(query), model_name=str(clip_model_name), device=str(clip_device))
+        rel = normalize_relevance(rel_raw)
         scores = minmax_01(_combine_q_l2l(base, rel))
         details["relevance_artifact"] = None if rel_art is None else {"kind": rel_art.kind, "path": str(rel_art.cache_path), **rel_art.details}
         details["relevance_norm"] = rel

@@ -107,6 +107,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p.add_argument("--ql2l-clap-device", type=str, default="cpu")
     p.add_argument("--ql2l-asr-device", type=str, default="cpu")
+    p.add_argument("--ql2l-clip-device", type=str, default="cpu")
     return p
 
 
@@ -209,6 +210,7 @@ def main(argv: list[str] | None = None) -> int:
                 method=str(args.method),
                 seed=int(item_seed),
                 clap_device=str(args.ql2l_clap_device),
+                clip_device=str(args.ql2l_clip_device),
                 asr_device=str(args.ql2l_asr_device),
             )
             sel = select_seconds_alpha_mixture(scores=scores_debug["scores"], budget_frames=int(args.budget_frames), seed=int(item_seed))

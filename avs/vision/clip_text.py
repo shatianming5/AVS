@@ -4,7 +4,10 @@ from dataclasses import dataclass
 
 import numpy as np
 import torch
+from PIL import Image
 from transformers import CLIPConfig, CLIPModel, CLIPTextConfig, CLIPTokenizer, CLIPVisionConfig
+
+from avs.vision.clip_vit import preprocess_pil
 
 
 @dataclass(frozen=True)
@@ -66,9 +69,36 @@ class ClipTextProbe:
     def text_features(self, texts: list[str]) -> np.ndarray:
         tokens = self.tokenizer([str(x) for x in texts], return_tensors="pt", padding=True, truncation=True)
         tokens = {k: v.to(device=self.device) for k, v in tokens.items()}
-        feat = self.model.get_text_features(**tokens)
+        # `CLIPModel.get_text_features` return type varies across transformers versions.
+        # Use the explicit text_model + projection to stay stable.
+        out = self.model.text_model(**tokens, return_dict=True)
+        pooled = out.pooler_output
+        feat = self.model.text_projection(pooled)
         feat = _l2_normalize(feat)
         return feat.detach().cpu().numpy().astype(np.float32, copy=False)
+
+    @torch.no_grad()
+    def image_features(self, images: list[Image.Image], *, resolution: int = 224, batch_size: int = 32) -> np.ndarray:
+        """
+        Compute CLIP projected image features in the joint embedding space.
+
+        Returns L2-normalized float32 features: [N, D] (D=512 for ViT-B/16).
+        """
+        if not images:
+            return np.zeros((0, 0), dtype=np.float32)
+        bs = max(1, int(batch_size))
+        feats: list[np.ndarray] = []
+        for i in range(0, len(images), bs):
+            chunk = images[i : i + bs]
+            pixel_values = preprocess_pil(chunk, resolution=int(resolution), device=self.device, dtype=self.dtype)
+            # `CLIPModel.get_image_features` return type varies across transformers versions.
+            # Use the explicit vision_model + projection to stay stable.
+            out = self.model.vision_model(pixel_values=pixel_values, return_dict=True)
+            pooled = out.pooler_output
+            feat = self.model.visual_projection(pooled)
+            feat = _l2_normalize(feat)
+            feats.append(feat.detach().cpu().numpy().astype(np.float32, copy=False))
+        return np.concatenate(feats, axis=0)
 
     @torch.no_grad()
     def project_image_features(self, pooled_features: np.ndarray) -> np.ndarray:
@@ -87,4 +117,3 @@ class ClipTextProbe:
     def logit_scale(self) -> float:
         # Used for softmax temperature in zero-shot scoring.
         return float(self.model.logit_scale.detach().exp().cpu().item())
-

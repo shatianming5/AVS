@@ -58,6 +58,7 @@ def _eval_one(
     strategy: str,
     ql2l_clap_device: str,
     ql2l_asr_device: str,
+    ql2l_clip_device: str,
 ) -> dict:
     dur = min(int(_duration_seconds_from_frames(processed_dir / "frames")), int(max_seconds))
     if dur <= 0:
@@ -98,6 +99,7 @@ def _eval_one(
             method=m,
             seed=int(seed),
             clap_device=str(ql2l_clap_device),
+            clip_device=str(ql2l_clip_device),
             asr_device=str(ql2l_asr_device),
         )
         scores = scores_debug["scores"]
@@ -163,6 +165,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p.add_argument("--ql2l-clap-device", type=str, default="cpu")
     p.add_argument("--ql2l-asr-device", type=str, default="cpu")
+    p.add_argument("--ql2l-clip-device", type=str, default="cpu")
     return p
 
 
@@ -290,6 +293,7 @@ def main(argv: list[str] | None = None) -> int:
                     strategy=str(args.strategy),
                     ql2l_clap_device=str(args.ql2l_clap_device),
                     ql2l_asr_device=str(args.ql2l_asr_device),
+                    ql2l_clip_device=str(args.ql2l_clip_device),
                 )
                 f.write(json.dumps(row, ensure_ascii=False) + "\n")
                 done_keys.add(key)

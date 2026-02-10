@@ -28,6 +28,7 @@ ATTN_IMPL="${ATTN_IMPL:-}"
 
 QL2L_CLAP_DEVICE="${QL2L_CLAP_DEVICE:-cpu}"
 QL2L_ASR_DEVICE="${QL2L_ASR_DEVICE:-cpu}"
+QL2L_CLIP_DEVICE="${QL2L_CLIP_DEVICE:-cpu}"
 
 mkdir -p "${OUT_DIR}"
 
@@ -45,6 +46,7 @@ args=(
   --dtype "${DTYPE}"
   --ql2l-clap-device "${QL2L_CLAP_DEVICE}"
   --ql2l-asr-device "${QL2L_ASR_DEVICE}"
+  --ql2l-clip-device "${QL2L_CLIP_DEVICE}"
 )
 if [[ -n "${ATTN_IMPL}" ]]; then
   args+=(--attn-implementation "${ATTN_IMPL}")
