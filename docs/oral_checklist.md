@@ -156,8 +156,8 @@ This section is **optional** for the core AVE oral pack, but is a high-leverage 
 - [ ] **AVQA (val subset)**: run `scripts/e0615_avqa_vlm_eval.sh` on a downloaded val subset (target `n>=128` after skipping missing videos), and report:
   - `uniform` / `random` / `audio` / `cheap_visual` / `fused` / `ql2l_clap` / `ql2l_asr_bm25` / `ql2l_clip`
   - skipped_videos + invalid_rate
-- [ ] **EgoSchema Subset (n=500)**: finish `ql2l_clip` baseline run and backfill metrics:
-  - running: `E0606` (`artifacts/experiments/E0606/run.log` → `runs/E0606_egoschema_eval_subset500_clip_*/metrics.json`).
+- [x] **EgoSchema Subset (n=500)**: `ql2l_clip` baseline run complete:
+  - `runs/E0606_egoschema_eval_subset500_clip_20260211-031138/metrics.json` (uniform acc=0.5880; ql2l_clip acc=0.5760; still < uniform).
 
 ### C. Narrative glue (one page, no new methods)
 

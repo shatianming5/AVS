@@ -124,7 +124,7 @@
   - logs: `artifacts/experiments/E0608_egoschema_eval_subset256_s1/run.log`
   - backfill: done (see `### E0608`).
 
-- [ ] E0606 (real; ppl; seed=0; CONFIG=Subset full; +ql2l_clip): EgoSchema VLM eval (labeled Subset; full n=500)
+- [x] E0606 (real; ppl; seed=0; CONFIG=Subset full; +ql2l_clip): EgoSchema VLM eval (labeled Subset; full n=500)
   - command: `OUT_DIR=runs/E0606_egoschema_eval_subset500_clip_$(date +%Y%m%d-%H%M%S) CONFIG=Subset SPLIT=test LIMIT=0 METHODS=uniform,ql2l_clap,ql2l_asr_bm25,ql2l_clip B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu QL2L_CLIP_DEVICE=cuda:3 bash scripts/e0602_egoschema_predict.sh`
   - configs: []
   - seeds: [0]
@@ -135,6 +135,7 @@
   - required_metrics:
     - `metrics.json`: `summary[*].acc` (not null for all methods), `summary[*].invalid_rate`
   - logs: `artifacts/experiments/E0606/run.log`
+  - backfill: done (see `### E0606`).
 
 - [x] E0609 (real; ppl; seed=0; +ql2l_clip): IntentQA VLM evaluation under budgeted frame selection (val n=253)
   - command: `OUT_DIR=runs/E0609_intentqa_vlm_eval_val_clip_20260211-011407 SPLIT=val LIMIT=256 METHODS=uniform,random,audio,cheap_visual,fused,ql2l_clap,ql2l_asr_bm25,ql2l_clip B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu QL2L_CLIP_DEVICE=cuda:3 ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=250 bash scripts/e0600_intentqa_vlm_eval.sh`
@@ -242,7 +243,7 @@
 | E0605 | success | EgoSchema Subset test (n=500; seeds=0,1): uniform acc=0.5880; ql2l_clap acc=0.5480; ql2l_asr_bm25 acc=0.5560 (invalid_rate=0) | `runs/E0605_egoschema_eval_subset500_s0_20260210-125048/` `runs/E0605_egoschema_eval_subset500_s1_20260210-183504/` | identical metrics across seeds; seed0 resumed after partial run |
 | E0607 | success | IntentQA faithfulness (n=253; ql2l_clap; seed1): acc=0.9486; acc_drop=0.0000; pred_change_rate=0.0316 | `runs/E0607_intentqa_faithfulness_val_s1_20260210-194732/` | matches seed0; invalid_rate=0 |
 | E0608 | success | EgoSchema Subset test (n=256; seed1): uniform acc=0.5859; ql2l_clap acc=0.5352; ql2l_asr_bm25 acc=0.5469 | `runs/E0608_egoschema_eval_subset256_s1_20260210-201700/` | matches seed0; invalid_rate=0 |
-| E0606 | pending | EgoSchema Subset test (n=500; seed0): add `ql2l_clip` baseline (uniform/ql2l_clap/ql2l_asr_bm25/ql2l_clip) | `runs/E0606_egoschema_eval_subset500_clip_20260211-031138/` | running (see `artifacts/experiments/E0606/run.log`) |
+| E0606 | success | EgoSchema Subset test (n=500; seed0): uniform acc=0.5880; ql2l_clip acc=0.5760; ql2l_clap=0.5480; ql2l_asr_bm25=0.5560 (invalid_rate=0) | `runs/E0606_egoschema_eval_subset500_clip_20260211-031138/` | ql2l_clip improves over other ql2l baselines but still < uniform |
 | E0609 | success | IntentQA val (n=253): uniform acc=0.9447; ql2l_clap acc=0.9486; cheap_visual acc=0.9526; ql2l_clip acc=0.9368 (Δ=-0.0079) | `runs/E0609_intentqa_vlm_eval_val_clip_20260211-011407/` | adds CLIP query-relevance baseline; skipped_videos=1 |
 | E0615 | pending | AVQA val subset: add extra dataset + include `text_only` baseline; download drift allowed | `runs/E0615_avqa_vlm_eval_val_*/` | requires AVQA clips (see `data/AVQA/meta/download_ok_val_auto.txt`) |
 
@@ -5309,10 +5310,10 @@ Notes (2026-02-10 rerun; artifact paths locally present):
 | Metrics (must save) | `metrics.json` + `predictions.jsonl` + `preprocess_meta.json`. |
 | Full cmd | See the checklist entry (OUT_DIR uses `runs/E0606_egoschema_eval_subset500_clip_*`). |
 | Smoke | [ ] |
-| Full | [ ] |
+| Full | [x] |
 | Logs | `artifacts/experiments/E0606/run.log` |
-| Artifacts | `runs/E0606_egoschema_eval_subset500_clip_20260211-031138/metrics.json` (pending). |
-| Results | Pending. |
+| Artifacts | `runs/E0606_egoschema_eval_subset500_clip_20260211-031138/metrics.json`, `runs/E0606_egoschema_eval_subset500_clip_20260211-031138/predictions.jsonl`, `runs/E0606_egoschema_eval_subset500_clip_20260211-031138/preprocess_meta.json` |
+| Results | Full Subset test run (n=500; seed=0; invalid_rate=0): uniform acc=0.5880; ql2l_clip acc=0.5760; ql2l_clap=0.5480; ql2l_asr_bm25=0.5560. |
 
 ### E0615: AVQA VLM evaluation under budgeted frame selection (val subset; download drift allowed)
 | Field | Value |
