@@ -868,6 +868,7 @@ Notes (2026-02-10 reruns; artifact paths locally present):
 - Quick test402 (SEEDS=0..2) for `EVENTNESS=av_clipdiff_vec_mlp`, `CANDIDATE_SET=ltl_adaptive_keepadj_v1` (adaptive_v3 winner): `runs/E0625_quick_test402_vecmlp_keepadj_v1_20260210-225003/metrics.json` (Δ≈+0.00829, p≈0.432; diagnose: `runs/E0625_quick_test402_vecmlp_keepadj_v1_20260210-225003/diagnose.json`).
 - Quick test402 (SEEDS=0..2) for `EVENTNESS=av_clipdiff_vec_mlp`, `CANDIDATE_SET=ltl_adaptive_keepadj_v1` (target config `ltlkeepadj_adj2_shift1_std0p55`): `runs/E0626_quick_test402_vecmlp_keepadj_adj2_shift1_std0p55_20260210-225120/metrics.json` (Δ≈+0.02098, p≈0.165; diagnose: `runs/E0626_quick_test402_vecmlp_keepadj_adj2_shift1_std0p55_20260210-225120/diagnose.json`).
 - Full test402 (SEEDS=0..9) for the above target config: `runs/E0628_full_test402_vecmlp_keepadj_adj2_shift1_std0p55_s0-9_20260210-225216/metrics.json` (Δ≈+0.00883, p≈0.225; diagnose: `runs/E0628_full_test402_vecmlp_keepadj_adj2_shift1_std0p55_s0-9_20260210-225216/diagnose.json`; highly unstable per-seed deltas, so C0003 remains unproven).
+- Full test402 (SEEDS=0..9) for the val-selected keepadj winner (E0624 best_config): `runs/E0629_full_test402_vecmlp_keepadj_best_s0-9_20260210-225809/metrics.json` (Δ≈-0.00408, p≈0.457; diagnose: `runs/E0629_full_test402_vecmlp_keepadj_best_s0-9_20260210-225809/diagnose.json`; does not transfer).
 
 
 ### E0209: Stage-2 plan sweep on val402 for learned anchors (ltl_adaptive_v2; lower fallback)
