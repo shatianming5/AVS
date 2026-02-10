@@ -12,7 +12,7 @@ Canon sources:
 ## 0) Hard gate (one must be true)
 
 - [ ] **C0003 proven** on official AVE `test402`: `anchored_top2 - uniform ≥ +0.02`, paired `p < 0.05`, `SEEDS=0..9`.
-  - Current best full test402 is still short: `runs/E0343_full_test402_av_clipdiff_mlp_20260206-005134/metrics.json` (Δ≈+0.01525).
+  - Current best full test402 in this workspace is still short: `runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/p0_train3339_test402_energy_160_224_352_k2_shift1_std1.0_temporal_conv/metrics.json` (Δ=+0.00403; p=0.383).
 - [x] If C0003 cannot be proven, **lock a revised claim** (e.g., “consistent +1% at fixed budget + strong Oracle ceiling + robust protocol”) and make the rest of this checklist airtight (so reviewers cannot dismiss as heuristic/cherry-pick).
 
 ---
@@ -111,6 +111,11 @@ For any new Stage-1 signal / method targeting C0003:
   - Last attempt: `av_clipdiff_flow_mlp` (E0393) — optical-flow magnitude (Farneback) + CLIPdiff + audio basic features → per-second MLP does not beat baseline on val402 (`runs/E0393_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_ltl_top1med_norm_v1_20260206-104413/sweep_summary.json`, best Δ≈+0.00881, p≈0.0971); stop before test402 (skip E0394/E0395).
   - Last attempt: `ltl_top1med_k1_extreme_v1` with fixed `av_clipdiff_flow_mlp` (E0396) — aggressive Stage-2 dynamic-K search regresses on val402 (`runs/E0396_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_ltl_top1med_k1_extreme_v1_20260206-130114/sweep_summary.json`, best Δ≈-0.00125, p≈0.924); stop before test402 (skip E0397/E0398).
   - Last attempt: `av_basic_mlp` (E0510) — supervised audio basic + frame-diff scalar is near-0 on val402 (`runs/E0510_ave_p0_sweep_official_val_av_basic_mlp_ltl_top1med_norm_v1_20260210-161514/sweep_summary.json`, best Δ≈+0.00183, p≈0.677); stop before test402.
+  - Last attempt: `av_fused_clipdiff_prod` (E0292) — rerun val402 sweep regresses (`runs/E0292_ave_p0_sweep_official_val_av_fused_clipdiff_prod_ltl_top1med_v1_20260210-181356/sweep_summary.json`, best Δ≈-0.00815, p≈0.218); stop before test402.
+  - Last attempt: `moe_energy_clipdiff` (E0296) — rerun val402 sweep regresses (`runs/E0296_ave_p0_sweep_official_val_moe_energy_clipdiff_ltl_top1med_moe_v1_20260210-181653/sweep_summary.json`, best Δ≈-0.00923, p≈0.485); stop before test402.
+  - Last attempt: `av_clipdiff_mlp` (E0207→E0208 quick) — rerun val402 is weak-positive (`runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_adaptive_v1_20260210-182509/sweep_summary.json`, best Δ≈+0.00515, p≈0.204), but not competitive on test402 quick (`runs/E0208_quick_test402_av_clipdiff_mlp_ltl_adaptive_v1_20260210-182944/metrics.json`, Δ≈+0.00738, p≈0.577); do not promote.
+  - Last attempt: `av_clipdiff_flow_mlp_stride` (E0400→E0401 quick) — val402 is near-baseline (`runs/E0400_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_stride_ltl_top1med_k1_extreme_v1_20260210-195236/sweep_summary.json`, best Δ≈+0.00490, p≈0.465), but regresses on test402 quick (`runs/E0401_quick_test402_av_clipdiff_flow_mlp_stride_20260210-195916/metrics.json`, Δ≈-0.00506, p≈0.555; diagnose: `runs/E0401_quick_test402_av_clipdiff_flow_mlp_stride_20260210-195916/diagnose.json`); do not promote.
+  - Last attempt: `av_clipdiff_vec_mlp` (E0610→E0611→E0612) — val402 is weak-positive (`runs/E0610_ave_p0_sweep_official_val_av_clipdiff_vec_mlp_ltl_adaptive_v1_20260210-200224/sweep_summary.json`, best Δ≈+0.00607, p≈0.248), test402 quick is positive but not significant (`runs/E0611_quick_test402_av_clipdiff_vec_mlp_ltl_adaptive_v1_20260210-200638/metrics.json`, Δ≈+0.01061, p≈0.391; diagnose: `runs/E0611_quick_test402_av_clipdiff_vec_mlp_ltl_adaptive_v1_20260210-200638/diagnose.json`), and collapses on full test402 (`runs/E0612_full_test402_av_clipdiff_vec_mlp_ltl_adaptive_v1_20260210-200736/metrics.json`, Δ≈+0.00095, p≈0.875; diagnose: `runs/E0612_full_test402_av_clipdiff_vec_mlp_ltl_adaptive_v1_20260210-200736/diagnose.json`); C0003 remains unproven.
 
 ---
 

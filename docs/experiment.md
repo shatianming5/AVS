@@ -77,21 +77,52 @@
     - `artifacts/experiments/E0604_val_s1/run.log`
   - backfill: done (see `### E0604`).
 
-- [x] E0605 (real; ppl; seed=0; CONFIG=Subset full): EgoSchema VLM eval (labeled Subset; full n=500)
+- [x] E0605 (real; ppl; seeds=0,1; CONFIG=Subset full): EgoSchema VLM eval (labeled Subset; full n=500)
   - command:
     - `OUT_DIR=runs/E0605_egoschema_eval_subset500_s0_20260210-125048 CONFIG=Subset SPLIT=test LIMIT=0 METHODS=uniform,ql2l_clap,ql2l_asr_bm25 B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu bash scripts/e0602_egoschema_predict.sh`
+    - `OUT_DIR=runs/E0605_egoschema_eval_subset500_s1_20260210-183504 CONFIG=Subset SPLIT=test LIMIT=0 METHODS=uniform,ql2l_clap,ql2l_asr_bm25 B_FRAMES=16 MAX_SECONDS=120 SEED=1 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu bash scripts/e0602_egoschema_predict.sh`
   - configs: []
-  - seeds: [0]
+  - seeds: [0, 1]
   - required_artifacts:
     - `runs/E0605_egoschema_eval_subset500_s0_20260210-125048/metrics.json`
     - `runs/E0605_egoschema_eval_subset500_s0_20260210-125048/predictions.jsonl`
     - `runs/E0605_egoschema_eval_subset500_s0_20260210-125048/preprocess_meta.json`
+    - `runs/E0605_egoschema_eval_subset500_s1_20260210-183504/metrics.json`
+    - `runs/E0605_egoschema_eval_subset500_s1_20260210-183504/predictions.jsonl`
+    - `runs/E0605_egoschema_eval_subset500_s1_20260210-183504/preprocess_meta.json`
   - required_metrics:
     - `metrics.json`: `summary[*].acc` (not null for all methods), `summary[*].invalid_rate`
   - logs:
     - `artifacts/experiments/E0605_subset500_s0/run.log`
     - `artifacts/experiments/E0605_subset500_s0_resume1/run.log` (resume)
+    - `artifacts/experiments/E0605_subset500_s1/run.log`
   - backfill: done (see `### E0605`).
+
+- [x] E0607 (real; ppl; seed=1; ql2l_clap): IntentQA faithfulness proxy (delete-and-predict; budget-matched) (val n=253)
+  - command: `OUT_DIR=runs/E0607_intentqa_faithfulness_val_s1_20260210-194732 SPLIT=val LIMIT=256 METHOD=ql2l_clap B_FRAMES=16 MAX_SECONDS=120 SEED=1 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=250 bash scripts/e0601_intentqa_faithfulness.sh`
+  - configs: []
+  - seeds: [1]
+  - required_artifacts:
+    - `runs/E0607_intentqa_faithfulness_val_s1_20260210-194732/faithfulness.json`
+    - `runs/E0607_intentqa_faithfulness_val_s1_20260210-194732/rows.jsonl`
+    - `runs/E0607_intentqa_faithfulness_val_s1_20260210-194732/preprocess_meta.json`
+  - required_metrics:
+    - `faithfulness.json`: `accuracy`, `accuracy_deleted`, `acc_drop`, `pred_change_rate`, `invalid_rate`
+  - logs: `artifacts/experiments/E0607_intentqa_faithfulness_val_s1/run.log`
+  - backfill: done (see `### E0607`).
+
+- [x] E0608 (real; ppl; seed=1; CONFIG=Subset): EgoSchema VLM eval/pred generation (labeled subset) (test n=256)
+  - command: `OUT_DIR=runs/E0608_egoschema_eval_subset256_s1_20260210-201700 CONFIG=Subset SPLIT=test LIMIT=256 METHODS=uniform,ql2l_clap,ql2l_asr_bm25 B_FRAMES=16 MAX_SECONDS=120 SEED=1 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu bash scripts/e0602_egoschema_predict.sh`
+  - configs: []
+  - seeds: [1]
+  - required_artifacts:
+    - `runs/E0608_egoschema_eval_subset256_s1_20260210-201700/metrics.json`
+    - `runs/E0608_egoschema_eval_subset256_s1_20260210-201700/predictions.jsonl`
+    - `runs/E0608_egoschema_eval_subset256_s1_20260210-201700/preprocess_meta.json`
+  - required_metrics:
+    - `metrics.json`: `summary[*].acc` (not null for all methods), `summary[*].invalid_rate`
+  - logs: `artifacts/experiments/E0608_egoschema_eval_subset256_s1/run.log`
+  - backfill: done (see `### E0608`).
 
 - [x] E0003: Official AVE full-dataset validation (multi-GPU)
   - command: `RUN_ROOT=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402 bash scripts/ave_verify_official_after_install.sh`
@@ -171,7 +202,9 @@
 | E0601 | success | IntentQA faithfulness (n=253; ql2l_clap): acc=0.9486; acc_drop=0.0000; pred_change_rate=0.0316 | `runs/E0601_intentqa_faithfulness_full_20260210-061137/` | delete-and-predict proxy; invalid_rate=0 |
 | E0602 | success | EgoSchema Subset test (n=256): uniform acc=0.5859; ql2l_clap acc=0.5352; ql2l_asr_bm25 acc=0.5469 | `runs/E0602_egoschema_eval_subset_full_20260210-064250/` | Qwen2-VL-2B; `budget_frames=16`, `max_seconds=120`, `strategy=ppl` |
 | E0604 | success | IntentQA val (n=253): seed0 uniform=0.9447, cheap_visual=0.9526, ql2l_clap=0.9486; seed1 uniform=0.9447, cheap_visual=0.9526, ql2l_clap=0.9486 | `runs/E0604_intentqa_vlm_eval_val_s*_20260210-125048/` | seed1 ran reduced METHODS (uniform,random,cheap_visual,ql2l_clap) due to runtime |
-| E0605 | success | EgoSchema Subset test (n=500): uniform acc=0.5880; ql2l_clap acc=0.5480; ql2l_asr_bm25 acc=0.5560 (invalid_rate=0) | `runs/E0605_egoschema_eval_subset500_s0_20260210-125048/` | Subset full n=500; seed=0; resumed after partial run |
+| E0605 | success | EgoSchema Subset test (n=500; seeds=0,1): uniform acc=0.5880; ql2l_clap acc=0.5480; ql2l_asr_bm25 acc=0.5560 (invalid_rate=0) | `runs/E0605_egoschema_eval_subset500_s0_20260210-125048/` `runs/E0605_egoschema_eval_subset500_s1_20260210-183504/` | identical metrics across seeds; seed0 resumed after partial run |
+| E0607 | success | IntentQA faithfulness (n=253; ql2l_clap; seed1): acc=0.9486; acc_drop=0.0000; pred_change_rate=0.0316 | `runs/E0607_intentqa_faithfulness_val_s1_20260210-194732/` | matches seed0; invalid_rate=0 |
+| E0608 | success | EgoSchema Subset test (n=256; seed1): uniform acc=0.5859; ql2l_clap acc=0.5352; ql2l_asr_bm25 acc=0.5469 | `runs/E0608_egoschema_eval_subset256_s1_20260210-201700/` | matches seed0; invalid_rate=0 |
 
 > Note: The authoritative runnable queue for the current `docs/plan.md` is the checklist above. The `## Experiments` catalog below is an archive; its internal `[ ]` fields are not a TODO list.
 
@@ -792,6 +825,11 @@ Follow-ups (train3339→test402; same token budget=1960):
 | Artifacts | `runs/E0207_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
 | Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_lr_20260204-073551/sweep_summary.json`. Full val sweeps (SEEDS=0..2): `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_lr_20260204-073816/sweep_summary.json` (energy_v3; best=`energyv3_shift0_std0p4_adaptiveGap0p6`), `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_lr_20260204-075118/sweep_summary.json` (ltl_gini_v1; best=`ltl_gini0p20_scoreAlloc`), `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_20260204-075914/sweep_summary.json` (energy_v3; best=`energyv3_shift1_std0p6`), `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_std_v1_20260204-083739/sweep_summary.json` (ltl_std_v1; best=`ltlstd_shift0_std0p45`), `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_std_v2_20260204-085103/sweep_summary.json` (ltl_std_v2; best=`ltlstd2_shift0_std0p5_mixedAlloc`), `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_gini_v2_20260204-090323/sweep_summary.json` (ltl_gini_v2; best=`ltlgini2_gini0p45_shift0`), `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_gap_v1_20260204-090353/sweep_summary.json` (ltl_gap_v1; best=`ltlgap1_gap0p3_shift0`), `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_extreme_v1_20260204-091309/sweep_summary.json` (ltl_extreme_v1; best=`ltlextreme1_shift1_std0p6`), `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_cls_ltl_std_v1_20260204-092157/sweep_summary.json` (av_clipdiff_mlp_cls; ltl_std_v1; best=`ltlstd_shift0_std0p55`), `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_cls_target_ltl_std_v1_20260204-092729/sweep_summary.json` (av_clipdiff_mlp_cls_target; ltl_std_v1; best=`ltlstd_shift1_std0p55`), `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_tcn_20260204-081451/sweep_summary.json` (energy_v3), `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_tcn_20260204-081451/best_config.json`, `runs/E0207_ave_p0_sweep_official_val_av_clip_mlp_cls_20260204-095132/sweep_summary.json` (av_clip_mlp_cls; ltl_std_v1; best=`ltlstd_shift1_std0p5`), `runs/E0207_ave_p0_sweep_official_val_av_clip_mlp_cls_target_20260204-095814/sweep_summary.json` (av_clip_mlp_cls_target; ltl_std_v1; best=`ltlstd_shift1_std0p55`), `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_tcn_20260204-100517/sweep_summary.json` (av_clipdiff_tcn; ltl_std_v1; best=`ltlstd_shift1_std0p55`), `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_vec_mlp_20260204-101416/sweep_summary.json` (av_clipdiff_vec_mlp; ltl_std_v1; best=`ltlstd_shift1_std0p55`), `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_20260204-102403/sweep_summary.json` (av_clipdiff_mlp; ltl_adaptive_v1; best=`ltladj1_shift0_std0p45`). |
 
+Notes (2026-02-10 reruns; artifact paths locally present):
+- `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_adaptive_v1`: `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_adaptive_v1_20260210-182509/sweep_summary.json` (best=`ltladj1_shift0_std0p5`, Δ≈+0.00515, p≈0.204).
+- `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_std_v1`: `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_std_v1_20260210-183049/sweep_summary.json` (best=`ltlstd_shift1_std0p45`, Δ≈+0.00457, p≈0.618).
+- `EVENTNESS=av_clipdiff_vec_mlp`, `CANDIDATE_SET=ltl_adaptive_v1`: `runs/E0610_ave_p0_sweep_official_val_av_clipdiff_vec_mlp_ltl_adaptive_v1_20260210-200224/sweep_summary.json` (best=`ltladj2_shift1_std0p55`, Δ≈+0.00607, p≈0.248).
+
 
 ### E0208: Best-to-test reproduction on test402 for clipdiff-augmented anchors (LTL “拉大”)
 | Field | Value |
@@ -816,6 +854,12 @@ Follow-ups (train3339→test402; same token budget=1960):
 | Logs | `runs/E0208_*` |
 | Artifacts | `runs/E0208_*/metrics.json` |
 | Results | Smoke (train64/test32; SEEDS=0,1; EPOCHS=1): `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_lr_20260204-073616/metrics.json`. Full test402 (SEEDS=0..9): `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_lr_20260204-074318/metrics.json` (Δ=+0.00759, p=0.0313; fallback≈0.826 under std_thr=0.4), `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_lr_20260204-075503/metrics.json` (ltl_gini_v1; Δ=+0.00122, p=0.704; fallback≈0.047), `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-080419/metrics.json` (anchored=0.72045 vs uniform=0.70858, Δ=+0.01187, p=0.00142; fallback≈0.883), `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-080617/metrics.json` (alt config; Δ=+0.00985, p=0.00532; fallback≈0.709), `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_ltl_std_v1_20260204-084147/metrics.json` (ltl_std_v1 best_config=`ltlstd_shift0_std0p45`; anchored=0.72065 vs uniform=0.70858, Δ=+0.01206, p=0.00464; fallback≈0.754), `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_ltl_std_v2_20260204-085632/metrics.json` (ltl_std_v2 best_config=`ltlstd2_shift0_std0p5_mixedAlloc`; anchored=0.71724 vs uniform=0.70858, Δ=+0.00866, p=0.0472; fallback≈0.816), `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_ltl_gini_v2_20260204-090710/metrics.json` (ltl_gini_v2 best_config=`ltlgini2_gini0p45_shift0`; anchored=0.71948 vs uniform=0.70858, Δ=+0.01090, p=0.0274), `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_ltl_gap_v1_20260204-090741/metrics.json` (ltl_gap_v1 best_config=`ltlgap1_gap0p3_shift0`; anchored=0.71600 vs uniform=0.70858, Δ=+0.00741, p=0.0604), `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_ltl_extreme_v1_20260204-091529/metrics.json` (ltl_extreme_v1 best_config=`ltlextreme1_shift1_std0p6`; anchored=0.71413 vs uniform=0.70858, Δ=+0.00555, p=0.0849), `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_cls_ltl_std_v1_20260204-092530/metrics.json` (av_clipdiff_mlp_cls; ltl_std_v1 best_config=`ltlstd_shift0_std0p55`; anchored=0.71510 vs uniform=0.70858, Δ=+0.00652, p=0.00801), `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_tcn_20260204-082007/metrics.json` (Δ=+0.00468, p=0.142), `runs/E0208_ave_p0_best_to_test_official_av_clip_mlp_cls_20260204-095509/metrics.json` (av_clip_mlp_cls; ltl_std_v1; Δ=+0.00281, p=0.328), `runs/E0208_ave_p0_best_to_test_official_av_clip_mlp_cls_target_20260204-100202/metrics.json` (av_clip_mlp_cls_target; ltl_std_v1; Δ=-0.00597, p=0.131), `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_tcn_20260204-100855/metrics.json` (av_clipdiff_tcn; ltl_std_v1; Δ=+0.00540, p=0.161), `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-103001/metrics.json` (av_clipdiff_mlp; ltl_adaptive_v1 best_config=`ltladj1_shift0_std0p45`; anchored=0.72234 vs uniform=0.70858, Δ=+0.01376, p=1.4e-05). |
+
+Notes (2026-02-10 reruns; artifact paths locally present):
+- Quick test402 (SEEDS=0..2) for `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_adaptive_v1`: `runs/E0208_quick_test402_av_clipdiff_mlp_ltl_adaptive_v1_20260210-182944/metrics.json` (Δ≈+0.00738, p≈0.577).
+- Quick test402 (SEEDS=0..2) for `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_std_v1`: `runs/E0208_quick_test402_av_clipdiff_mlp_ltl_std_v1_20260210-183321/metrics.json` (Δ≈+0.00124, p≈0.927).
+- Quick test402 (SEEDS=0..2) for `EVENTNESS=av_clipdiff_vec_mlp`, `CANDIDATE_SET=ltl_adaptive_v1`: `runs/E0611_quick_test402_av_clipdiff_vec_mlp_ltl_adaptive_v1_20260210-200638/metrics.json` (Δ≈+0.01061, p≈0.391; diagnose: `runs/E0611_quick_test402_av_clipdiff_vec_mlp_ltl_adaptive_v1_20260210-200638/diagnose.json`).
+- Full test402 (SEEDS=0..9) for the above: `runs/E0612_full_test402_av_clipdiff_vec_mlp_ltl_adaptive_v1_20260210-200736/metrics.json` (Δ≈+0.00095, p≈0.875; diagnose: `runs/E0612_full_test402_av_clipdiff_vec_mlp_ltl_adaptive_v1_20260210-200736/diagnose.json`).
 
 
 ### E0209: Stage-2 plan sweep on val402 for learned anchors (ltl_adaptive_v2; lower fallback)
@@ -2184,6 +2228,9 @@ Follow-ups (train3339→test402; same token budget=1960):
 | Artifacts | `runs/E0292_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
 | Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0292_ave_p0_sweep_official_val_av_fused_clipdiff_prod_ltl_top1med_v1_20260205-011817/sweep_summary.json` (best Δ≈+0.00312). Full (val402; SEEDS=0..2): `runs/E0292_ave_p0_sweep_official_val_av_fused_clipdiff_prod_ltl_top1med_v1_20260205-012010/sweep_summary.json` (best=`ltltop1med_thr0p5_shift1`, Δ≈-0.00482, p≈0.491; regresses). |
 
+Notes (2026-02-10 rerun; artifact paths locally present):
+- Full (val402; SEEDS=0..2): `runs/E0292_ave_p0_sweep_official_val_av_fused_clipdiff_prod_ltl_top1med_v1_20260210-181356/sweep_summary.json` (best=`ltltop1med_thr0p8_shift1`, Δ≈-0.00815, p≈0.218; regresses).
+
 
 ### E0293: Best-to-test reproduction on test402 (E0292 selection; av_fused_clipdiff_prod)
 | Field | Value |
@@ -2263,6 +2310,9 @@ Follow-ups (train3339→test402; same token budget=1960):
 | Logs | `runs/E0296_*` |
 | Artifacts | `runs/E0296_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
 | Results | Smoke (train64/val32; SEEDS=0,1; EPOCHS=1): `runs/E0296_ave_p0_sweep_official_val_moe_energy_clipdiff_ltl_top1med_moe_v1_20260205-014218/sweep_summary.json` (best Δ≈+0.00469). Full (val402; SEEDS=0..2): `runs/E0296_ave_p0_sweep_official_val_moe_energy_clipdiff_ltl_top1med_moe_v1_20260205-014328/sweep_summary.json` (best=`ltltop1medmoe_std0p4_thr0p4_shift0`, Δ≈+0.00224, p≈0.756; no improvement vs E0294). |
+
+Notes (2026-02-10 rerun; artifact paths locally present):
+- Full (val402; SEEDS=0..2): `runs/E0296_ave_p0_sweep_official_val_moe_energy_clipdiff_ltl_top1med_moe_v1_20260210-181653/sweep_summary.json` (best=`ltltop1medmoe_std0p4_thr0p7_shift0`, Δ≈-0.00923, p≈0.485; regresses).
 
 
 ### E0297: Best-to-test reproduction on test402 (E0296 selection; moe_energy_clipdiff)
@@ -4637,6 +4687,9 @@ Follow-ups (train3339→test402; same token budget=1960):
 | Artifacts | `runs/E0400_*/sweep_summary.json`, `runs/E0400b_*/sweep_summary.json`, `runs/E0400c_*/sweep_summary.json` |
 | Results | E0400 (`k1_extreme`): `runs/E0400_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_stride_ltl_top1med_k1_extreme_v1_20260206-131825/sweep_summary.json` (best Δ≈+0.00723, p≈0.412). E0400b (`top1med_norm`): `runs/E0400b_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_stride_ltl_top1med_norm_v1_20260206-132936/sweep_summary.json` (best Δ≈+0.00607, p≈0.08999). E0400c (`top1med_v1`): `runs/E0400c_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_stride_ltl_top1med_v1_20260206-133240/sweep_summary.json` (best Δ≈+0.00357, p≈0.0487). Decision: not competitive for test402 promotion. |
 
+Notes (2026-02-10 rerun; artifact paths locally present):
+- E0400 (`k1_extreme`): `runs/E0400_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_stride_ltl_top1med_k1_extreme_v1_20260210-195236/sweep_summary.json` (best=`ltltop1medk1ext_thr0p6_shift1_score`, Δ≈+0.00490, p≈0.465).
+
 
 ### E0401: Quick test402 transfer (SEEDS=0..2) — dense-stride winner + diagnosis
 | Field | Value |
@@ -4659,6 +4712,9 @@ Follow-ups (train3339→test402; same token budget=1960):
 | Logs | `runs/E0401_*`, `runs/E0344_*` |
 | Artifacts | `runs/E0401_*/metrics.json`, `runs/E0344_*/diagnose.json` |
 | Results | Baseline quick (SEEDS=0,1,2): `runs/E0401_quick_test402_av_clipdiff_flow_mlp_stride_20260206-140425/metrics.json` + `runs/E0401_quick_test402_av_clipdiff_flow_mlp_stride_20260206-140425/diagnose.json` (`Δ=+0.00771`, `p=0.331`, `fallback_used_frac≈0.8607`). Alternative quick reruns: `runs/E0401_quick_test402_av_clipdiff_flow_mlp_stride_alt_top1med_thr0p5_20260206-150837/metrics.json` + `.../diagnose.json` (`Δ=+0.01153`, `p=0.0661`, `fallback_used_frac≈0.5622`); `runs/E0401_quick_test402_av_clipdiff_flow_mlp_stride_alt_top1medn_thr0p6_20260206-151412/metrics.json` + `.../diagnose.json` (`Δ=+0.00746`, `p=0.436`). |
+
+Notes (2026-02-10 rerun; artifact paths locally present):
+- Quick test402 (SEEDS=0..2): `runs/E0401_quick_test402_av_clipdiff_flow_mlp_stride_20260210-195916/metrics.json` (Δ≈-0.00506, p≈0.555; diagnose: `runs/E0401_quick_test402_av_clipdiff_flow_mlp_stride_20260210-195916/diagnose.json`).
 
 
 ### E0402: Full test402 reproduction (SEEDS=0..9) — dense-stride winner → attempt C0003
@@ -5128,15 +5184,47 @@ Follow-ups (train3339→test402; same token budget=1960):
 ### E0605: EgoSchema Subset VLM evaluation under budgeted frame selection (full n=500)
 | Field | Value |
 | --- | --- |
-| Objective | Upgrade E0602 from Subset(256) to the full labeled Subset split (n=500) and run SEED=0 for the complete config backfill. |
+| Objective | Upgrade E0602 from Subset(256) to the full labeled Subset split (n=500) and run multiple seeds for robustness. |
 | Dataset | EgoSchema (HF repo clone + extracted videos). |
 | Model | VLM: Qwen2-VL (default). |
 | Code path | `avs/experiments/egoschema_vlm_eval.py`, `scripts/e0602_egoschema_predict.sh` |
-| Params | `CONFIG=Subset`, `SPLIT=test`, `LIMIT=0` (full), `SEED=0`. |
+| Params | `CONFIG=Subset`, `SPLIT=test`, `LIMIT=0` (full), `SEED∈{0,1}`. |
 | Metrics (must save) | Per-seed `metrics.json` + `predictions.jsonl` + `preprocess_meta.json`. |
+| Full cmd | See the checklist entry (2 exact commands with fixed OUT_DIRs). |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `artifacts/experiments/E0605_subset500_s0/run.log` (partial), `artifacts/experiments/E0605_subset500_s0_resume1/run.log` (resume), `artifacts/experiments/E0605_subset500_s1/run.log` |
+| Artifacts | `runs/E0605_egoschema_eval_subset500_s0_20260210-125048/*`, `runs/E0605_egoschema_eval_subset500_s1_20260210-183504/*` |
+| Results | Full Subset test run (n=500; seeds=0,1; invalid_rate=0): uniform acc=0.5880, ql2l_clap=0.5480, ql2l_asr_bm25=0.5560 (identical across seeds). Artifacts: `runs/E0605_egoschema_eval_subset500_s0_20260210-125048/metrics.json`, `runs/E0605_egoschema_eval_subset500_s1_20260210-183504/metrics.json`. |
+
+### E0607: IntentQA faithfulness proxy (delete-and-predict; seed=1)
+| Field | Value |
+| --- | --- |
+| Objective | Extend E0601 with an additional seed to verify stability of the faithfulness proxy metrics under the same budgets/method. |
+| Dataset | IntentQA (CSV + videos). |
+| Model | VLM: Qwen2-VL (default). |
+| Code path | `avs/experiments/intentqa_faithfulness.py`, `scripts/e0601_intentqa_faithfulness.sh` |
+| Params | Same as E0601, plus `SEED=1`. |
+| Metrics (must save) | `faithfulness.json` + `rows.jsonl` + `preprocess_meta.json`. |
 | Full cmd | See the checklist entry (1 exact command with fixed OUT_DIR). |
 | Smoke | [ ] |
 | Full | [x] |
-| Logs | `artifacts/experiments/E0605_subset500_s0/run.log` (partial), `artifacts/experiments/E0605_subset500_s0_resume1/run.log` (resume) |
-| Artifacts | `runs/E0605_egoschema_eval_subset500_s*_20260210-125048/*` |
-| Results | Full Subset test run (n=500; seed=0; invalid_rate=0): uniform acc=0.5880, ql2l_clap=0.5480, ql2l_asr_bm25=0.5560. Artifacts: `runs/E0605_egoschema_eval_subset500_s0_20260210-125048/metrics.json`. |
+| Logs | `artifacts/experiments/E0607_intentqa_faithfulness_val_s1/run.log` |
+| Artifacts | `runs/E0607_intentqa_faithfulness_val_s1_20260210-194732/*` |
+| Results | Matches seed0: accuracy=0.948617, accuracy_deleted=0.948617, acc_drop=0.000000, pred_change_rate=0.031621, invalid_rate=0. |
+
+### E0608: EgoSchema prediction generation under budgeted frame selection (seed=1; Subset n=256)
+| Field | Value |
+| --- | --- |
+| Objective | Extend E0602 with an additional seed to confirm stability on the labeled Subset split under the same budgets/methods. |
+| Dataset | EgoSchema (HF repo clone + extracted videos). |
+| Model | VLM: Qwen2-VL (default). |
+| Code path | `avs/experiments/egoschema_vlm_eval.py`, `scripts/e0602_egoschema_predict.sh` |
+| Params | `CONFIG=Subset`, `SPLIT=test`, `LIMIT=256`, `SEED=1`. |
+| Metrics (must save) | `metrics.json` + `predictions.jsonl` + `preprocess_meta.json`. |
+| Full cmd | See the checklist entry (1 exact command with fixed OUT_DIR). |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `artifacts/experiments/E0608_egoschema_eval_subset256_s1/run.log` |
+| Artifacts | `runs/E0608_egoschema_eval_subset256_s1_20260210-201700/*` |
+| Results | Matches seed0: uniform acc=0.5859, ql2l_clap=0.5352, ql2l_asr_bm25=0.5469 (invalid_rate=0; n=256). |
