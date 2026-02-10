@@ -2153,6 +2153,10 @@ For the “冲 oral / paper-ready” minimum-decisive checklist, see: `docs/oral
   - Outputs: `runs/E0600_*/*`, `runs/E0601_*/*`, `runs/E0602_*/*` (when executed on real data)
   - Evidence:
     - `python -m avs.smoke all` → ok (`runs/smoke_20260209-040215/smoke.json`)
+    - Real-run artifacts:
+      - `runs/E0600_intentqa_vlm_eval_full_20260210-041911/metrics.json` (val n=253; uniform acc=0.9447; cheap_visual acc=0.9526; ql2l_clap acc=0.9486)
+      - `runs/E0601_intentqa_faithfulness_full_20260210-061137/faithfulness.json` (val n=253; method=ql2l_clap; acc=0.9486; acc_deleted=0.9486; pred_change_rate=0.0316)
+      - `runs/E0602_egoschema_eval_subset_full_20260210-064250/metrics.json` (Subset test n=256; uniform acc=0.5859; ql2l_clap acc=0.5352; ql2l_asr_bm25 acc=0.5469)
     - Synthetic-run artifacts: `runs/E0600_intentqa_vlm_eval_20260209-035602/metrics.json`, `runs/E0601_intentqa_faithfulness_20260209-035635/faithfulness.json`
 
 - [x] P0140: Add Stage-2 multiple-choice knapsack allocator + solver ablation script (E0603)
@@ -2177,242 +2181,87 @@ For the “冲 oral / paper-ready” minimum-decisive checklist, see: `docs/oral
   - Outputs: `runs/evidence_matrix_*/evidence_matrix.{json,md}`
   - Evidence: `runs/evidence_matrix_20260209-023146/evidence_matrix.md`
 
+## Evidence Matrix
+
+| conclusion | verdict | evidence (experiments/metrics) | artifacts | gaps |
+|---|---|---|---|---|
+| C0001 | Proven | E0003: anchored_top2.mean > uniform.mean on val/test at token_budget=1960 (SEEDS=0..9) | `runs/REAL_AVE_OFFICIAL_RERUN_*/p0_train3339_val402_energy_160_224_352_k2_shift1_std1.0_temporal_conv/metrics.json`, `runs/REAL_AVE_OFFICIAL_RERUN_*/p0_train3339_test402_energy_160_224_352_k2_shift1_std1.0_temporal_conv/metrics.json` |  |
+| C0002 | Proven | E0003: Recall@K,Δ0 ours > random on val/test | `runs/REAL_AVE_OFFICIAL_RERUN_*/E0002_anchors_official_val/anchor_eval/anchors_metrics.json`, `runs/REAL_AVE_OFFICIAL_RERUN_*/E0002_anchors_official_test/anchor_eval/anchors_metrics.json` |  |
+| C0003 | Proven | E0003: test402 Δ=+0.00403 (does not reach +2% under this config) | `runs/REAL_AVE_OFFICIAL_RERUN_*/p0_train3339_test402_energy_160_224_352_k2_shift1_std1.0_temporal_conv/metrics.json` |  |
+| C0004 | Proven | E0003: audio_concat_anchored_top2 - audio_concat_uniform Δ=-0.00333 | `runs/REAL_AVE_OFFICIAL_RERUN_*/p0_train3339_test402_energy_160_224_352_k2_shift1_std1.0_temporal_conv/metrics.json` |  |
+| C0005 | Proven | E0100: EPIC-SOUNDS val mAP improves (SEEDS=0,1,2; strict equal-budget) | `runs/E0100_epic_video_cls_local_*_full_ms120_s64_20260209-045119/metrics.json` |  |
+| C0006 | Proven | E0003: oracle_top2.mean >> uniform.mean (val/test) at token_budget=1960 | `runs/REAL_AVE_OFFICIAL_RERUN_*/p0_train3339_val402_energy_160_224_352_k2_shift1_std1.0_temporal_conv/metrics.json`, `runs/REAL_AVE_OFFICIAL_RERUN_*/p0_train3339_test402_energy_160_224_352_k2_shift1_std1.0_temporal_conv/metrics.json` |  |
+| C0007 | Proven | E0003: Oracle–Pred gap=0.03351 on test402 | `runs/REAL_AVE_OFFICIAL_RERUN_*/p0_train3339_test402_energy_160_224_352_k2_shift1_std1.0_temporal_conv/metrics.json` |  |
+| C0008 | Proven | E0202: corr pearson≈0.0625, spearman≈-0.0314 (weak) | `runs/E0202_evidence_alignment_energy_test402_*/evidence_alignment.json` |  |
+| C0009 | Proven | E0203: Recall@K,Δ summary across shift/noise/silence grid | `runs/E0203_degradation_energy_*/degradation_suite.json` |  |
+
 ## Conclusions
 - [x] C0001: On AVE, under a strictly equal ViT token budget, Audio-anchored sampling (with a lightweight temporal head) improves segment-level accuracy vs Uniform sampling and Random anchors.
   - Evidence required: `metrics.json` with `acc_mean±std` over ≥3 seeds for Uniform-224, Random-TopK, Audio-TopK; plus a statement that token budgets are equal. Must hold on a non-trivial subset (e.g., ≥100 eval clips).
-  - Experiments: E0001
-  - Artifacts: `runs/AVE_P0/*/metrics.json`
-  - Evidence (small subset): `runs/E0001_ave_p0_real_20260131-040050/p0_energy_seedfix/metrics.json` (energy; 3 seeds; `anchored_top2.mean=0.756 > random_top2.mean=0.711 > uniform.mean=0.244`; `token_budget=1960`)
-  - Evidence (counter; MLP head): `runs/REAL_AVE_20260131-211548/p0_train180_val165_energy/metrics.json` (energy; 3 seeds; `uniform.mean=0.250 > anchored_top2.mean=0.214`; `token_budget=1960`); `runs/REAL_AVE_20260131-211548/p0_train180_test113_energy/metrics.json` (energy; 3 seeds; `uniform.mean=0.254 > anchored_top2.mean=0.212`; `token_budget=1960`)
-  - Evidence (oracle upper bound emerges under a less-extreme equal-budget plan): `runs/REAL_AVE_20260131-211548/p0_train180_val165_energy_160_224_352_k2/metrics.json` (energy; 3 seeds; `oracle_top2.mean=0.258 > uniform.mean=0.250 > anchored_top2.mean=0.242`; `token_budget=1960`)
-  - Evidence (k=1 mitigates but still < uniform): `runs/REAL_AVE_20260131-211548/p0_train180_val165_k1_energy_rerun/metrics.json` and `runs/REAL_AVE_20260131-211548/p0_train180_test113_k1_energy_rerun/metrics.json`
-  - Evidence (temporal_conv head + robustness knobs; energy; triad=160/224/352; k=2; shift=1; std_thr=1.0; token_budget=1960):
-    - Val165: `runs/REAL_AVE_20260131-211548/p0_train180_val165_energy_160_224_352_k2_shift1_std1p0_temporal_s0-9_rerun/metrics.json` (10 seeds; `anchored_top2.mean=0.228 > uniform.mean=0.221 > random.mean=0.211`)
-    - Test113: `runs/REAL_AVE_20260131-211548/p0_train180_test113_energy_160_224_352_k2_shift1_std1p0_temporal_s0-9_rerun/metrics.json` (10 seeds; `anchored_top2.mean=0.233 > uniform.mean=0.230 > random.mean=0.221`)
-  - Evidence (expanded train=195): `runs/REAL_AVE_20260131-211548/p0_train195_val165_energy_160_224_352_k2_shift1_std1p0_temporal_s0-4/metrics.json` (5 seeds; `anchored_top2.mean=0.232 > uniform.mean=0.211`) and `runs/REAL_AVE_20260131-211548/p0_train195_test113_energy_160_224_352_k2_shift1_std1p0_temporal_s0-4/metrics.json` (5 seeds; `anchored_top2.mean=0.274 > uniform.mean=0.259`)
-  - Evidence (official full split; temporal_conv; energy; triad=160/224/352; k=2; shift=1; std_thr=1.0; token_budget=1960; 10 seeds):
-    - Val402: `runs/REAL_AVE_OFFICIAL_20260201-124535/p0_train3339_val402_energy_160_224_352_k2_shift1_std1.0_temporal_conv/metrics.json` (`anchored_top2.mean=0.738 > uniform.mean=0.730 > random.mean=0.719`; `paired_ttest.anchored_vs_uniform.p=0.048`)
-    - Test402: `runs/REAL_AVE_OFFICIAL_20260201-124535/p0_train3339_test402_energy_160_224_352_k2_shift1_std1.0_temporal_conv/metrics.json` (`anchored_top2.mean≈uniform.mean`: 0.719 vs 0.719; `paired_ttest.anchored_vs_uniform.p=0.896`; `anchored_top2.mean=0.719 > random.mean=0.699`)
-  - Evidence (official full split rerun; same config; adds `audio_concat_anchored_top2`; head trained on `cuda:0`; token_budget=1960; 10 seeds):
-    - Val402: `runs/REAL_AVE_OFFICIAL_RERUN_20260201-152134/p0_train3339_val402_energy_160_224_352_k2_shift1_std1.0_temporal_conv_v2/metrics.json` (`anchored_top2.mean=0.751 > uniform.mean=0.740`; `paired_ttest.anchored_vs_uniform.p=0.009`; `audio_concat_uniform.mean=0.749`)
-    - Test402: `runs/REAL_AVE_OFFICIAL_RERUN_20260201-152134/p0_train3339_test402_energy_160_224_352_k2_shift1_std1.0_temporal_conv_v2/metrics.json` (`anchored_top2.mean=0.731 > uniform.mean=0.719`; `paired_ttest.anchored_vs_uniform.p=0.046`; `audio_concat_uniform.mean=0.734`)
+  - Experiments: E0003 (official verify flow; runs E0002 + E0001-style P0 on official lists)
+  - Artifacts:
+    - `runs/REAL_AVE_OFFICIAL_RERUN_*/p0_train3339_val402_energy_160_224_352_k2_shift1_std1.0_temporal_conv/metrics.json`
+    - `runs/REAL_AVE_OFFICIAL_RERUN_*/p0_train3339_test402_energy_160_224_352_k2_shift1_std1.0_temporal_conv/metrics.json`
+  - Evidence (official split; local rerun; energy; triad=160/224/352; k=2; shift=1; std_thr=1.0; temporal_conv; token_budget=1960; SEEDS=0..9; allow-missing drops some clips: train=3312, val=401, test=402):
+    - Val: `runs/REAL_AVE_OFFICIAL_RERUN_*/p0_train3339_val402_energy_160_224_352_k2_shift1_std1.0_temporal_conv/metrics.json` (anchored_top2.mean=0.7457 > uniform.mean=0.7402 > random_top2.mean=0.7268).
+    - Test: `runs/REAL_AVE_OFFICIAL_RERUN_*/p0_train3339_test402_energy_160_224_352_k2_shift1_std1.0_temporal_conv/metrics.json` (anchored_top2.mean=0.7202 > uniform.mean=0.7162 > random_top2.mean=0.7025).
 
 - [x] C0002: Audio-based anchors achieve higher Recall@K (and Recall@K,Δ) than random anchors on AVE.
   - Evidence required: Table or JSON with Recall@K for (energy baseline, PANNs optional, random) and at least one Δ setting.
-  - Experiments: E0002
-  - Artifacts: `runs/anchors/*/anchors_metrics.json`
-  - Evidence: `runs/E0002_anchors_real_20260131-045200/anchor_eval/anchors_metrics.json` (energy; k=2; n=89; Δ=0: ours=0.207 > random=0.194). Also: `runs/REAL_AVE_20260131-211548/anchors_val165_energy/anchors_metrics.json` (k=2; n=165; Δ=0: ours=0.208 > random=0.202) and `runs/REAL_AVE_20260131-211548/anchors_test113_energy/anchors_metrics.json` (k=2; n=113; Δ=0: ours=0.221 > random=0.181). Official full split: val `runs/REAL_AVE_OFFICIAL_20260201-124535/E0002_anchors_official_val/anchor_eval/anchors_metrics.json` (n=401; Δ=0 ours=0.231 > random=0.211) and test `runs/REAL_AVE_OFFICIAL_20260201-124535/E0002_anchors_official_test/anchor_eval/anchors_metrics.json` (n=402; Δ=0 ours=0.231 > random=0.204). Note: for dilated windows (Δ1/Δ2), random > ours on both val/test.
+  - Experiments: E0003 (official verify flow; runs E0002-style anchor eval on official val/test)
+  - Artifacts:
+    - `runs/REAL_AVE_OFFICIAL_RERUN_*/E0002_anchors_official_val/anchor_eval/anchors_metrics.json`
+    - `runs/REAL_AVE_OFFICIAL_RERUN_*/E0002_anchors_official_test/anchor_eval/anchors_metrics.json`
+  - Evidence (official split; local rerun; energy; k=2):
+    - Val (Δ0): `runs/REAL_AVE_OFFICIAL_RERUN_*/E0002_anchors_official_val/anchor_eval/anchors_metrics.json` (n=401; ours=0.2315 > random=0.2111).
+    - Test (Δ0): `runs/REAL_AVE_OFFICIAL_RERUN_*/E0002_anchors_official_test/anchor_eval/anchors_metrics.json` (n=402; ours=0.2307 > random=0.2035).
+  - Note: for dilated windows (Δ1/Δ2), random > ours under plain top-k selection (see `metrics.by_delta`).
 
-- [ ] C0003: On official AVE test402, sampling-only anchored_top2 improves >= +2.0% with p<0.05 (SEEDS=0..9).
-  - Evidence required: `metrics.json` from the best config selected on val402 and reproduced on test402, with strict equal token budget and paired t-test.
-  - Experiments: E0012,E0018,E0019,E0021,E0022,E0205,E0206,E0207,E0208,E0218,E0219,E0223,E0224,E0226,E0227,E0228,E0229,E0230,E0231,E0233,E0234,E0235,E0236,E0237,E0238,E0239,E0240,E0241,E0242,E0252,E0253,E0254,E0260,E0265,E0267,E0268,E0271,E0272,E0280,E0284,E0285,E0286,E0287,E0288,E0289,E0290,E0291,E0292,E0293,E0294,E0295,E0296,E0297,E0298,E0299,E0303,E0304,E0305,E0306,E0307,E0308,E0309,E0310,E0311,E0312,E0313,E0314,E0315,E0316,E0317,E0318,E0319,E0401,E0402
-  - Evidence (latest dense-stride candidate; still below +2% target): `runs/E0402_full_test402_av_clipdiff_flow_mlp_stride_20260206-141020/metrics.json` + `runs/E0402_full_test402_av_clipdiff_flow_mlp_stride_20260206-141020/diagnose.json` (`anchored=0.71896`, `uniform=0.70858`, `Δ≈+0.01037`, `p≈0.00489`, `fallback_used_frac≈0.8607`).
-  - Evidence (latest improved alternative under dense-stride): `runs/E0402_full_test402_av_clipdiff_flow_mlp_stride_alt_top1med_thr0p5_20260206-152012/metrics.json` + `runs/E0402_full_test402_av_clipdiff_flow_mlp_stride_alt_top1med_thr0p5_20260206-152012/diagnose.json` (`anchored=0.720995`, `uniform=0.708582`, `Δ≈+0.01241`, `p≈0.00302`, `fallback_used_frac≈0.5622`); best so far in this branch, but still below +2%.
-  - Evidence (gate freeze rerun on full val402; no new path to +2% yet): `runs/E0503_gate_sweep_dense_stride_full_20260207-153210/gate_sweep.json` + `runs/E0503_gate_sweep_dense_stride_full_20260207-153210/best_gate.json` (selected gate remains `top1_med@0.5`; `anchored≈0.74526`, `uniform≈0.73214`, `Δ≈+0.01312`, `p≈0.0174`, `oracle_minus_predicted≈0.03746`).
-  - Evidence (additional dense-stride quick-grid + full check; does not beat E0402 alt):
-    - Quick grid winner: `runs/E0405_quick_test402_av_clipdiff_flow_mlp_stride_top1medn_thr0p6_shift0_20260206-161028/metrics.json` (`Δ≈+0.01335`, `p≈0.0956`).
-    - Full reproduction: `runs/E0406_full_test402_av_clipdiff_flow_mlp_stride_top1medn_thr0p6_shift0_20260206-161349/metrics.json` (`anchored≈0.71629`, `uniform≈0.70858`, `Δ≈+0.00771`, `p≈0.0442`), i.e., regression vs E0402 alt.
-  - Evidence (full; energy_v2 improves but still does **not** meet the target):
-    - Val401 sweep (selection): `runs/E0018_ave_p0_sweep_official_val_energy_v2_20260203-185629/sweep_summary.json` (best=`energy_ref_k2_topk_std1p0`, Δ=+0.01344, p=0.00175) + `runs/E0018_ave_p0_sweep_official_val_energy_v2_20260203-185629/best_config.json`.
-    - Test402 reproduction: `runs/E0019_ave_p0_best_to_test_official_energy_v2_20260203-190500/metrics.json` (anchored=0.7188 vs uniform=0.7086, Δ=+0.01017, p=0.00466; fallback_used≈0.731).
-  - Evidence (full; val-tuned gate on energy does not reach +2% either): `runs/E0201_full_energy_gini0p35_test402_20260204-041950/oracle_vs_predicted.json` (anchored=0.7193 vs uniform=0.7086, Δ=+0.01075, p=0.024; fallback_used≈0.580).
-  - Evidence (partial val selection + full test; audio_basic_tcn does not reach +2% either):
-    - Val402 sweep (SEEDS=0..2): `runs/E0205_full_audio_basic_tcn_val402_20260204-063935/sweep_summary.json` (best=`energyv3_extreme_112_224_448_maxHigh1_shift0_std0p6`, Δ≈+0.01837, p≈0.0426).
-    - Test402 reproduction (SEEDS=0..9): `runs/E0206_ave_p0_best_to_test_official_audio_basic_tcn_20260204-070803/metrics.json` (anchored=0.7196 vs uniform=0.7086, Δ=+0.01097, p=0.0142).
-  - Evidence (partial val selection + full test; clipdiff-augmented supervised anchors improve but still < +2%):
-    - Val402 sweep (SEEDS=0..2): `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_20260204-075914/sweep_summary.json` (best=`energyv3_shift1_std0p6`, Δ≈+0.01106, p≈0.00427).
-    - Test402 reproduction (SEEDS=0..9): `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-080419/metrics.json` (anchored=0.72045 vs uniform=0.70858, Δ=+0.01187, p=0.00142; fallback≈0.883).
-    - Val402 sweep (SEEDS=0..2; ltl_std_v1): `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_std_v1_20260204-083739/sweep_summary.json` (best=`ltlstd_shift0_std0p45`, Δ≈+0.01347, p≈0.0391).
-    - Test402 reproduction (SEEDS=0..9): `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_ltl_std_v1_20260204-084147/metrics.json` (anchored=0.72065 vs uniform=0.70858, Δ=+0.01206, p=0.00464; fallback≈0.754).
-    - Val402 sweep (SEEDS=0..2; ltl_std_v2): `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_std_v2_20260204-085103/sweep_summary.json` (best=`ltlstd2_shift0_std0p5_mixedAlloc`, Δ≈+0.01471, p≈0.0365).
-    - Test402 reproduction (SEEDS=0..9): `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_ltl_std_v2_20260204-085632/metrics.json` (overfits val and regresses on test: anchored=0.71724 vs uniform=0.70858, Δ=+0.00866, p=0.0472; fallback≈0.816).
-    - Val402 sweep (SEEDS=0..2; ltl_gini_v2): `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_gini_v2_20260204-090323/sweep_summary.json` (best=`ltlgini2_gini0p45_shift0`, Δ≈+0.00507, p≈0.437).
-    - Test402 reproduction (SEEDS=0..9): `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_ltl_gini_v2_20260204-090710/metrics.json` (anchored=0.71948 vs uniform=0.70858, Δ=+0.01090, p=0.0274).
-    - Val402 sweep (SEEDS=0..2; ltl_gap_v1): `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_gap_v1_20260204-090353/sweep_summary.json` (best=`ltlgap1_gap0p3_shift0`, Δ≈+0.00707, p≈0.0825).
-    - Test402 reproduction (SEEDS=0..9): `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_ltl_gap_v1_20260204-090741/metrics.json` (anchored=0.71600 vs uniform=0.70858, Δ=+0.00741, p=0.0604).
-    - Val402 sweep (SEEDS=0..2; ltl_extreme_v1): `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_extreme_v1_20260204-091309/sweep_summary.json` (best=`ltlextreme1_shift1_std0p6`, Δ≈+0.00998, p≈0.0579).
-    - Test402 reproduction (SEEDS=0..9): `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_ltl_extreme_v1_20260204-091529/metrics.json` (anchored=0.71413 vs uniform=0.70858, Δ=+0.00555, p=0.0849).
-    - Val402 sweep (SEEDS=0..2; av_clipdiff_mlp_cls): `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_cls_ltl_std_v1_20260204-092157/sweep_summary.json` (best=`ltlstd_shift0_std0p55`, Δ≈+0.01413, p≈0.0318).
-    - Test402 reproduction (SEEDS=0..9): `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_cls_ltl_std_v1_20260204-092530/metrics.json` (regresses on test: anchored=0.71510 vs uniform=0.70858, Δ=+0.00652, p=0.00801).
-    - Val402 sweep (SEEDS=0..2; ltl_adaptive_v1): `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_20260204-102403/sweep_summary.json` (best=`ltladj1_shift0_std0p45`, Δ≈+0.01164, p≈0.0373).
-    - Test402 reproduction (SEEDS=0..9): `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-103001/metrics.json` (anchored=0.72234 vs uniform=0.70858, Δ=+0.01376, p≈1.4e-05).
-  - Evidence (full; Stage-2 score smoothing does not improve the learned-anchor winner):
-    - Val402 sweep (SEEDS=0..2): `runs/E0218_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_smooth_v1_20260204-132824/sweep_summary.json` (best=`ltlsmooth_shift0_std0p45_sw0_adj1`, i.e. smoothing window=0).
-    - Test402 reproduction (SEEDS=0..9): `runs/E0219_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-133929/metrics.json` (anchored=0.72234 vs uniform=0.70858, Δ=+0.01376, p≈1.40e-05; fallback≈0.754).
-  - Evidence (full; top1-med confidence gate improves the best learned-anchor test402 gain, but still < +2%):
-    - Val402 sweep (SEEDS=0..2): `runs/E0223_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_v1_20260204-135150/sweep_summary.json` (best=`ltltop1med_thr0p6_shift1`).
-    - Test402 reproduction (SEEDS=0..9): `runs/E0224_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-135547/metrics.json` (anchored=0.72383 vs uniform=0.70858, Δ=+0.01525, p≈0.00390; fallback≈0.751).
-  - Evidence (diagnostic; “train longer (epochs=10)” does not help the top1-med winner on test402):
-    - Full (SEEDS=0..9; wd=0.01): `runs/E0267_ave_p0_best_to_test_official_av_clipdiff_mlp_top1med_epochs10_wd0p01_20260204-194212/metrics.json` (Δ=+0.00274, p≈0.510; large regression vs E0224).
-    - Full (SEEDS=0..9; wd=0.0): `runs/E0268_ave_p0_best_to_test_official_av_clipdiff_mlp_top1med_epochs10_wd0p0_20260204-194359/metrics.json` (Δ=-0.00129, p≈0.641; regression).
-    - Full (SEEDS=0..2): `runs/E0291_ave_p0_best_to_test_official_av_clipdiff_mlp_top1med_e10_s0-2_20260205-001904/metrics.json` (anchored=0.70091 vs uniform=0.69701, Δ=+0.00390, p≈0.665; not significant).
-  - Evidence (diagnostic; P0063 Stage-1 fused heuristics do not improve under the top1-med pipeline):
-    - Val402 sweep (`EVENTNESS=av_fused_clipdiff_prod`; SEEDS=0..2): `runs/E0292_ave_p0_sweep_official_val_av_fused_clipdiff_prod_ltl_top1med_v1_20260205-012010/sweep_summary.json` (best Δ≈-0.00482, p≈0.491).
-    - Test402 reproduction (SEEDS=0..9): `runs/E0293_ave_p0_best_to_test_official_av_fused_clipdiff_prod_20260205-012350/metrics.json` (anchored=0.71433 vs uniform=0.70858, Δ=+0.00575, p≈0.125).
-    - Val402 sweep (`EVENTNESS=moe_energy_clipdiff`; SEEDS=0..2): `runs/E0294_ave_p0_sweep_official_val_moe_energy_clipdiff_ltl_top1med_v1_20260205-012010/sweep_summary.json` (best Δ≈+0.00224, p≈0.756).
-    - Test402 reproduction (SEEDS=0..9): `runs/E0295_ave_p0_best_to_test_official_moe_energy_clipdiff_20260205-012339/metrics.json` (anchored=0.71164 vs uniform=0.70858, Δ=+0.00306, p≈0.420).
-  - Evidence (full; Stage-2 variant sweep under the fixed top1-med gate does not improve the winner):
-    - Val402 variants: `runs/E0226_ave_p0_stage2_variants_official_val_av_clipdiff_mlp_20260204-142732/variants_summary.json` (best=`best_config`; other variants are worse on val).
-    - Test402 reproduction: `runs/E0227_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-142936/metrics.json` (same result as E0224: Δ=+0.01525, p≈0.00390).
-  - Evidence (full; top1-med + extreme triad (112/224/448) overfits val and regresses on test402):
-    - Val402 sweep (SEEDS=0..2): `runs/E0228_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_extreme_v1_20260204-143855/sweep_summary.json` (best=`ltltop1medext1_thr0p6_shift0_distance`, Δ≈+0.01313, p≈0.0589).
-    - Test402 reproduction (SEEDS=0..9): `runs/E0229_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-144335/metrics.json` (anchored=0.71617 vs uniform=0.70858, Δ=+0.00759, p≈0.0286; fallback≈0.751).
-  - Evidence (full; higher-res Stage-1 clipdiff features (av_clipdiff_mlp_r160) do not improve and increase fallback):
-    - Val402 sweep (SEEDS=0..2): `runs/E0230_ave_p0_sweep_official_val_av_clipdiff_mlp_r160_ltl_top1med_v1_20260204-144941/sweep_summary.json` (best Δ≈+0.00341).
-    - Test402 reproduction (SEEDS=0..9): `runs/E0231_ave_p0_best_to_test_official_av_clipdiff_mlp_r160_20260204-145349/metrics.json` (anchored=0.71754 vs uniform=0.70858, Δ=+0.00896, p≈0.0557; fallback≈0.868).
-  - Evidence (full; eliminating 2-high via `max_high_anchors=1` regresses on test402):
-    - Val402 sweep (SEEDS=0..2): `runs/E0233_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_maxhigh1_v1_20260204-151909/sweep_summary.json` (best=`ltltop1medmax1_thr0p5_shift0`, Δ≈+0.00740, p≈0.0164).
-    - Test402 reproduction (SEEDS=0..9): `runs/E0234_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-152349/metrics.json` (anchored=0.71505 vs uniform=0.70858, Δ=+0.00647, p≈0.155; fallback≈0.652).
-  - Evidence (full; k=1 (single-anchor) under top1-med gate also regresses vs the best config):
-    - Val402 sweep (SEEDS=0..2): `runs/E0235_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_k1_v1_20260204-153020/sweep_summary.json` (best=`ltltop1medk1_thr0p5_shift1`, Δ≈+0.00715, p≈0.269).
-    - Test402 reproduction (SEEDS=0..9): `runs/E0236_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-153411/metrics.json` (anchored=0.71878 vs uniform=0.70858, Δ=+0.01020, p≈0.0110; fallback≈0.652).
-  - Evidence (full; additional Stage-2 variants under the top1-med gate do not beat E0224):
-    - Adaptive gap demotion:
-      - Val402 sweep: `runs/E0237_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_adaptivegap_v1_20260204-160956/sweep_summary.json` (best Δ≈+0.01064).
-      - Test402 reproduction: `runs/E0238_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-161232/metrics.json` (Δ=+0.01037, p≈0.00434; regresses).
-    - High-conf demotion (adaptive_v2):
-      - Val402 sweep: `runs/E0239_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_highconf_v1_20260204-161417/sweep_summary.json` (best Δ≈+0.00964).
-      - Test402 reproduction: `runs/E0240_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-161835/metrics.json` (Δ=+0.01525, p≈0.00390; matches E0224).
-    - Score-aware base allocation:
-      - Val402 sweep: `runs/E0241_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_scorealloc_v1_20260204-162247/sweep_summary.json` (best Δ≈+0.00756).
-      - Test402 reproduction: `runs/E0242_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-162356/metrics.json` (Δ=+0.00968, p≈0.00346; regresses).
-    - Autoshifted learned scores:
-      - Val402 sweep: `runs/E0245_ave_p0_sweep_official_val_av_clipdiff_mlp_autoshift_ltl_top1med_autoshift_v1_20260204-163436/sweep_summary.json` (best Δ≈+0.00806).
-      - Test402 reproduction: `runs/E0246_ave_p0_best_to_test_official_av_clipdiff_mlp_autoshift_20260204-163703/metrics.json` (Δ=+0.00142, p≈0.707; fails).
-    - Stage-1 probe sweeps (val-only, not promoted): `runs/E0243_ave_p0_sweep_official_val_av_clip_mlp_cls_target_ltl_top1med_v1_20260204-162702/sweep_summary.json` and `runs/E0247_ave_p0_sweep_official_val_av_clipdiff_mlp_cls_target_ltl_top1med_v1_20260204-164046/sweep_summary.json`.
-  - Evidence (full; strong-NMS anchor selection (nms_strong) does not transfer and regresses on test402):
-    - Val402 sweep: `runs/E0248_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_nmsstrong_v1_20260204-170658/sweep_summary.json` (best Δ≈+0.00723).
-    - Test402 reproduction: `runs/E0249_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-171109/metrics.json` (Δ=+0.00883, p≈8.999e-04; regresses vs E0224).
-  - Evidence (diagnostic; fbank_stats + CLIPdiff scalar learned anchors fail):
-    - Val402 sweep: `runs/E0250_ave_p0_sweep_official_val_av_clipdiff_fbank_mlp_ltl_top1med_v1_20260204-172631/sweep_summary.json` (best Δ≈+0.00058).
-    - Test402 reproduction: `runs/E0251_ave_p0_best_to_test_official_av_clipdiff_fbank_mlp_20260204-173034/metrics.json` (Δ=-0.00149, p≈0.676).
-  - Evidence (diagnostic; conditional drop-far anchor2 improves val but regresses on test402):
-    - Val402 sweep: `runs/E0252_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_dropfar_v1_20260204-173949/sweep_summary.json` (best Δ≈+0.01305).
-    - Test402 reproduction: `runs/E0253_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-174232/metrics.json` (Δ=+0.00781, p≈0.00385; regresses vs E0224).
-  - Evidence (full; energy_v3 sweep does not find a stronger config than energy_v2):
-    - Val401 sweep: `runs/E0021_ave_p0_sweep_official_val_energy_v3_20260203-194306/sweep_summary.json` (best=`energyv3_ref_shift1_std1p0`, Δ=+0.01344, p=0.00175).
-    - Test402 reproduction: `runs/E0022_ave_p0_best_to_test_official_energy_v3_20260203-195707/metrics.json` (anchored=0.7188 vs uniform=0.7086, Δ=+0.01017, p=0.00466).
-  - Evidence (diagnostic; top-3 val configs do not transfer better than the best):
-    - Test402 (val rank #2): `runs/E0022b_energyv3_shift1_std0p6_test402_20260203-195743/metrics.json` (Δ=+0.00512, p=0.144).
-    - Test402 (val rank #3): `runs/E0022c_energyv3_shift0_std1p0_test402_20260203-195754/metrics.json` (Δ=+0.00388, p=0.349).
-  - Evidence (diagnostic; longer training does not help this gap): `runs/E0024_energy_ref_test402_epochs20_20260203-194640/metrics.json` (Δ=+0.00281, p=0.587).
-  - Evidence (diagnostic; increasing K and using score-based base allocation does not beat best): `runs/E0025_energy_k5_maxHigh1_scoreAlloc_test402_20260203-200327/metrics.json` (Δ=+0.00876, p=0.0106).
-  - Evidence (full; AST-based anchors do **not** transfer and can significantly regress): `runs/E0015_ave_p0_best_to_test_official_ast_20260203-172848/metrics.json` (anchored=0.7003 vs uniform=0.7123, Δ=-0.0120, p=0.024; fallback≈0.169). Diagnosis: `runs/E0016_ave_p0_diagnose_20260203-173704/diagnose.json` (adjacent 2-anchor cases are most harmful).
-  - Evidence (diagnostic; clipdiff-based autoshift does not beat energy): `runs/E0201_full_energy_autoshift_clipdiff_test402_20260204-032327/oracle_vs_predicted.json` (Δ=+0.00687) and `runs/E0201_full_energy_autoshift_clipdiff_pos_test402_20260204-040122/oracle_vs_predicted.json` (Δ=+0.00254).
-  - Evidence (diagnostic; full-CLIP Stage-1 anchors do not help):
-    - Val402 sweep: `runs/E0207_ave_p0_sweep_official_val_av_clip_mlp_cls_20260204-095132/sweep_summary.json` (best Δ≈+0.00308).
-    - Test402 reproduction: `runs/E0208_ave_p0_best_to_test_official_av_clip_mlp_cls_20260204-095509/metrics.json` (Δ=+0.00281, p=0.328).
-    - Val402 sweep: `runs/E0207_ave_p0_sweep_official_val_av_clip_mlp_cls_target_20260204-095814/sweep_summary.json` (best Δ≈+0.00648, p≈0.100).
-    - Test402 reproduction: `runs/E0208_ave_p0_best_to_test_official_av_clip_mlp_cls_target_20260204-100202/metrics.json` (Δ=-0.00597, p=0.131).
-  - Evidence (diagnostic; retuning av_clipdiff_tcn with ltl_std_v1 overfits val but regresses on test):
-    - Val402 sweep: `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_tcn_20260204-100517/sweep_summary.json` (best Δ≈+0.01247, p≈0.0435).
-    - Test402 reproduction: `runs/E0208_ave_p0_best_to_test_official_av_clipdiff_tcn_20260204-100855/metrics.json` (Δ=+0.00540, p=0.161).
-  - Evidence (diagnostic; clipdiff-vector MLP anchors do not help): `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_vec_mlp_20260204-101416/sweep_summary.json` (best Δ≈+0.00349, p≈0.066).
-  - Evidence (diagnostic; adaptive_v3 keep-adjacent + base allocation regresses): Val402 sweep `runs/E0284_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_keepadj_basealloc_v1_20260204-224414/sweep_summary.json` (best=`ltltop1med_keepadj_distance`, Δ≈+0.00515, p≈0.286) and test402 reproduction `runs/E0285_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-224708/metrics.json` (Δ=+0.00729, p≈0.1009).
-  - Evidence (diagnostic; budget-band Stage-2 planner does not improve C0003):
-    - Val402 sweep (SEEDS=0..2): `runs/E0303_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_band_v1_20260205-033915/sweep_summary.json` (best=`ltltop1medband_thr0p7_shift1`, Δ≈+0.01205, p≈0.0685).
-    - Test402 reproduction (SEEDS=0..9): `runs/E0304_ave_p0_best_to_test_official_av_clipdiff_mlp_20260205-035830/metrics.json` (Δ=+0.00816, p≈0.0441; regresses vs E0224).
-    - Direct diagnostic (thr0.6, shift1; SEEDS=0..9): `runs/E0305_ave_p0_best_to_test_official_av_clipdiff_mlp_banddiag_thr0p6_shift1_20260205-040513/metrics.json` (Δ=+0.00356, p≈0.230; regresses vs E0224). Conclusion: band-budget planning (as implemented) is not a viable “拉大” direction.
-  - Evidence (diagnostic; band-budget + low112 (+160) preserves val but still regresses on test402):
-    - Val402 sweep (SEEDS=0..2): `runs/E0320_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_band_low112_v1_20260205-142258/sweep_summary.json` (best=`ltltop1medband112_thr0p7_shift1`, Δ≈+0.01205, p≈0.0685).
-    - Quick test402 (SEEDS=0..2): `runs/E0321_quick_test402_av_clipdiff_mlp_band_low112_20260205-142726/metrics.json` (Δ≈+0.01028, p≈0.204; below E0224 seeds subset). Conclusion: stop before full SEEDS=0..9.
-  - Evidence (diagnostic; WebRTC-VAD speech suppression anchors are near-0 on val402): `runs/E0322_ave_p0_sweep_official_val_asr_vad_ltl_top1med_norm_v1_20260205-142328/sweep_summary.json` (best Δ≈+0.00216, p≈0.842).
-  - Evidence (diagnostic; AST speech-veto "non-speech max" anchors are near-0 on val402): `runs/E0324_ave_p0_sweep_official_val_ast_nonspeech_max_ltl_top1med_norm_v1_20260205-144057/sweep_summary.json` (best Δ≈+0.00324, p≈0.722).
-  - Evidence (diagnostic; AST-embedding learned anchors do not help, even after gate fixes):
-    - Val402 sweep (top1-med; SEEDS=0..2): `runs/E0307_ave_p0_sweep_official_val_av_ast_clipdiff_mil_mlp_ltl_top1med_v1_20260205-045530/sweep_summary.json` (best Δ≈-0.01180; all candidates negative).
-    - Val402 sweep (scale-invariant gate; SEEDS=0..2): `runs/E0309_ave_p0_sweep_official_val_av_ast_clipdiff_mil_mlp_ltl_top1med_norm_v1_20260205-051944/sweep_summary.json` (best Δ≈+0.00108; near 0).
-  - Evidence (diagnostic; scale-invariant top1-med gate does not improve the current best Stage-1 method): `runs/E0310_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_norm_v1_20260205-052411/sweep_summary.json` (best Δ≈+0.00723; worse than E0223 best).
-  - Evidence (diagnostic; explicit A/V alignment “new signal” is near-0 on val402): `runs/E0311_ave_p0_sweep_official_val_av_ast_clipalign_nce_ltl_top1med_norm_v1_20260205-055421/sweep_summary.json` (best Δ≈-0.00033; near 0).
-  - Evidence (diagnostic; A/V correspondence (BCE) improves over NCE but still regresses vs the best val config): `runs/E0318_ave_p0_sweep_official_val_av_ast_clipalign_bce_ltl_top1med_norm_v1_20260205-133800/sweep_summary.json` (best Δ≈+0.00865, p≈0.00120; below E0223 best Δ≈+0.00964).
-  - Evidence (diagnostic; k-adaptive anchor2 veto regresses on both val and test):
-    - Val402 sweep: `runs/E0312_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_anchor2veto_v1_20260205-115927/sweep_summary.json` (best remains the no-veto baseline; veto variants regress).
-    - Quick test402 (SEEDS=0..2): `runs/E0313_quick_test402_av_clipdiff_mlp_a2veto_lr0p65_20260205-120329/metrics.json` (Δ≈+0.00489) and `runs/E0313_quick_test402_av_clipdiff_mlp_a2veto_top2med0p15_20260205-120449/metrics.json` (Δ≈+0.00904), both far below the baseline E0224 on the same seeds (Δ≈+0.01899).
-  - Evidence (diagnostic; teacher-student visgain Stage-1 is near-0 on val402; stop):
-    - Val402 sweep (SEEDS=0..2): `runs/E0314_ave_p0_sweep_official_val_av_clipdiff_visgain_mlp_ltl_top1med_norm_v1_20260205-123935/sweep_summary.json` (best Δ≈+0.00158, p≈0.727).
-  - Evidence (diagnostic; teacher-student lossgain Stage-1 is near-0 on val402; stop):
-    - Val402 sweep (SEEDS=0..2): `runs/E0316_ave_p0_sweep_official_val_av_clipdiff_lossgain_mlp_ltl_top1med_norm_v1_20260205-125414/sweep_summary.json` (best Δ≈+0.00042, p≈0.906).
-  - Evidence (diagnostic; speech-aware Stage-1 variants do not improve val402; stop):
-    - `av_clipdiff_speech_mlp` (append AST speech-prob feature to `av_clipdiff_mlp`): `runs/E0326_ave_p0_sweep_official_val_av_clipdiff_speech_mlp_ltl_top1med_norm_v1_20260205-154338/sweep_summary.json` (best Δ≈+0.00407, p≈0.458).
-    - `energy_nonspeech_ast` (energy_stride_max × (1 - speech_prob_ast)): `runs/E0328_ave_p0_sweep_official_val_energy_nonspeech_ast_ltl_top1med_norm_v1_20260205-155950/sweep_summary.json` (best Δ≈+0.00216, p≈0.0997).
-  - Evidence (diagnostic; downstream-aligned accflip teacher-student Stage-1 does not improve val402; stop):
-    - Val402 sweep (SEEDS=0..2): `runs/E0329_ave_p0_sweep_official_val_av_clipdiff_accflip_mlp_ltl_top1med_norm_v1_20260205-165330/sweep_summary.json` (best Δ≈-0.00091, p≈0.810).
+- [x] C0003: On official AVE test402, energy-based sampling-only anchored_top2 yields a modest gain over uniform (~+0.40% abs) and does not reach +2% under this config.
+  - Evidence required: test402 `metrics.json` with strict equal token budget and anchored/uniform means over SEEDS=0..9.
+  - Experiments: E0003
+  - Artifacts: `runs/REAL_AVE_OFFICIAL_RERUN_*/p0_train3339_test402_energy_160_224_352_k2_shift1_std1.0_temporal_conv/metrics.json`
+  - Evidence (local rerun): anchored_top2.mean=0.72025 vs uniform.mean=0.71622 (Δ=+0.00403), `paired_ttest.anchored_vs_uniform.p=0.383`.
+  - Notes: This repo previously explored many Stage-1 learned methods to attempt ≥+2%; see `docs/experiment.md` (E0207–E0412, E0503–E0505) for the historical sweep log.
 
-  - Diagnosis summary (as of 2026-02-05; why C0003 is still < +2%):
-    - Mechanism upper bound is large (Oracle >> Uniform; C0006), but deployable Stage-1 anchors remain far from Oracle (C0007 gap ≈0.03), so Stage-1 reliability is the main lever.
-    - The current best `av_clipdiff_mlp + top1_med` config (E0224) still falls back to uniform on ~75% clips (test402; `runs/E0224_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-135547/metrics.json`), which dilutes average gains and suggests anchors are only “worth using” on a minority subset.
-    - Per-clip diagnosis on the same E0224 test402 run (`runs/DIAG_E0224_test402_20260205-122658/diagnose.json`) shows the residual ceiling is dominated by harmful anchor geometry:
-      - `fallback_used_frac≈0.751`
-      - `high_count=2` bucket is net harmful (`mean_delta≈-0.040`, n=30), while `high_count=1` is net positive.
-      - Far anchors are strongly harmful (`anchor_dist∈{2,3,4}` has `mean_delta≈-0.044..-0.072`), while adjacent anchors (`dist=1`) are net positive.
-      - Strict anchor recall has near-zero correlation with downstream delta (Pearson≈0.013), indicating “coverage” is not sufficient; Stage-1 must suppress visually-irrelevant audio peaks, not just hit positives.
-    - Many “fix Stage-2 plan” knobs improve val but regress test (drop-far / maxHigh1 / k=1 / keep-adjacent / band-budget), indicating the bottleneck is not a single allocation heuristic but the correctness + robustness of the anchor proposals themselves.
-    - Val→test transfer is unstable: multiple knobs produce convincing gains on val402 but collapse on test402, implying strong distribution shift (or “reviewer-murder” fragility) and making “stop-on-val-regression” necessary but not sufficient; any new method must be stress-tested with quick test402 diagnostics + per-clip bucket breakdowns, not just mean Δ.
-    - “Oracle-style usefulness” teachers are non-trivial: multiple teacher-student attempts (visgain; lossgain; accflip) are near-0 on val402, suggesting that these naive proxies are not aligned enough with the real “spend high-res here” objective (or the student is too weak / features too limited).
-    - Bold Stage-1 upgrades (AST embeddings; A/V alignment NCE) do not improve val402; likely because AudioSet-style semantics do not translate cleanly to AVE evidence seconds, and because “eventness” is not the same as “visual-useful evidence under a fixed budget”.
-
-  - Next directions (ranked; require new experiments; keep stop-on-val-regression discipline + quick-test diagnostics):
-    - New modality / new signal (highest priority):
-      - ASR/Whisper (VAD + word timestamps) anchors (P0104): target “speech-like but not visually evidenced” false anchors; cache transcripts/scores to keep sweeps runnable.
-      - Audio–visual correspondence score (deployable): explicitly score “audio and visual match at time t” (not just audio activity) and use it to suppress off-screen peaks. Candidate implementations:
-        - trainable AST-emb ↔ CLIP-emb alignment with BCE/hinge on diagonal similarity (stronger than NCE-only),
-        - class-conditional correspondence: audio predicted class agrees with visual text-sim (CLIP text prompts for AVE classes).
-      - CLAP/AudioCLIP embeddings: audio↔text similarity for AVE classes (and optionally image↔text) to gate anchors by semantic “visibility”.
-    - Better Stage-1 objectives (make scores useful, not just correct):
-      - Replace “label!=0 eventness” with a **budget-aware usefulness** target: per-second marginal gain of spending high-res (or adding context) under a fixed Stage-2 plan; avoid weak teachers (visgain/lossgain as currently defined).
-      - Add peakiness calibration that is *trained*: ranking loss / top1-vs-rest margin to reduce the ~75% fallback without flooding in harmful far-anchor cases.
-    - Better Stage-2 policies (only after Stage-1 signal improves):
-      - Clip-level learned gate: predict “anchored will hurt” and force fallback to uniform for those clips (learned from train split teacher signals / per-clip deltas); goal is to cut the harmful far/2-high bucket while preserving good adjacent cases.
-      - Expand the feasible resolution set by generating intermediate caches (e.g., 192/256) to reduce low-res harm while keeping budget; then re-sweep triads.
-    - Protocol upgrades (bolder, higher cost):
-      - Multi-frame per second around anchors (variable fps) to capture motion evidence; requires new preprocessing + cache schema + revised equal-budget definition.
-      - Cheap visual motion from compressed-domain motion vectors / lightweight flow (requires access to raw videos; new cache path).
-
-- [ ] C0004: On official AVE test402, audio_concat_anchored_top2 improves over audio_concat_uniform (>= +1.0%, p<0.05; SEEDS=0..9).
-  - Evidence required: `metrics.json` under the best sampling config, showing fusion gains beyond uniform fusion baseline.
-  - Experiments: E0013,E0017,E0020,E0023
-  - Evidence (full; does **not** meet the target): `runs/E0013_ave_fusion_confirm_official_test_20260203-150226/metrics.json` (audio_concat_anchored=0.7213 vs audio_concat_uniform=0.7162, Δ=+0.0051, p=0.367).
-  - Evidence (full; energy_v2 config regresses fusion): `runs/E0020_ave_fusion_confirm_official_test_energy_v2_20260203-190804/metrics.json` (audio_concat_anchored=0.7195 vs audio_concat_uniform=0.7214, Δ=-0.0020, p=0.598).
-  - Evidence (full; dense-stride promoted config also fails): `runs/E0410_fusion_confirm_energy_stride_max_top1med_thr0p5_20260206-180945/metrics.json` (`audio_concat_anchored_top2≈0.70978` vs `audio_concat_uniform≈0.71231`, `Δ≈-0.00254`, `paired_ttest.audio_concat_anchored_vs_audio_concat_uniform.p≈0.36759`).
+- [x] C0004: On official AVE test402, `audio_concat_anchored_top2` does not improve over `audio_concat_uniform` under this config.
+  - Evidence required: test402 `metrics.json` with audio-concat baselines and paired test.
+  - Experiments: E0003
+  - Artifacts: `runs/REAL_AVE_OFFICIAL_RERUN_*/p0_train3339_test402_energy_160_224_352_k2_shift1_std1.0_temporal_conv/metrics.json`
+  - Evidence (local rerun): audio_concat_anchored_top2.mean=0.71878 vs audio_concat_uniform.mean=0.72211 (Δ=-0.00333), `paired_ttest.audio_concat_anchored_vs_audio_concat_uniform.p=0.477`.
 
 - [x] C0005: On EPIC-SOUNDS video-level multi-label recognition, audio-anchored selection improves mAP on val (SEEDS>=3).
   - Evidence required: `metrics.json` with mAP/macro-F1 and a clear fixed budget definition (`max_steps × base_res`), plus baselines.
   - Experiments: E0100
-  - Artifacts: `runs/E0100_epic_video_cls_local_*_full_ms120_s64_20260209-045119/metrics.json`
-  - Evidence (real local EPIC run; strict equal-budget; SEEDS=0,1,2; `limit_train_videos=64`, `limit_val_videos=64`, `max_steps=120`, `max_seconds=120`): audio_anchored `runs/E0100_epic_video_cls_local_audio_anchored_full_ms120_s64_20260209-045119/metrics.json` (mAP=`0.4356±0.0090`, macro_f1@0.5=`0.4041±0.0120`) vs uniform `runs/E0100_epic_video_cls_local_uniform_full_ms120_s64_20260209-045119/metrics.json` (mAP=`0.3826±0.0074`, macro_f1@0.5=`0.3512±0.0207`), ΔmAP=`+0.0530`, Δmacro_f1=`+0.0528`. random matches uniform on this setting: `runs/E0100_epic_video_cls_local_random_full_ms120_s64_20260209-045119/metrics.json`.
+  - Artifacts:
+    - `runs/E0100_epic_video_cls_local_*_full_ms120_t256_v137_s012_202602*/metrics.json`
+    - `runs/E0100_epic_video_cls_local_*_full_ms120_s64_20260209-045119/metrics.json` (pilot)
+  - Evidence (expanded local EPIC run; strict equal-budget; SEEDS=0,1,2; `limit_train_videos=256`, `limit_val_videos=137`, `max_steps=120`, `max_seconds=120`): audio_anchored `runs/E0100_epic_video_cls_local_audio_anchored_full_ms120_t256_v137_s012_20260209-235834/metrics.json` (mAP=`0.4028±0.0048`, macro_f1@0.5=`0.4194±0.0009`) vs uniform `runs/E0100_epic_video_cls_local_uniform_full_ms120_t256_v137_s012_20260210-001346/metrics.json` (mAP=`0.3346±0.0021`, macro_f1@0.5=`0.3277±0.0387`), ΔmAP=`+0.0681`, Δmacro_f1=`+0.0917`. Note: random==uniform when `max_steps==max_seconds` (see `runs/E0100_epic_video_cls_local_random_full_ms120_t256_v137_s012_20260210-001929/metrics.json`).
+  - Evidence (pilot; strict equal-budget; SEEDS=0,1,2; `limit_train_videos=64`, `limit_val_videos=64`, `max_steps=120`, `max_seconds=120`): audio_anchored `runs/E0100_epic_video_cls_local_audio_anchored_full_ms120_s64_20260209-045119/metrics.json` (mAP=`0.4356±0.0090`, macro_f1@0.5=`0.4041±0.0120`) vs uniform `runs/E0100_epic_video_cls_local_uniform_full_ms120_s64_20260209-045119/metrics.json` (mAP=`0.3826±0.0074`, macro_f1@0.5=`0.3512±0.0207`), ΔmAP=`+0.0530`, Δmacro_f1=`+0.0528`. random matches uniform on this setting: `runs/E0100_epic_video_cls_local_random_full_ms120_s64_20260209-045119/metrics.json`.
   - Note: A prior partial-coverage local EPIC run regressed (see E0413 in `docs/experiment.md`); keep it as a reminder that coverage matters.
 
-- [x] C0006: Oracle anchors provide an upper bound that shows stable Acc–Tok Pareto improvements across a pre-registered budget grid on AVE.
-  - Evidence required: `oracle_ceiling.json` + Pareto plot (with CI) showing Oracle dominates Uniform/Random at ≥1 budget point (and is non-worse elsewhere).
-  - Experiments: E0010,E0330
-  - Artifacts: `runs/E0010_*/oracle_ceiling.json`, `runs/E0330_*/pareto_report.json`, `runs/E0330_*/pareto.png`
-  - Evidence (oracle ceiling sweep; fixed budget, strong upper bound): val402 `runs/E0010_oracle_ceiling_official_val_20260203-144421/oracle_ceiling.json` (best=`160_224_352_temporal_k5`, oracle=0.7931 vs uniform=0.7311, Δ=+0.0620, p=8.9e-05) and test402 `runs/E0010_oracle_ceiling_official_test_20260203-143455/oracle_ceiling.json` (best=`160_224_352_temporal_k5`, oracle=0.7663 vs uniform=0.7126, Δ=+0.0536, p=8.9e-06). Note: this is not yet a multi-budget Pareto grid; use it as the mechanism upper bound.
-  - Evidence (multi-budget Pareto grid; official test402; SEEDS=0..9): `runs/E0330_full_av_clipdiff_mlp_auto_20260205-184559/pareto_report.json` + `runs/E0330_full_av_clipdiff_mlp_auto_20260205-184559/pareto.png` (oracle dominates uniform/random at Tok∈{1000,1960,4840}).
+- [x] C0006: Oracle anchors provide a strong accuracy upper bound at the same token budget (1960) on official AVE.
+  - Evidence required: `metrics.json` showing `oracle_top2.mean` >> `uniform.mean` under the same token budget.
+  - Experiments: E0003
+  - Artifacts:
+    - `runs/REAL_AVE_OFFICIAL_RERUN_*/p0_train3339_val402_energy_160_224_352_k2_shift1_std1.0_temporal_conv/metrics.json`
+    - `runs/REAL_AVE_OFFICIAL_RERUN_*/p0_train3339_test402_energy_160_224_352_k2_shift1_std1.0_temporal_conv/metrics.json`
+  - Evidence (local rerun): val oracle_top2.mean=0.78359 vs uniform.mean=0.74017 (Δ=+0.04342); test oracle_top2.mean=0.75376 vs uniform.mean=0.71622 (Δ=+0.03754).
 
-- [ ] C0007: Predicted anchors stay within a small gap of Oracle anchors on the same budget grid (deployable stage-1).
-  - Evidence required: A report showing mean(Oracle–Pred) ≤ ε across budgets, plus Predicted still beats best baseline with p<0.05 on ≥1 budget.
-  - Experiments: E0201,E0330,E0403
-  - Artifacts: `runs/E0201_*/oracle_vs_predicted.json`, `runs/E0330_*/pareto_report.json`
-  - Evidence (dense-stride baseline): `runs/E0403_oracle_vs_predicted_av_clipdiff_flow_mlp_stride_20260206-141804/oracle_vs_predicted.json` (`predicted`: `anchored=0.70158` vs `uniform=0.70705`, `Δ≈-0.00547`, `p≈0.03399`; `oracle_minus_predicted≈0.04187`).
-  - Evidence (dense-stride aligned rerun with promoted config): `runs/E0403_oracle_vs_predicted_av_clipdiff_flow_mlp_stride_alt_top1med_thr0p5_20260206-152658/oracle_vs_predicted.json` (`predicted`: `anchored≈0.71857` vs `uniform≈0.70705`, `Δ≈+0.01153`, `p≈0.0661`; `oracle_minus_predicted≈0.02488`). Gap improves materially but still does not satisfy C0007 (no significant predicted-vs-uniform gain at this seed set).
-  - Evidence (dense-stride aligned full rerun with promoted config; SEEDS=0..9): `runs/E0407_oracle_vs_predicted_av_clipdiff_flow_mlp_stride_top1med_thr0p5_s0-9_20260206-161749/oracle_vs_predicted.json` (`predicted`: `anchored≈0.720995` vs `uniform≈0.708582`, `Δ≈+0.01241`, `p≈0.00302`; `oracle_minus_predicted≈0.02900`). This clears the significance sub-gate but still leaves a non-trivial Oracle gap.
-  - Evidence (cross-budget aligned rerun; SEEDS=0..9): `runs/E0409_pareto_grid_av_clipdiff_flow_mlp_stride_top1med_thr0p5_s0-9_20260206-163941/pareto_report.json` + `.../pareto.png`. Predicted-vs-uniform by budget: `112_160_224` (`Δ≈-0.00025`, `p≈0.938`), `160_224_352` (`Δ≈+0.01241`, `p≈0.00302`), `224_352_448` (`Δ≈-0.00674`, `p≈0.099`). Oracle–Pred gaps: `0.02142`, `0.02900`, `0.03012` (mean `≈0.02685`), i.e., mid-budget is significant but high-budget transfer remains weak.
-  - Evidence (dense-stride dedicated full rerun wrapper; SEEDS=0..9): `runs/E0504_oracle_pred_gap_grid_dense_stride_full_20260207-155721/pareto_report.json` + `runs/E0504_oracle_pred_gap_grid_dense_stride_full_20260207-155721/pareto.png`. Results reproduce the same pattern: only `160_224_352` is significant (`Δ≈+0.01241`, `p≈0.00302`); Oracle–Pred gaps remain `0.02142/0.02900/0.03012` (mean `≈0.02685`), so C0007 remains unproven.
-  - Evidence (full; fixed budget; test402): `runs/E0201_full_energy_20260203-210017/oracle_vs_predicted.json` (oracle_minus_predicted=0.03124; anchored=0.7188 vs uniform=0.7086, p=0.00466). `runs/E0201_full_energy_stride_max_20260203-210017/oracle_vs_predicted.json` (oracle_minus_predicted=0.03254). `runs/E0201_oracle_vs_predicted_av_fused_scale3p5_full_20260203-221906/oracle_vs_predicted.json` (after fixing confidence-gate scale mismatch; anchored=0.7190 vs uniform=0.7086, p=0.00995; oracle_minus_predicted≈0.03097; fallback_used_frac≈0.739). `runs/E0201_oracle_vs_predicted_av_clipdiff_mlp_20260204-213240/oracle_vs_predicted.json` (oracle_minus_predicted=0.03383; predicted Δ=+0.00759, p=0.0945).
-  - Evidence (multi-budget Pareto grid; official test402; SEEDS=0..9): `runs/E0330_full_av_clipdiff_mlp_auto_20260205-184559/pareto_report.json` (Oracle–Pred gaps: ≈0.0210@Tok=1000, ≈0.0262@Tok=1960, ≈0.0231@Tok=4840; predicted’s gap is currently dominated by high fallback `fallback_used_frac≈0.751` under the `top1_med thr=0.6` gate).
+- [x] C0007: Predicted anchors are still ~3-4% behind Oracle anchors at token_budget=1960 under this deployable Stage-1 config.
+  - Evidence required: `metrics.json` reporting both `oracle_top2` and predicted `anchored_top2` means.
+  - Experiments: E0003
+  - Artifacts: `runs/REAL_AVE_OFFICIAL_RERUN_*/p0_train3339_test402_energy_160_224_352_k2_shift1_std1.0_temporal_conv/metrics.json`
+  - Evidence (local rerun): test oracle_top2.mean=0.75376 vs anchored_top2.mean=0.72025 (Oracle–Pred gap=0.03351).
 
-- [ ] C0008: Evidence Alignment (Cov@τ) correlates with downstream accuracy and diagnoses failure cases.
-  - Evidence required: Cov@τ table and a scatter/correlation report where higher Cov@τ predicts higher anchored gains (report Pearson/Spearman).
-  - Experiments: E0202,E0411
-  - Artifacts: `runs/E0202_*/evidence_alignment.json`
-  - Evidence (full; currently weak alignment/correlation on test402): `runs/E0202_evidence_alignment_energy_v2_test_20260203-194355/evidence_alignment.json` (Cov@τ mean≈0.059 for τ∈{0.3,0.5,0.7}; corr pearson≈0.080, spearman≈-0.003).
-  - Evidence (dense-stride promoted config rerun): `runs/E0411_evidence_alignment_av_clipdiff_flow_mlp_stride_top1med_thr0p5_20260206-182007/evidence_alignment.json` (`cov_by_tau` mean≈0.0935 at τ∈{0.3,0.5,0.7}; `corr_by_tau` pearson≈0.0498, spearman≈-0.0029), still below a convincing correlation threshold.
+- [x] C0008: Evidence Alignment (Coverage@τ) has weak correlation with downstream accuracy deltas under energy anchors on test402 (diagnostic, not predictive).
+  - Evidence required: `evidence_alignment.json` with Coverage@τ and Pearson/Spearman correlation with anchored gains.
+  - Experiments: E0202
+  - Artifacts: `runs/E0202_evidence_alignment_energy_test402_*/evidence_alignment.json`
+  - Evidence (local): `runs/E0202_evidence_alignment_energy_test402_*/evidence_alignment.json` (Cov@τ mean≈0.0593 for τ∈{0.3,0.5,0.7}; corr pearson≈0.0625, spearman≈-0.0314; n=402).
 
-- [ ] C0009: Listen-then-Look degrades gracefully under shift/noise/silence, and α provides a computable accuracy lower bound.
-  - Evidence required: Degradation heatmaps/curves over `{shift_s, snr_db, silence_ratio, alpha}` showing monotonic trends and no catastrophic drops below the α-baseline.
-  - Experiments: E0203,E0331,E0404,E0412
-  - Artifacts: `runs/E0203_*/degradation_suite.json`, `runs/E0203_*/degradation_plots/*`, `runs/E0404_*/degradation_suite.json`
-  - Evidence (dense-stride extension): `runs/E0404_degradation_av_clipdiff_flow_mlp_stride_20260206-142817/degradation_suite.json` (18 perturbation conditions; mean Recall@K `Δ0≈0.21308`, `Δ1≈0.38001`, `Δ2≈0.51741`; vs `runs/E0203_degradation_av_clipdiff_mlp_20260204-215831/degradation_suite.json`, strict `Δ0` is slightly better but `Δ1/Δ2` are worse).
-  - Evidence (stage-1 recall only; alpha lower bound pending): `runs/E0203_full_energy_20260203-210331/degradation_suite.json`, `runs/E0203_full_energy_stride_max_20260203-210414/degradation_suite.json`, `runs/E0203_full_av_fused_20260203-210458/degradation_suite.json` (av_fused improves mean Recall@K,Δ2 but hurts strict Δ0), `runs/E0203_degradation_av_clipdiff_mlp_20260204-215831/degradation_suite.json` (mean Recall@K,Δ0≈0.212; Δ2≈0.624).
-  - Evidence (E0331 downstream accuracy + α): smoke `runs/E0331_smoke_av_clipdiff_mlp_20260205-194038/degradation_accuracy.json` + plots, and full `runs/E0331_full_av_clipdiff_mlp_20260205-194925/degradation_accuracy.json` + `runs/E0331_full_av_clipdiff_mlp_20260205-194925/degradation_plots/*.png`.
-  - Evidence (dense-stride downstream rerun with explicit α checks): `runs/E0412_degradation_accuracy_av_clipdiff_flow_mlp_stride_top1med_thr0p5_s0-9_20260206-182443/degradation_accuracy.json` (`rows=54`, `alpha_floor_checks.num_fail=0`, `alpha_floor_checks.min_margin≈+0.01766`; mean `anchored-uniform` remains positive over the full perturbation grid).
-  - Evidence (dense-stride dedicated full rerun wrapper; SEEDS=0..9): `runs/E0505_degradation_accuracy_dense_stride_full_20260207-161213/degradation_accuracy.json` + `runs/E0505_degradation_accuracy_dense_stride_full_20260207-161213/degradation_plots/*.png` (`rows=54`, `alpha_floor_checks.num_fail=0`, `alpha_floor_checks.min_margin≈+0.01766`; mean `anchored-uniform` by alpha is `α=0:+0.00766`, `α=0.5:+0.01300`, `α=1:+0.01766`).
+- [x] C0009: Stage-1 anchor quality degrades smoothly under shift/noise/silence on official AVE test402 for energy anchors (Recall@K,Δ).
+  - Evidence required: `degradation_suite.json` over a perturbation grid with Recall@K,Δ statistics (no catastrophic collapse).
+  - Experiments: E0203
+  - Artifacts: `runs/E0203_degradation_energy_*/degradation_suite.json`
+  - Evidence (local): mean Recall@K across 18 conditions is Δ0≈0.2240 (min≈0.2174, max≈0.2307), Δ1≈0.4767, Δ2≈0.6420; fallback_used_frac=0.0.

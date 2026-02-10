@@ -169,6 +169,7 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("empty --methods")
     if "uniform" not in methods:
         methods = ["uniform"] + methods
+    labels_available = all(it.answer_idx is not None for it in items)
 
     p = egoschema_paths()
     if not p.videos_dir.exists():
@@ -195,6 +196,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[egoschema] preprocessed {i+1}/{len(vids)} videos", flush=True)
     pre_s = float(time.time() - t_pre)
 
+    # Persist preprocessing metadata early so partial runs still produce debuggable artifacts.
+    (out_dir / "preprocess_meta.json").write_text(json.dumps(pre_meta, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
     model = QwenVL(
         QwenVLConfig(
             model_name=str(args.model_name),
@@ -204,41 +208,49 @@ def main(argv: list[str] | None = None) -> int:
         )
     )
 
-    per_method: dict[str, list[dict]] = {m: [] for m in methods}
+    n_by_method: dict[str, int] = {m: 0 for m in methods}
+    invalid_by_method: dict[str, int] = {m: 0 for m in methods}
+    correct_by_method: dict[str, int] = {m: 0 for m in methods}
     t0 = time.time()
-    for j, it in enumerate(items):
-        proc_dir = p.processed_video_dir(it.video_idx)
-        h = hashlib.sha1(f"{it.question_idx}|{it.video_idx}".encode("utf-8")).hexdigest()
-        item_seed = int(args.seed) + int(h[:8], 16)
-        for m in methods:
-            row = _eval_one(
-                model=model,
-                item=it,
-                processed_dir=proc_dir,
-                method=str(m),
-                budget_frames=int(args.budget_frames),
-                seed=int(item_seed),
-                max_seconds=int(args.max_seconds),
-                strategy=str(args.strategy),
-                ql2l_clap_device=str(args.ql2l_clap_device),
-                ql2l_asr_device=str(args.ql2l_asr_device),
-            )
-            per_method[str(m)].append(row)
-        if (j + 1) % 10 == 0 or (j + 1) == len(items):
-            dt = time.time() - t0
-            print(f"[egoschema] eval {j+1}/{len(items)} items ({dt:.1f}s)", flush=True)
+    with (out_dir / "predictions.jsonl").open("w", encoding="utf-8") as f:
+        for j, it in enumerate(items):
+            proc_dir = p.processed_video_dir(it.video_idx)
+            h = hashlib.sha1(f"{it.question_idx}|{it.video_idx}".encode("utf-8")).hexdigest()
+            item_seed = int(args.seed) + int(h[:8], 16)
+            for m in methods:
+                row = _eval_one(
+                    model=model,
+                    item=it,
+                    processed_dir=proc_dir,
+                    method=str(m),
+                    budget_frames=int(args.budget_frames),
+                    seed=int(item_seed),
+                    max_seconds=int(args.max_seconds),
+                    strategy=str(args.strategy),
+                    ql2l_clap_device=str(args.ql2l_clap_device),
+                    ql2l_asr_device=str(args.ql2l_asr_device),
+                )
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+                n_by_method[str(m)] += 1
+                if bool(row["invalid"]):
+                    invalid_by_method[str(m)] += 1
+                if labels_available and bool(row["correct"]):
+                    correct_by_method[str(m)] += 1
+
+            if (j + 1) % 10 == 0 or (j + 1) == len(items):
+                f.flush()
+                dt = time.time() - t0
+                print(f"[egoschema] eval {j+1}/{len(items)} items ({dt:.1f}s)", flush=True)
 
     eval_s = float(time.time() - t0)
 
     summaries: list[MethodSummary] = []
     for m in methods:
-        rows = per_method[str(m)]
-        invalid = np.asarray([1.0 if r["invalid"] else 0.0 for r in rows], dtype=np.float64)
-        acc = None
-        if all(r["answer_idx"] is not None for r in rows):
-            correct = np.asarray([1.0 if r["correct"] else 0.0 for r in rows], dtype=np.float64)
-            acc = float(correct.mean() if correct.size else 0.0)
-        summaries.append(MethodSummary(method=str(m), n=int(len(rows)), acc=acc, invalid_rate=float(invalid.mean() if invalid.size else 0.0)))
+        n = int(n_by_method[str(m)])
+        inv = int(invalid_by_method[str(m)])
+        invalid_rate = float(inv / n) if n else 0.0
+        acc = float(correct_by_method[str(m)] / n) if (labels_available and n) else None
+        summaries.append(MethodSummary(method=str(m), n=n, acc=acc, invalid_rate=invalid_rate))
 
     payload = {
         "ok": True,
@@ -260,12 +272,6 @@ def main(argv: list[str] | None = None) -> int:
             "preprocess_meta_json": str(out_dir / "preprocess_meta.json"),
         },
     }
-
-    (out_dir / "preprocess_meta.json").write_text(json.dumps(pre_meta, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    with (out_dir / "predictions.jsonl").open("w", encoding="utf-8") as f:
-        for m in methods:
-            for r in per_method[str(m)]:
-                f.write(json.dumps(r, ensure_ascii=False) + "\n")
 
     (out_dir / "metrics.json").write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(out_dir / "metrics.json")

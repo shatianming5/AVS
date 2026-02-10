@@ -18,6 +18,8 @@ B_FRAMES="${B_FRAMES:-16}"
 MAX_SECONDS="${MAX_SECONDS:-120}"
 SEED="${SEED:-0}"
 STRATEGY="${STRATEGY:-ppl}" # ppl|generate
+ALLOW_MISSING_VIDEOS="${ALLOW_MISSING_VIDEOS:-0}"
+MIN_ITEMS="${MIN_ITEMS:-16}"
 
 MODEL_NAME="${MODEL_NAME:-Qwen/Qwen2-VL-2B-Instruct}"
 DEVICE="${DEVICE:-cuda:0}"
@@ -47,6 +49,8 @@ args=(
 if [[ -n "${ATTN_IMPL}" ]]; then
   args+=(--attn-implementation "${ATTN_IMPL}")
 fi
+if [[ "${ALLOW_MISSING_VIDEOS}" = "1" ]]; then
+  args+=(--allow-missing-videos --min-items "${MIN_ITEMS}")
+fi
 
 python -m avs.experiments.intentqa_vlm_eval "${args[@]}"
-

@@ -1,10 +1,140 @@
 # Experiments
 
 ## Overview
-- Goal: Prove `docs/plan.md` conclusions (C0001/C0002) on AVE with runnable, reproducible commands.
+- Goal: Prove `docs/plan.md` conclusions (C0001-C0009) with runnable, reproducible commands and locally present artifacts.
 - Baseline: Uniform-224 sampling under a fixed ViT token budget.
 - Primary model: CLIP ViT-B/16 (vision features) + per-segment MLP head; audio probe = energy or AST.
 - Data: To install the official full AVE videos (4143 clips), run `bash scripts/ave_install_official.sh` (downloads `AVE_Dataset.zip` and installs under `data/AVE/raw/videos/`).
+
+## Reproducibility
+- Date: 2026-02-09
+- Environment: Python 3.10.12; torch 2.6.0+cu124 (CUDA 12.4); GPUs: 5x NVIDIA GeForce RTX 4090 D
+- Datasets:
+  - AVE (official zip): `data/AVE/raw/videos/` (install via `bash scripts/ave_install_official.sh`)
+  - EPIC-SOUNDS (local subset): `data/EPIC_SOUNDS/raw/videos/` + annotations under `data/EPIC_SOUNDS/meta/`
+
+## Checklist
+### Run Queue (Long-Video QA; sequential)
+- [x] E0600 (real; ppl): IntentQA VLM evaluation under budgeted frame selection (val n=253; seed=0)
+  - command: `OUT_DIR=runs/E0600_intentqa_vlm_eval_full_20260210-041911 SPLIT=val LIMIT=256 METHODS=uniform,random,audio,cheap_visual,fused,ql2l_clap,ql2l_asr_bm25 B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=250 bash scripts/e0600_intentqa_vlm_eval.sh`
+  - configs: []
+  - seeds: [0]
+  - required_artifacts:
+    - `runs/E0600_intentqa_vlm_eval_full_20260210-041911/metrics.json`
+    - `runs/E0600_intentqa_vlm_eval_full_20260210-041911/predictions.jsonl`
+    - `runs/E0600_intentqa_vlm_eval_full_20260210-041911/preprocess_meta.json`
+  - required_metrics:
+    - `metrics.json`: `summary[*].{acc,invalid_rate}`, `delta_vs_uniform`, `skipped_videos`
+  - logs:
+    - `artifacts/experiments/E0600_full_ppl/run.log` (aborted at 80/253; no artifacts written)
+    - `artifacts/experiments/E0600_full_ppl_rerun2/run.log` (full)
+  - backfill: done (see `### E0600`).
+
+- [x] E0601 (real; ppl; ql2l_clap): IntentQA faithfulness proxy (delete-and-predict; budget-matched) (val n=253; seed=0)
+  - command: `OUT_DIR=runs/E0601_intentqa_faithfulness_full_20260210-061137 SPLIT=val LIMIT=256 METHOD=ql2l_clap B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=250 bash scripts/e0601_intentqa_faithfulness.sh`
+  - configs: []
+  - seeds: [0]
+  - required_artifacts:
+    - `runs/E0601_intentqa_faithfulness_full_20260210-061137/faithfulness.json`
+    - `runs/E0601_intentqa_faithfulness_full_20260210-061137/rows.jsonl`
+    - `runs/E0601_intentqa_faithfulness_full_20260210-061137/preprocess_meta.json`
+  - required_metrics:
+    - `faithfulness.json`: `accuracy`, `accuracy_deleted`, `acc_drop`, `pred_change_rate`, `invalid_rate`
+  - logs: `artifacts/experiments/E0601_full_ql2l_clap_ppl/run.log`
+  - backfill: done (see `### E0601`).
+
+- [x] E0602 (real; ppl; CONFIG=Subset): EgoSchema VLM eval/pred generation (labeled subset) (test n=256; seed=0)
+  - command: `OUT_DIR=runs/E0602_egoschema_eval_subset_full_20260210-064250 CONFIG=Subset SPLIT=test LIMIT=256 METHODS=uniform,ql2l_clap,ql2l_asr_bm25 B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu bash scripts/e0602_egoschema_predict.sh`
+  - configs: []
+  - seeds: [0]
+  - required_artifacts:
+    - `runs/E0602_egoschema_eval_subset_full_20260210-064250/metrics.json`
+    - `runs/E0602_egoschema_eval_subset_full_20260210-064250/predictions.jsonl`
+    - `runs/E0602_egoschema_eval_subset_full_20260210-064250/preprocess_meta.json`
+  - required_metrics:
+    - `metrics.json`: `summary[*].acc` (not null for all methods), `summary[*].invalid_rate`
+  - logs: `artifacts/experiments/E0602_full_subset_ppl/run.log`
+  - backfill: done (see `### E0602`).
+
+- [x] E0003: Official AVE full-dataset validation (multi-GPU)
+  - command: `RUN_ROOT=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402 bash scripts/ave_verify_official_after_install.sh`
+  - configs: []
+  - seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  - required_artifacts:
+    - `runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/E0002_anchors_official_val/anchor_eval/anchors_metrics.json`
+    - `runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/E0002_anchors_official_test/anchor_eval/anchors_metrics.json`
+    - `runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/p0_train3339_val402_energy_160_224_352_k2_shift1_std1.0_temporal_conv/metrics.json`
+    - `runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/p0_train3339_test402_energy_160_224_352_k2_shift1_std1.0_temporal_conv/metrics.json`
+  - required_metrics:
+    - `metrics.json`: `metrics.summary.{uniform,random_top2,anchored_top2,oracle_top2}.mean`, `metrics.token_budget`, `metrics.paired_ttest.anchored_vs_uniform.p`
+    - `anchors_metrics.json`: `metrics.by_delta["0"].ours_mean_recall > metrics.by_delta["0"].random_mean_recall` on val/test
+  - logs: `artifacts/experiments/E0003/run.log`
+
+- [x] E0100: EPIC-SOUNDS video-level multi-label classification (downstream proxy)
+  - command:
+    - `SELECTION=audio_anchored MAX_SECONDS=120 MAX_STEPS=120 LIMIT_TRAIN_VIDEOS=64 LIMIT_VAL_VIDEOS=64 SEEDS=0,1,2 OUT_DIR=runs/E0100_epic_video_cls_local_audio_anchored_full_ms120_s64_20260209-045119 bash scripts/e0100_epic_video_cls_local.sh`
+    - `SELECTION=uniform MAX_SECONDS=120 MAX_STEPS=120 LIMIT_TRAIN_VIDEOS=64 LIMIT_VAL_VIDEOS=64 SEEDS=0,1,2 OUT_DIR=runs/E0100_epic_video_cls_local_uniform_full_ms120_s64_20260209-045119 bash scripts/e0100_epic_video_cls_local.sh`
+    - `SELECTION=random MAX_SECONDS=120 MAX_STEPS=120 LIMIT_TRAIN_VIDEOS=64 LIMIT_VAL_VIDEOS=64 SEEDS=0,1,2 OUT_DIR=runs/E0100_epic_video_cls_local_random_full_ms120_s64_20260209-045119 bash scripts/e0100_epic_video_cls_local.sh`
+    - `SELECTION=audio_anchored MAX_SECONDS=120 MAX_STEPS=120 LIMIT_TRAIN_VIDEOS=256 LIMIT_VAL_VIDEOS=137 SEEDS=0,1,2 OUT_DIR=runs/E0100_epic_video_cls_local_audio_anchored_full_ms120_t256_v137_s012_20260209-235834 bash scripts/e0100_epic_video_cls_local.sh`
+    - `SELECTION=uniform MAX_SECONDS=120 MAX_STEPS=120 LIMIT_TRAIN_VIDEOS=256 LIMIT_VAL_VIDEOS=137 SEEDS=0,1,2 OUT_DIR=runs/E0100_epic_video_cls_local_uniform_full_ms120_t256_v137_s012_20260210-001346 bash scripts/e0100_epic_video_cls_local.sh`
+    - `SELECTION=random MAX_SECONDS=120 MAX_STEPS=120 LIMIT_TRAIN_VIDEOS=256 LIMIT_VAL_VIDEOS=137 SEEDS=0,1,2 OUT_DIR=runs/E0100_epic_video_cls_local_random_full_ms120_t256_v137_s012_20260210-001929 bash scripts/e0100_epic_video_cls_local.sh`
+    - `SELECTION=uniform MAX_SECONDS=120 MAX_STEPS=60 LIMIT_TRAIN_VIDEOS=256 LIMIT_VAL_VIDEOS=137 SEEDS=0,1,2 OUT_DIR=runs/E0100_epic_video_cls_local_uniform_ms120_steps60_t256_v137_s012_20260210-012533 bash scripts/e0100_epic_video_cls_local.sh`
+    - `SELECTION=random MAX_SECONDS=120 MAX_STEPS=60 LIMIT_TRAIN_VIDEOS=256 LIMIT_VAL_VIDEOS=137 SEEDS=0,1,2 OUT_DIR=runs/E0100_epic_video_cls_local_random_ms120_steps60_t256_v137_s012_20260210-013248 bash scripts/e0100_epic_video_cls_local.sh`
+    - `SELECTION=audio_anchored MAX_SECONDS=120 MAX_STEPS=60 LIMIT_TRAIN_VIDEOS=256 LIMIT_VAL_VIDEOS=137 SEEDS=0,1,2 OUT_DIR=runs/E0100_epic_video_cls_local_audio_anchored_ms120_steps60_t256_v137_s012_20260210-013750 bash scripts/e0100_epic_video_cls_local.sh`
+    - `SELECTION=oracle MAX_SECONDS=120 MAX_STEPS=60 LIMIT_TRAIN_VIDEOS=256 LIMIT_VAL_VIDEOS=137 SEEDS=0,1,2 OUT_DIR=runs/E0100_epic_video_cls_local_oracle_ms120_steps60_t256_v137_s012_20260210-014715 bash scripts/e0100_epic_video_cls_local.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0100_epic_video_cls_local_audio_anchored_full_ms120_s64_20260209-045119/metrics.json`
+    - `runs/E0100_epic_video_cls_local_uniform_full_ms120_s64_20260209-045119/metrics.json`
+    - `runs/E0100_epic_video_cls_local_random_full_ms120_s64_20260209-045119/metrics.json`
+    - `runs/E0100_epic_video_cls_local_audio_anchored_full_ms120_t256_v137_s012_20260209-235834/metrics.json`
+    - `runs/E0100_epic_video_cls_local_uniform_full_ms120_t256_v137_s012_20260210-001346/metrics.json`
+    - `runs/E0100_epic_video_cls_local_random_full_ms120_t256_v137_s012_20260210-001929/metrics.json`
+    - `runs/E0100_epic_video_cls_local_uniform_ms120_steps60_t256_v137_s012_20260210-012533/metrics.json`
+    - `runs/E0100_epic_video_cls_local_random_ms120_steps60_t256_v137_s012_20260210-013248/metrics.json`
+    - `runs/E0100_epic_video_cls_local_audio_anchored_ms120_steps60_t256_v137_s012_20260210-013750/metrics.json`
+    - `runs/E0100_epic_video_cls_local_oracle_ms120_steps60_t256_v137_s012_20260210-014715/metrics.json`
+  - required_metrics:
+    - `metrics.json`: `summary.mAP.mean`, `summary["macro_f1@0.5"].mean`, plus budget fields (`max_steps`, `max_seconds`, `base_res`)
+  - logs:
+    - `artifacts/experiments/E0100/run.log` (pilot s64)
+    - `artifacts/experiments/E0100_full/run.log` (expanded t256/v137)
+    - `artifacts/experiments/E0100_steps60/run.log` (uniform, steps60)
+    - `artifacts/experiments/E0100_steps60_random/run.log`
+    - `artifacts/experiments/E0100_steps60_anchored/run.log`
+    - `artifacts/experiments/E0100_steps60_oracle/run.log`
+
+- [x] E0202: Evidence Alignment (Cov@tau) vs accuracy correlation report (energy / test402)
+  - command: `python -m avs.experiments.evidence_alignment_report --in-metrics runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/p0_train3339_test402_energy_160_224_352_k2_shift1_std1.0_temporal_conv/metrics.json --meta-dir data/AVE/meta --out-dir runs/E0202_evidence_alignment_energy_test402_20260209-061145`
+  - configs: []
+  - seeds: []
+  - required_artifacts: [`runs/E0202_evidence_alignment_energy_test402_20260209-061145/evidence_alignment.json`]
+  - required_metrics:
+    - `evidence_alignment.json`: `cov_by_tau` + `corr_by_tau` with Pearson/Spearman (tau_grid includes `0.3,0.5,0.7`)
+  - logs: `artifacts/experiments/E0202/run.log`
+
+- [x] E0203: Degradation suite (shift/noise/silence grid) on official AVE test402 (energy)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_160_224_352 EVENTNESS=energy AUDIO_DEVICE=cpu bash scripts/e0203_degradation_suite_official.sh`
+  - configs: []
+  - seeds: []
+  - required_artifacts: [`runs/E0203_degradation_energy_20260209-061156/degradation_suite.json`]
+  - required_metrics:
+    - `degradation_suite.json`: 18-row grid complete; per-row `recall_by_delta` present; `fallback_used_frac` reported
+  - logs: `artifacts/experiments/E0203/run.log`
+
+## Results
+| id | status | key_metrics | artifacts | notes |
+|---|---|---|---|---|
+| E0003 | success | test402 anchored_top2.mean=0.72025 vs uniform.mean=0.71622 (Δ=+0.00403; p=0.383); anchors Δ0 ours>random on val/test | `runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/` | allow-missing drops some clips (train=3312, val=401, test=402) |
+| E0100 | success | mAP=`0.4028±0.0048` (anchored) vs `0.3346±0.0021` (uniform; Δ=+0.0681); macro_f1@0.5=`0.4194±0.0009` vs `0.3277±0.0387` (Δ=+0.0917) | `runs/E0100_epic_video_cls_local_*_full_ms120_t256_v137_s012_202602*/metrics.json` | expanded t256/v137 rerun (plus pilot s64); strict equal-budget (`max_steps × base_res`). Note: when `max_steps==max_seconds`, random==uniform because both select all seconds. Additional diagnostic (`max_steps=60`, `max_seconds=120`, t256/v137): uniform mAP=`0.3351±0.0048`; random=`0.3340±0.0051`; audio_anchored=`0.3358±0.0135`; oracle=`0.3329±0.0005` (no gain at this tighter budget). |
+| E0202 | success | Cov@tau mean≈0.0593; corr pearson≈0.0625 spearman≈-0.0314 (weak) | `runs/E0202_evidence_alignment_energy_test402_20260209-061145/evidence_alignment.json` | diagnostic only (not a predictor) |
+| E0203 | success | mean Recall@K across 18 conditions: Δ0≈0.2240 (min≈0.2174, max≈0.2307), Δ1≈0.4767, Δ2≈0.6420 | `runs/E0203_degradation_energy_20260209-061156/degradation_suite.json` | fallback_used_frac=0.0 |
+| E0600 | success | IntentQA val (n=253): uniform acc=0.9447; cheap_visual acc=0.9526; ql2l_clap acc=0.9486 | `runs/E0600_intentqa_vlm_eval_full_20260210-041911/` | Qwen2-VL-2B; `budget_frames=16`, `max_seconds=120`, `strategy=ppl` |
+| E0601 | success | IntentQA faithfulness (n=253; ql2l_clap): acc=0.9486; acc_drop=0.0000; pred_change_rate=0.0316 | `runs/E0601_intentqa_faithfulness_full_20260210-061137/` | delete-and-predict proxy; invalid_rate=0 |
+| E0602 | success | EgoSchema Subset test (n=256): uniform acc=0.5859; ql2l_clap acc=0.5352; ql2l_asr_bm25 acc=0.5469 | `runs/E0602_egoschema_eval_subset_full_20260210-064250/` | Qwen2-VL-2B; `budget_frames=16`, `max_seconds=120`, `strategy=ppl` |
+
+> Note: The authoritative runnable queue for the current `docs/plan.md` is the checklist above. The `## Experiments` catalog below is an archive; its internal `[ ]` fields are not a TODO list.
 
 ## Experiments
 
@@ -69,8 +199,8 @@
 | Full cmd | `bash scripts/ave_verify_official_after_install.sh` |
 | Smoke | [ ] |
 | Full | [x] |
-| Logs | `runs/ave_official_verify.log` and `runs/REAL_AVE_OFFICIAL_*` |
-| Results | Run root: `runs/REAL_AVE_OFFICIAL_20260201-124535`. Anchors: see `E0002_anchors_official_{val,test}/anchor_eval/anchors_metrics.json` (Δ0 ours > random on both). AVE-P0 (token_budget=1960; SEEDS=0..9; head=temporal_conv; energy; 160/224/352; shift=1; std_thr=1.0): train→val `p0_train3339_val402_energy_160_224_352_k2_shift1_std1.0_temporal_conv/metrics.json` (anchored=0.7377 > uniform=0.7296 > random=0.7192; p(anchored vs uniform)=0.048, p(anchored vs random)=0.003) and train→test `p0_train3339_test402_energy_160_224_352_k2_shift1_std1.0_temporal_conv/metrics.json` (anchored≈uniform: 0.7191 vs 0.7186; p=0.896; anchored > random=0.6992, p=3.6e-05). Rerun root: `runs/REAL_AVE_OFFICIAL_RERUN_20260201-152134` (adds `audio_concat_anchored_top2` baseline; trains head on `TRAIN_DEVICE=cuda:0`; skips cache build when caches exist). Train→val `p0_train3339_val402_energy_160_224_352_k2_shift1_std1.0_temporal_conv_v2/metrics.json` (anchored=0.7508 > uniform=0.7402; p=0.009; audio_concat_anchored=0.7515; audio_concat_uniform=0.7490). Train→test `p0_train3339_test402_energy_160_224_352_k2_shift1_std1.0_temporal_conv_v2/metrics.json` (anchored=0.7306 > uniform=0.7192; p=0.046; audio_concat_uniform=0.7336; audio_concat_anchored=0.7346). |
+| Logs | `artifacts/experiments/E0003/run.log` and `runs/REAL_AVE_OFFICIAL_RERUN_*` |
+| Results | Local rerun root: `runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402`. Anchors: `E0002_anchors_official_val/anchor_eval/anchors_metrics.json` (n=401; Δ0 ours=0.2315 > random=0.2111) and `E0002_anchors_official_test/anchor_eval/anchors_metrics.json` (n=402; Δ0 ours=0.2307 > random=0.2035). AVE-P0 (token_budget=1960; SEEDS=0..9; head=temporal_conv; energy; 160/224/352; shift=1; std_thr=1.0; allow-missing drops some clips: train=3312, val=401): train→val `p0_train3339_val402_energy_160_224_352_k2_shift1_std1.0_temporal_conv/metrics.json` (anchored=0.7457 > uniform=0.7402 > random=0.7268; p(anchored vs uniform)=0.239) and train→test `p0_train3339_test402_energy_160_224_352_k2_shift1_std1.0_temporal_conv/metrics.json` (anchored=0.7202 > uniform=0.7162 > random=0.7025; p(anchored vs uniform)=0.383). |
 
 Follow-ups (train3339→test402; same token budget=1960):
 - Fast repro (cache-preload optimization, same numbers): `runs/REAL_AVE_OFFICIAL_TUNE_20260201-ANCH_ADAPT/p0_train3339_test402_energy_160_224_352_k2_shift1_std1.0_temporal_conv_fixed_v3/metrics.json` (anchored=0.7306 > uniform=0.7192; p=0.046).
@@ -946,7 +1076,7 @@ Follow-ups (train3339→test402; same token budget=1960):
 | Full | [x] |
 | Logs | `runs/E0223_*` |
 | Artifacts | `runs/E0223_*/{sweep_summary.json,best_config.json,eventness_scores.json}` |
-| Results | `runs/E0223_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_v1_20260204-135150/sweep_summary.json` (best=`ltltop1med_thr0p6_shift1`, Δ≈+0.00964, p≈0.0331). |
+| Results | Local rerun (val402; SEEDS=0..2): `runs/E0223_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_v1_20260209-234131/sweep_summary.json` (best=`ltltop1med_thr0p7_shift1`, Δ≈+0.00283, p≈0.7587). Historical reference (non-local): `runs/E0223_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_v1_20260204-135150/sweep_summary.json` (best=`ltltop1med_thr0p6_shift1`, Δ≈+0.00964, p≈0.0331). |
 
 
 ### E0224: Best-to-test reproduction on test402 for learned anchors (ltl_top1med_v1 selection)
@@ -971,7 +1101,7 @@ Follow-ups (train3339→test402; same token budget=1960):
 | Full | [x] |
 | Logs | `runs/E0224_*` |
 | Artifacts | `runs/E0224_*/metrics.json` |
-| Results | `runs/E0224_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-135547/metrics.json` (anchored=0.72383 vs uniform=0.70858, Δ=+0.01525, p≈0.00390; fallback≈0.751). |
+| Results | Local rerun (test402; SEEDS=0..9; val-selected `ltltop1med_thr0p7_shift1`): `runs/E0224_ave_p0_best_to_test_official_av_clipdiff_mlp_20260209-234703/metrics.json` (anchored=0.71127 vs uniform=0.71622, Δ≈-0.00495, p≈0.2801; fallback≈0.831). Diagnostic (non-val-selected): `runs/E0224_full_test402_av_clipdiff_mlp_thr0p6_shift1_s0-9_20260209-235100/metrics.json` (Δ≈-0.00040, p≈0.9418; fallback≈0.754). Historical reference (non-local): `runs/E0224_ave_p0_best_to_test_official_av_clipdiff_mlp_20260204-135547/metrics.json` (Δ≈+0.01525). |
 
 
 ### E0226: Stage-2 plan variants on val402 for the current best top1-med gate (selection/base allocation ablation)
@@ -2840,7 +2970,7 @@ Follow-ups (train3339→test402; same token budget=1960):
 | Full | [x] |
 | Logs | `runs/E0330_*` |
 | Artifacts | `runs/E0330_*/{pareto_report.json,pareto.png,metrics_*.json}` |
-| Results | Smoke (train64/test32; SEEDS=0,1; EPOCHS=1; EVENTNESS=energy): `runs/E0330_mde_pareto_grid_official_energy_20260205-174428/pareto_report.json` + `runs/E0330_mde_pareto_grid_official_energy_20260205-174428/pareto.png` (includes per-budget `metrics_predicted_*.json` with `token_usage`). Full (official test402; SEEDS=0..9; EVENTNESS=av_clipdiff_mlp; budget_mode=auto): `runs/E0330_full_av_clipdiff_mlp_auto_20260205-184559/pareto_report.json` + `runs/E0330_full_av_clipdiff_mlp_auto_20260205-184559/pareto.png` (Tok=1960: predicted Δ=+0.01525; oracle Δ=+0.04142; `fallback_used_frac≈0.751`). |
+| Results | Smoke (train64/test32; SEEDS=0,1; EPOCHS=1; EVENTNESS=energy): `runs/E0330_mde_pareto_grid_official_energy_20260205-174428/pareto_report.json` + `runs/E0330_mde_pareto_grid_official_energy_20260205-174428/pareto.png` (includes per-budget `metrics_predicted_*.json` with `token_usage`). Local full rerun (official test402; SEEDS=0..9; EVENTNESS=av_clipdiff_mlp; base config from local E0223 best=`ltltop1med_thr0p7_shift1`; budget_mode=auto): `runs/E0330_mde_pareto_grid_official_av_clipdiff_mlp_local_20260209-235305/pareto_report.json` + `.../pareto.png`. Predicted-vs-uniform Δ: `112_160_224≈-0.00328`, `160_224_352≈-0.00495`, `224_352_448≈+0.00299`; Oracle-vs-uniform Δ: `+0.02042`, `+0.03754`, `+0.02037` (cheap-visual collapses to uniform on this rerun). Historical reference (non-local): `runs/E0330_full_av_clipdiff_mlp_auto_20260205-184559/pareto_report.json`. |
 
 
 ### E0331: Degradation suite with downstream accuracy + α lower bound (oral-critical)
@@ -2857,7 +2987,7 @@ Follow-ups (train3339→test402; same token budget=1960):
 | Full cmd | `SEEDS=0,1,2 EVENTNESS_METHOD=av_clipdiff_mlp TRAIN_DEVICE=cuda:9 bash scripts/e0331_degradation_accuracy_official.sh` |
 | Smoke | [x] |
 | Full | [x] |
-| Results | Smoke (train64/eval32; SEEDS=0,1; EPOCHS=1; EVENTNESS_METHOD=av_clipdiff_mlp): `runs/E0331_smoke_av_clipdiff_mlp_20260205-194038/degradation_accuracy.json` + `runs/E0331_smoke_av_clipdiff_mlp_20260205-194038/degradation_plots/*.png`. Full (train3339/test402; SEEDS=0..2): `runs/E0331_full_av_clipdiff_mlp_20260205-194925/degradation_accuracy.json` + `runs/E0331_full_av_clipdiff_mlp_20260205-194925/degradation_plots/*.png` (clean mean: anchored=0.7260 vs uniform=0.7070, Δ=+0.0190; gate fallback≈0.751). |
+| Results | Smoke (train64/eval32; SEEDS=0,1; EPOCHS=1; EVENTNESS_METHOD=av_clipdiff_mlp): `runs/E0331_smoke_av_clipdiff_mlp_20260205-194038/degradation_accuracy.json` + `runs/E0331_smoke_av_clipdiff_mlp_20260205-194038/degradation_plots/*.png`. Local full rerun (train3339/test402; SEEDS=0..2): `runs/E0331_degradation_accuracy_av_clipdiff_mlp_local_20260209-235316/degradation_accuracy.json` + `.../degradation_plots/*.png` (clean mean: anchored≈0.71070 vs uniform≈0.71294, Δ≈-0.00224; gate fallback≈0.831; `alpha_floor_checks.num_fail=0`, `min_margin≈+0.000249`). Historical reference (non-local): `runs/E0331_full_av_clipdiff_mlp_20260205-194925/degradation_accuracy.json`. |
 
 
 ### E0332: Stage-1 sweep on val402 (sep3 confidence gate; `ltl_sep3_v1`)
@@ -3038,7 +3168,7 @@ Follow-ups (train3339→test402; same token budget=1960):
 | Full | [x] |
 | Logs | `runs/E0202_*` |
 | Artifacts | `runs/E0202_*/evidence_alignment.json` |
-| Results | Test402 (energy_v2): `runs/E0202_evidence_alignment_energy_v2_test_20260203-194355/evidence_alignment.json` (Cov@τ mean≈0.059 for τ∈{0.3,0.5,0.7}; corr(Δacc,Cov) pearson≈0.080, spearman≈-0.003). Test402 (av_clipdiff_mlp / E0224): `runs/E0202_evidence_alignment_av_clipdiff_mlp_test402_20260205-233330/evidence_alignment.json` (Cov@τ mean≈0.059; corr pearson≈0.0127, spearman≈0.0299). |
+| Results | Test402 (energy_v2): `runs/E0202_evidence_alignment_energy_v2_test_20260203-194355/evidence_alignment.json` (Cov@τ mean≈0.059 for τ∈{0.3,0.5,0.7}; corr(Δacc,Cov) pearson≈0.080, spearman≈-0.003). Test402 (av_clipdiff_mlp / E0224): `runs/E0202_evidence_alignment_av_clipdiff_mlp_test402_20260205-233330/evidence_alignment.json` (Cov@τ mean≈0.059; corr pearson≈0.0127, spearman≈0.0299). Local rerun (energy / E0003): `runs/E0202_evidence_alignment_energy_test402_20260209-061145/evidence_alignment.json` (Cov@τ mean≈0.0593; corr pearson≈0.0625, spearman≈-0.0314). |
 
 
 ### E0203: Degradation suite (shift/noise/silence × α) on AVE
@@ -3063,7 +3193,7 @@ Follow-ups (train3339→test402; same token budget=1960):
 | Full | [x] |
 | Logs | `runs/E0203_*` |
 | Artifacts | `runs/E0203_*/degradation_suite.json` |
-| Results | Full (test402; grid=3×3×2=18): energy `runs/E0203_full_energy_20260203-210331/degradation_suite.json` (mean Recall@K,Δ0≈0.223; Δ2≈0.640). energy_stride_max `runs/E0203_full_energy_stride_max_20260203-210414/degradation_suite.json` (mean Δ0≈0.223; Δ2≈0.634). av_fused `runs/E0203_full_av_fused_20260203-210458/degradation_suite.json` (mean Δ0≈0.207; Δ2≈0.708; improves under larger Δ but hurts strict Δ0). Learned audio eventness runner: `runs/E0203_degradation_audio_basic_lr_20260204-012618/degradation_suite.json`. Deployable multimodal Stage-1 (`av_clipdiff_mlp`): `runs/E0203_degradation_av_clipdiff_mlp_20260204-215831/degradation_suite.json` (mean Δ0≈0.212; Δ2≈0.624). |
+| Results | Full (test402; grid=3×3×2=18): energy `runs/E0203_full_energy_20260203-210331/degradation_suite.json` (mean Recall@K,Δ0≈0.223; Δ2≈0.640). energy_stride_max `runs/E0203_full_energy_stride_max_20260203-210414/degradation_suite.json` (mean Δ0≈0.223; Δ2≈0.634). av_fused `runs/E0203_full_av_fused_20260203-210458/degradation_suite.json` (mean Δ0≈0.207; Δ2≈0.708; improves under larger Δ but hurts strict Δ0). Learned audio eventness runner: `runs/E0203_degradation_audio_basic_lr_20260204-012618/degradation_suite.json`. Deployable multimodal Stage-1 (`av_clipdiff_mlp`): `runs/E0203_degradation_av_clipdiff_mlp_20260204-215831/degradation_suite.json` (mean Δ0≈0.212; Δ2≈0.624). Local rerun (energy / caches from E0003): `runs/E0203_degradation_energy_20260209-061156/degradation_suite.json` (mean Δ0≈0.224; Δ2≈0.642). |
 
 
 ### E0340: Build official mid-res caches (112/160/192/208/224/320/352) for P0116
@@ -4647,8 +4777,8 @@ Follow-ups (train3339→test402; same token budget=1960):
 | Smoke | [x] |
 | Full | [x] |
 | Logs | `runs/E0408_vision_efficiency_*` |
-| Artifacts | `runs/E0408_vision_efficiency_20260206-161610/vision_efficiency.json` |
-| Results | `runs/E0408_vision_efficiency_20260206-161610/vision_efficiency.json`: per-resolution tokens/FLOPs are explicitly reported and monotonic (`49→100→196→484→784` tokens/image; `3.84e7→8.31e7→1.82e8→5.90e8→1.20e9` FLOPs/image). |
+| Artifacts | `runs/E0408_vision_efficiency_20260209-233151/vision_efficiency.json` |
+| Results | `runs/E0408_vision_efficiency_20260209-233151/vision_efficiency.json`: per-resolution tokens/FLOPs are explicitly reported and monotonic (`49→100→196→484→784` tokens/image; `3.84e7→8.31e7→1.82e8→5.90e8→1.20e9` FLOPs/image). |
 
 
 ### E0409: Multi-budget Pareto rerun (SEEDS=0..9) — aligned with dense-stride `top1_med thr0.5`
@@ -4880,10 +5010,10 @@ Follow-ups (train3339→test402; same token budget=1960):
 | Params | `SPLIT`, `LIMIT`, `METHODS`, `B_FRAMES`, `MAX_SECONDS`, `SEED`, `STRATEGY`, `MODEL_NAME`, `DEVICE`, `DTYPE`, `QL2L_CLAP_DEVICE`, `QL2L_ASR_DEVICE` |
 | Metrics (must save) | `metrics.json` (per-method acc/invalid + bootstrap CI deltas vs uniform), `predictions.jsonl` (per-item rows). |
 | Smoke cmd | `python -m avs.experiments.intentqa_vlm_eval --help` |
-| Full cmd | `OUT_DIR=runs/E0600_intentqa_vlm_eval_$(date +%Y%m%d-%H%M%S) SPLIT=val LIMIT=256 B_FRAMES=16 MAX_SECONDS=120 DEVICE=cuda:0 QL2L_CLAP_DEVICE=cuda:0 QL2L_ASR_DEVICE=cuda:0 bash scripts/e0600_intentqa_vlm_eval.sh` |
+| Full cmd | `OUT_DIR=runs/E0600_intentqa_vlm_eval_$(date +%Y%m%d-%H%M%S) SPLIT=val LIMIT=256 B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=250 bash scripts/e0600_intentqa_vlm_eval.sh` |
 | Outputs | `runs/E0600_intentqa_vlm_eval_*/metrics.json`, `runs/E0600_intentqa_vlm_eval_*/predictions.jsonl` |
-| Artifacts | `runs/E0600_intentqa_vlm_eval_20260209-035602/metrics.json`, `runs/E0600_intentqa_vlm_eval_20260209-035602/predictions.jsonl` |
-| Results | Synthetic smoke run completed (n=1; `AVS_DATA_DIR=runs/smoke_20260209-034707/data`, `SPLIT=train`, `METHODS=uniform,ql2l_asr_bm25`, `B_FRAMES=4`, `MAX_SECONDS=8`, `STRATEGY=generate`), validating end-to-end preprocessing → Q-L2L (ASR+BM25) → VLM inference and cache writes. |
+| Artifacts | Full real run: `runs/E0600_intentqa_vlm_eval_full_20260210-041911/metrics.json`, `runs/E0600_intentqa_vlm_eval_full_20260210-041911/predictions.jsonl`, `runs/E0600_intentqa_vlm_eval_full_20260210-041911/preprocess_meta.json` (log: `artifacts/experiments/E0600_full_ppl_rerun2/run.log`). Synthetic smoke: `runs/E0600_intentqa_vlm_eval_20260209-035602/metrics.json`, `runs/E0600_intentqa_vlm_eval_20260209-035602/predictions.jsonl`. |
+| Results | Full val run (n=253; seed=0; `budget_frames=16`, `max_seconds=120`, `strategy=ppl`; invalid_rate=0 for all methods). Acc: uniform=0.9447, random=0.9328, audio=0.9447, cheap_visual=0.9526, fused=0.9407, ql2l_clap=0.9486, ql2l_asr_bm25=0.9407. Δ vs uniform (bootstrap 95% CI; n_boot=300): cheap_visual +0.0079 [-0.0119,+0.0277], ql2l_clap +0.0040 [-0.0158,+0.0258], random -0.0119 [-0.0435,+0.0139]. |
 | Notes | Q-L2L backends cache artifacts under each processed video dir (e.g. `processed/<vid>/q_l2l/*`) to keep reruns deterministic. |
 
 ### E0601: IntentQA faithfulness proxy (delete-and-predict)
@@ -4896,10 +5026,10 @@ Follow-ups (train3339→test402; same token budget=1960):
 | Params | `SPLIT`, `LIMIT`, `METHOD`, `B_FRAMES`, `MAX_SECONDS`, `SEED`, `STRATEGY`, model/QL2L device knobs |
 | Metrics (must save) | `faithfulness.json` (acc, acc_deleted, acc_drop, pred_change_rate), `rows.jsonl` (per-item). |
 | Smoke cmd | `python -m avs.experiments.intentqa_faithfulness --help` |
-| Full cmd | `OUT_DIR=runs/E0601_intentqa_faithfulness_$(date +%Y%m%d-%H%M%S) SPLIT=val LIMIT=256 METHOD=ql2l_clap B_FRAMES=16 MAX_SECONDS=120 DEVICE=cuda:0 QL2L_CLAP_DEVICE=cuda:0 QL2L_ASR_DEVICE=cuda:0 bash scripts/e0601_intentqa_faithfulness.sh` |
+| Full cmd | `OUT_DIR=runs/E0601_intentqa_faithfulness_$(date +%Y%m%d-%H%M%S) SPLIT=val LIMIT=256 METHOD=ql2l_clap B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=250 bash scripts/e0601_intentqa_faithfulness.sh` |
 | Outputs | `runs/E0601_intentqa_faithfulness_*/faithfulness.json`, `runs/E0601_intentqa_faithfulness_*/rows.jsonl` |
-| Artifacts | `runs/E0601_intentqa_faithfulness_20260209-035635/faithfulness.json`, `runs/E0601_intentqa_faithfulness_20260209-035635/rows.jsonl` |
-| Results | Synthetic smoke run completed (n=1; `AVS_DATA_DIR=runs/smoke_20260209-034707/data`, `SPLIT=train`, `METHOD=ql2l_asr_bm25`, `B_FRAMES=4`, `MAX_SECONDS=8`, `STRATEGY=generate`). |
+| Artifacts | Full real run: `runs/E0601_intentqa_faithfulness_full_20260210-061137/faithfulness.json`, `runs/E0601_intentqa_faithfulness_full_20260210-061137/rows.jsonl`, `runs/E0601_intentqa_faithfulness_full_20260210-061137/preprocess_meta.json` (log: `artifacts/experiments/E0601_full_ql2l_clap_ppl/run.log`). Synthetic smoke: `runs/E0601_intentqa_faithfulness_20260209-035635/faithfulness.json`, `runs/E0601_intentqa_faithfulness_20260209-035635/rows.jsonl`. |
+| Results | Full val run (n=253; method=ql2l_clap; seed=0; `budget_frames=16`, `max_seconds=120`, `strategy=ppl`; invalid_rate=0): acc=0.9486, acc_deleted=0.9486, acc_drop=0.0000, pred_change_rate=0.0316. |
 
 ### E0602: EgoSchema prediction generation under budgeted frame selection
 | Field | Value |
@@ -4911,9 +5041,11 @@ Follow-ups (train3339→test402; same token budget=1960):
 | Params | `CONFIG`, `SPLIT`, `LIMIT`, `METHODS`, `B_FRAMES`, `MAX_SECONDS`, `SEED`, `STRATEGY`, model/QL2L device knobs |
 | Metrics (must save) | `metrics.json`, `predictions.jsonl`, `preprocess_meta.json` |
 | Smoke cmd | `python -m avs.experiments.egoschema_vlm_eval --help` |
-| Full cmd | `OUT_DIR=runs/E0602_egoschema_predict_$(date +%Y%m%d-%H%M%S) CONFIG=MC SPLIT=test LIMIT=256 B_FRAMES=16 MAX_SECONDS=120 DEVICE=cuda:0 QL2L_CLAP_DEVICE=cuda:0 QL2L_ASR_DEVICE=cuda:0 bash scripts/e0602_egoschema_predict.sh` |
+| Full cmd | `OUT_DIR=runs/E0602_egoschema_predict_$(date +%Y%m%d-%H%M%S) CONFIG=Subset SPLIT=test LIMIT=256 B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu bash scripts/e0602_egoschema_predict.sh` |
 | Outputs | `runs/E0602_egoschema_predict_*/metrics.json`, `runs/E0602_egoschema_predict_*/predictions.jsonl` |
-| Notes | Requires extracted videos: `bash scripts/datasets/egoschema_extract_videos.sh` (from `data/hf_repos/egoschema/videos_chunked_*.zip`). |
+| Artifacts | Full real run: `runs/E0602_egoschema_eval_subset_full_20260210-064250/metrics.json`, `runs/E0602_egoschema_eval_subset_full_20260210-064250/predictions.jsonl`, `runs/E0602_egoschema_eval_subset_full_20260210-064250/preprocess_meta.json` (log: `artifacts/experiments/E0602_full_subset_ppl/run.log`). |
+| Results | Full Subset test run (n=256; seed=0; `budget_frames=16`, `max_seconds=120`, `strategy=ppl`; invalid_rate=0): uniform acc=0.5859, ql2l_clap acc=0.5352, ql2l_asr_bm25 acc=0.5469. |
+| Notes | Requires extracted videos: `bash scripts/datasets/egoschema_extract_videos.sh` (from `data/hf_repos/egoschema/videos_chunked_*.zip`). If you want to generate predictions without labels (for external eval), use `CONFIG=MC`. |
 
 ### E0603: Stage-2 solver ablation (greedy vs Lagrangian knapsack)
 | Field | Value |

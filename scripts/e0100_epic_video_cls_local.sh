@@ -19,7 +19,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VIDEOS_DIR="${VIDEOS_DIR:-data/EPIC_SOUNDS/raw/videos}"
 META_DIR="${META_DIR:-data/EPIC_SOUNDS/meta}"
 
-SELECTION="${SELECTION:-audio_anchored}" # uniform|random|audio_anchored
+SELECTION="${SELECTION:-audio_anchored}" # uniform|random|audio_anchored|oracle
 MAX_SECONDS="${MAX_SECONDS:-}"
 MAX_STEPS="${MAX_STEPS:-120}"
 

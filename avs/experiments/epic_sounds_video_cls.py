@@ -18,7 +18,7 @@ from avs.pipeline.long_plan_generation import long_plan_from_wav_hybrid
 from avs.pipeline.plan_generation import infer_num_segments_from_wav
 from avs.preprocess.epic_sounds_audio import extract_epic_sounds_audio
 from avs.preprocess.epic_sounds_frames import extract_epic_sounds_frames
-from avs.sampling.plans import SamplingPlan, uniform_plan
+from avs.sampling.plans import SamplingPlan, equal_token_budget_anchored_plan, uniform_plan
 from avs.vision.clip_vit import ClipVisionEncoder, ClipVisionEncoderConfig
 from avs.vision.feature_cache import FeatureCache, build_clip_feature_cache_from_seconds
 
@@ -152,6 +152,54 @@ class EpicVideoPack:
         }
 
 
+def _oracle_anchors_from_segments(
+    index: EpicSoundsIndex,
+    video_id: str,
+    *,
+    split: str,
+    duration_seconds: int,
+    k: int,
+) -> list[int]:
+    """
+    Oracle anchors from EPIC-SOUNDS GT timestamps.
+
+    Policy (deterministic):
+      - take the center second of each labeled segment, prioritize longer segments
+      - clamp to `[0, duration_seconds)`
+      - return up to `k` unique seconds
+    """
+    dur = max(0, int(duration_seconds))
+    if dur <= 0 or int(k) <= 0:
+        return []
+
+    if split == "train":
+        segs = index.train
+    elif split == "val":
+        segs = index.val
+    else:
+        raise ValueError(f"oracle anchors only support train/val splits, got split={split!r}")
+
+    cand = [s for s in segs if str(s.video_id) == str(video_id) and s.class_id is not None]
+    if not cand:
+        return []
+
+    # Prefer longer segments; tie-break by time then stable id.
+    cand.sort(key=lambda s: (-(float(s.stop_sec) - float(s.start_sec)), float(s.start_sec), str(s.annotation_id)))
+
+    out: list[int] = []
+    seen: set[int] = set()
+    for s in cand:
+        c = int(round(0.5 * (float(s.start_sec) + float(s.stop_sec))))
+        c = max(0, min(dur - 1, int(c)))
+        if c in seen:
+            continue
+        out.append(int(c))
+        seen.add(int(c))
+        if len(out) >= int(k):
+            break
+    return out
+
+
 def pack_one_video(
     *,
     video_id: str,
@@ -184,6 +232,8 @@ def pack_one_video(
     panns_checkpoint: Path | None,
     audiomae_random: bool,
     audiomae_checkpoint: Path | None,
+    oracle_index: EpicSoundsIndex | None,
+    oracle_split: str | None,
 ) -> EpicVideoPack:
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "audio").mkdir(parents=True, exist_ok=True)
@@ -259,8 +309,39 @@ def pack_one_video(
         anchors_seconds = [int(x) for x in rec.anchors_seconds]
         selected_seconds = [int(x) for x in rec.selected_seconds]
         plan = rec.plan
+    elif selection == "oracle":
+        if oracle_index is None or oracle_split is None:
+            raise ValueError("oracle selection requires oracle_index and oracle_split")
+        anchors_seconds = _oracle_anchors_from_segments(
+            oracle_index,
+            str(video_id),
+            split=str(oracle_split),
+            duration_seconds=int(duration),
+            k=int(k),
+        )
+        # Reuse the hybrid seconds selection policy to match audio_anchored's background/anchor mix.
+        from avs.pipeline.long_plan_generation import select_seconds_hybrid
+
+        selected_seconds = select_seconds_hybrid(
+            duration_seconds=int(duration),
+            anchors_seconds=[int(x) for x in anchors_seconds],
+            anchor_radius=int(anchor_radius),
+            background_stride=int(background_stride),
+            max_steps=int(max_steps),
+        )
+
+        anchor_set = set(int(x) for x in anchors_seconds)
+        anchor_positions = [i for i, t in enumerate(selected_seconds) if int(t) in anchor_set]
+        plan = equal_token_budget_anchored_plan(
+            num_segments=len(selected_seconds),
+            anchors=anchor_positions,
+            low_res=int(low_res),
+            base_res=int(base_res),
+            high_res=int(high_res),
+            patch_size=int(patch_size),
+        )
     else:
-        raise ValueError(f"unknown selection={selection!r}; expected 'uniform', 'random', or 'audio_anchored'")
+        raise ValueError(f"unknown selection={selection!r}; expected 'uniform', 'random', 'audio_anchored', or 'oracle'")
 
     plan_path = out_dir / "plans" / f"{video_id}.{selection}.plan.json"
     plan.save_json(plan_path)
@@ -495,7 +576,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--meta-dir", type=Path, default=epic_sounds_paths().meta_dir)
     p.add_argument("--out-dir", type=Path, default=Path("runs") / f"epic_sounds_video_cls_{time.strftime('%Y%m%d-%H%M%S')}")
 
-    p.add_argument("--selection", type=str, default="audio_anchored", choices=["uniform", "random", "audio_anchored"])
+    p.add_argument("--selection", type=str, default="audio_anchored", choices=["uniform", "random", "audio_anchored", "oracle"])
     p.add_argument("--max-seconds", type=int, default=None)
     p.add_argument("--max-steps", type=int, default=120)
 
@@ -655,6 +736,8 @@ def main(argv: list[str] | None = None) -> int:
                 panns_checkpoint=args.panns_checkpoint,
                 audiomae_random=bool(args.audiomae_random),
                 audiomae_checkpoint=args.audiomae_checkpoint,
+                oracle_index=index if str(args.selection) == "oracle" else None,
+                oracle_split=str(split) if str(args.selection) == "oracle" else None,
             )
             if split == "train":
                 packs_train.append(pack)

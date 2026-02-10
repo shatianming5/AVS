@@ -13,6 +13,11 @@ from avs.utils.scores import minmax_01
 
 _WORD_RE = re.compile(r"[A-Za-z0-9]+")
 
+# Lightweight in-process caches to avoid repeatedly re-loading large models during eval loops.
+# This keeps evaluation deterministic (no randomness introduced) and drastically reduces overhead.
+_ASR_MODEL_CACHE: dict[tuple[str, str, str], object] = {}
+_CLAP_PROBE_CACHE: dict[tuple[str, str, str, bool], object] = {}
+
 
 def _tokenize(text: str) -> list[str]:
     return [m.group(0).lower() for m in _WORD_RE.finditer(str(text))]
@@ -118,7 +123,11 @@ def load_or_compute_asr_per_sec_text(
             ct = "float32"
 
     t0 = time.time()
-    model = WhisperModel(str(model_size), device=str(device), compute_type=str(ct))
+    key = (str(model_size), str(device), str(ct))
+    model = _ASR_MODEL_CACHE.get(key)
+    if model is None:
+        model = WhisperModel(str(model_size), device=str(device), compute_type=str(ct))
+        _ASR_MODEL_CACHE[key] = model
     segments, _info = model.transcribe(
         str(wav_path),
         language=None if language is None else str(language),
@@ -202,7 +211,11 @@ def load_or_compute_clap_audio_embeddings(
     from avs.audio.clap_probe import ClapProbe, ClapProbeConfig
 
     t0 = time.time()
-    probe = ClapProbe(ClapProbeConfig(model_name=str(model_name), pretrained=bool(pretrained), device=str(device), dtype=str(dtype)))
+    key = (str(model_name), str(device), str(dtype), bool(pretrained))
+    probe = _CLAP_PROBE_CACHE.get(key)
+    if probe is None:
+        probe = ClapProbe(ClapProbeConfig(model_name=str(model_name), pretrained=bool(pretrained), device=str(device), dtype=str(dtype)))
+        _CLAP_PROBE_CACHE[key] = probe
     # Use a batched implementation to avoid huge processor inputs on long videos.
     emb = probe.audio_embeddings_per_second(wav_path, num_segments=int(num_segments), batch_size=int(batch_size))
     emb = np.asarray(emb, dtype=np.float32)
@@ -238,7 +251,11 @@ def clap_query_relevance_from_embeddings(audio_emb: np.ndarray, query: str, *, m
     """
     from avs.audio.clap_probe import ClapProbe, ClapProbeConfig
 
-    probe = ClapProbe(ClapProbeConfig(model_name=str(model_name), pretrained=True, device=str(device), dtype="float32"))
+    key = (str(model_name), str(device), "float32", True)
+    probe = _CLAP_PROBE_CACHE.get(key)
+    if probe is None:
+        probe = ClapProbe(ClapProbeConfig(model_name=str(model_name), pretrained=True, device=str(device), dtype="float32"))
+        _CLAP_PROBE_CACHE[key] = probe
     text_emb = probe.text_embeddings([str(query)])  # [1, D]
     a = np.asarray(audio_emb, dtype=np.float32)
     t = np.asarray(text_emb[0], dtype=np.float32)

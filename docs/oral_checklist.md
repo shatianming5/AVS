@@ -50,16 +50,33 @@ Canon sources:
   - Tokens: E0330/E0407 artifacts include strict token-budgeted comparisons.
   - FLOPs/latency calibration artifact: `runs/E0408_vision_efficiency_20260206-161610/vision_efficiency.json`.
 
+### E. Cross-dataset proxy — EPIC-SOUNDS long-video recognition (downstream sanity)
+
+- [x] **E0100 (expanded): EPIC-SOUNDS video-level multi-label classification** under strict equal-budget (SEEDS=0,1,2; `max_steps=120`, `max_seconds=120`, `limit_train_videos=256`, `limit_val_videos=137`).
+  - Goal: show the Listen-then-Look indexing story survives in a long-video setting (not only AVE 10s).
+  - Artifacts:
+    - Anchored: `runs/E0100_epic_video_cls_local_audio_anchored_full_ms120_t256_v137_s012_20260209-235834/metrics.json`
+    - Uniform: `runs/E0100_epic_video_cls_local_uniform_full_ms120_t256_v137_s012_20260210-001346/metrics.json`
+    - Random: `runs/E0100_epic_video_cls_local_random_full_ms120_t256_v137_s012_20260210-001929/metrics.json`
+  - Key result: anchored mAP=`0.4028±0.0048` vs uniform mAP=`0.3346±0.0021` (Δ=`+0.0681`); anchored macro_f1@0.5=`0.4194±0.0009` vs uniform=`0.3277±0.0387` (Δ=`+0.0917`).
+  - Note: when `max_steps==max_seconds`, random==uniform because both select all seconds; if you want a meaningful random baseline, set `max_steps < max_seconds`.
+  - Extra diagnostic (meaningful random baseline; tighter budget): `max_seconds=120`, `max_steps=60`, `limit_train_videos=256`, `limit_val_videos=137`, `SEEDS=0,1,2`:
+    - Artifacts: `runs/E0100_epic_video_cls_local_{uniform,random,audio_anchored,oracle}_ms120_steps60_t256_v137_s012_20260210-*/metrics.json`
+    - Result: uniform mAP=`0.3351±0.0048`; random=`0.3340±0.0051`; audio_anchored=`0.3358±0.0135`; oracle=`0.3329±0.0005` (no gain at this tighter budget).
+
 ---
 
 ## 2) Narrative checklist (slides/section headers)
 
-- [ ] **What is new**: “audio is a cheap temporal index; visual budget is allocated only where evidence is likely”.
-- [ ] **Budget definition is sealed**: strict token accounting + fixed budget grid.
-- [ ] **MDE protocol is pre-registered**: Oracle → Predicted + controls (Random / Cheap-visual).
-- [ ] **Why it works / when it fails**: bucketed diagnosis (fallback-heavy, far anchors, 2-high harm) + evidence alignment.
-- [ ] **Robustness**: explicit degradation curves + α lower bound.
-- [ ] **Reproducibility**: dataset verify (`bash scripts/datasets/verify_all.sh`), fixed seeds, saved run artifacts.
+- [x] **What is new**: “audio is a cheap temporal index; visual budget is allocated only where evidence is likely”. (see `docs/oral_narrative.md`)
+- [x] **Budget definition is sealed**: strict token accounting + fixed budget grid. (see `docs/oral_narrative.md`)
+- [x] **MDE protocol is pre-registered**: Oracle → Predicted + controls (Random / Cheap-visual). (see `docs/oral_narrative.md`)
+- [x] **Why it works / when it fails**: bucketed diagnosis (fallback-heavy, far anchors, 2-high harm) + evidence alignment. (see `docs/oral_narrative.md`)
+- [x] **Robustness**: explicit degradation curves + α lower bound. (see `docs/oral_narrative.md`)
+- [x] **Reproducibility**: dataset verify (`bash scripts/datasets/verify_all.sh`), fixed seeds, saved run artifacts.
+  - Evidence:
+    - Dataset status snapshot: `runs/datasets_verify_20260210-022759/datasets_verify.json`
+    - IntentQA LFS pull log (to eliminate pointer mp4s): `artifacts/datasets/intentqa_hf_pull_full_20260210-020508.log`
 
 ---
 

@@ -159,6 +159,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--strategy", type=str, default="ppl", choices=["ppl", "generate"])
     p.add_argument("--out-dir", type=Path, required=True)
+    p.add_argument(
+        "--allow-missing-videos",
+        action="store_true",
+        help="If set, skip missing/corrupted videos during preprocessing and filter out affected items.",
+    )
+    p.add_argument(
+        "--min-items",
+        type=int,
+        default=16,
+        help="Minimum number of items required after filtering (only used when --allow-missing-videos is set).",
+    )
 
     p.add_argument("--model-name", type=str, default=QwenVLConfig.model_name)
     p.add_argument("--device", type=str, default=QwenVLConfig.device)
@@ -185,27 +196,56 @@ def main(argv: list[str] | None = None) -> int:
     if "uniform" not in methods:
         methods = ["uniform"] + methods
 
-    # Preprocess videos once.
+    # Preprocess videos once (with an optional skip-on-failure policy for real-world corruptions).
     p = intentqa_paths()
     vids = sorted({it.video_id for it in items})
     pre_meta: dict[str, dict] = {}
+    ok_vids: set[str] = set()
+    skipped_vids: list[dict] = []
     t_pre = time.time()
     for i, vid in enumerate(vids):
         video_path = p.raw_video_path(vid)
         if not video_path.exists():
+            if bool(args.allow_missing_videos):
+                rec = {"video_id": str(vid), "reason": "missing_video", "video_path": str(video_path)}
+                skipped_vids.append(rec)
+                pre_meta[str(vid)] = {"ok": False, **rec}
+                continue
             raise FileNotFoundError(f"missing IntentQA video: {video_path}")
-        meta = ensure_processed_fps1(
-            video_path=video_path,
-            out_dir=p.processed_video_dir(vid),
-            sample_rate=16000,
-            start_offset_sec=0.5,
-            max_seconds=int(args.max_seconds),
-            force=False,
-        )
-        pre_meta[str(vid)] = meta
+
+        try:
+            meta = ensure_processed_fps1(
+                video_path=video_path,
+                out_dir=p.processed_video_dir(vid),
+                sample_rate=16000,
+                start_offset_sec=0.5,
+                max_seconds=int(args.max_seconds),
+                force=False,
+            )
+            pre_meta[str(vid)] = meta
+            ok_vids.add(str(vid))
+        except Exception as e:  # noqa: BLE001
+            if not bool(args.allow_missing_videos):
+                raise
+            rec = {"video_id": str(vid), "reason": "preprocess_failed", "video_path": str(video_path), "error": repr(e)}
+            skipped_vids.append(rec)
+            pre_meta[str(vid)] = {"ok": False, **rec}
+
         if (i + 1) % 50 == 0 or (i + 1) == len(vids):
             print(f"[intentqa] preprocessed {i+1}/{len(vids)} videos", flush=True)
     pre_s = float(time.time() - t_pre)
+
+    if bool(args.allow_missing_videos):
+        items_before = int(len(items))
+        items = [it for it in items if str(it.video_id) in ok_vids]
+        if len(items) < int(args.min_items):
+            raise SystemExit(
+                f"too few items after filtering missing/corrupted videos: kept={len(items)} "
+                f"< min_items={int(args.min_items)} (before={items_before}, skipped_videos={len(skipped_vids)})"
+            )
+
+    # Persist preprocessing metadata early so partial runs still produce debuggable artifacts.
+    (out_dir / "preprocess_meta.json").write_text(json.dumps(pre_meta, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     # Load VLM.
     model = QwenVL(
@@ -217,44 +257,54 @@ def main(argv: list[str] | None = None) -> int:
         )
     )
 
-    per_method: dict[str, list[dict]] = {m: [] for m in methods}
+    # Stream predictions as we go (instead of only at the end) so long runs are more failure-tolerant.
+    correct_by_method: dict[str, list[float]] = {m: [] for m in methods}
+    invalid_by_method: dict[str, list[float]] = {m: [] for m in methods}
     t0 = time.time()
-    for j, it in enumerate(items):
-        proc_dir = p.processed_video_dir(it.video_id)
-        # Use a stable per-item seed so random baseline stays paired across runs.
-        h = hashlib.sha1(f"{it.qid}|{it.video_id}".encode("utf-8")).hexdigest()
-        item_seed = int(args.seed) + int(h[:8], 16)
-        for m in methods:
-            row = _eval_one(
-                model=model,
-                item=it,
-                processed_dir=proc_dir,
-                method=str(m),
-                budget_frames=int(args.budget_frames),
-                seed=int(item_seed),
-                max_seconds=int(args.max_seconds),
-                strategy=str(args.strategy),
-                ql2l_clap_device=str(args.ql2l_clap_device),
-                ql2l_asr_device=str(args.ql2l_asr_device),
-            )
-            per_method[str(m)].append(row)
-        if (j + 1) % 10 == 0 or (j + 1) == len(items):
-            dt = time.time() - t0
-            print(f"[intentqa] eval {j+1}/{len(items)} items ({dt:.1f}s)", flush=True)
+    with (out_dir / "predictions.jsonl").open("w", encoding="utf-8") as f:
+        for j, it in enumerate(items):
+            proc_dir = p.processed_video_dir(it.video_id)
+            # Use a stable per-item seed so random baseline stays paired across runs.
+            h = hashlib.sha1(f"{it.qid}|{it.video_id}".encode("utf-8")).hexdigest()
+            item_seed = int(args.seed) + int(h[:8], 16)
+            for m in methods:
+                row = _eval_one(
+                    model=model,
+                    item=it,
+                    processed_dir=proc_dir,
+                    method=str(m),
+                    budget_frames=int(args.budget_frames),
+                    seed=int(item_seed),
+                    max_seconds=int(args.max_seconds),
+                    strategy=str(args.strategy),
+                    ql2l_clap_device=str(args.ql2l_clap_device),
+                    ql2l_asr_device=str(args.ql2l_asr_device),
+                )
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+                correct_by_method[str(m)].append(1.0 if row["correct"] else 0.0)
+                invalid_by_method[str(m)].append(1.0 if row["invalid"] else 0.0)
+            if (j + 1) % 10 == 0 or (j + 1) == len(items):
+                f.flush()
+                dt = time.time() - t0
+                print(f"[intentqa] eval {j+1}/{len(items)} items ({dt:.1f}s)", flush=True)
 
     eval_s = float(time.time() - t0)
 
     # Aggregate.
     summaries: list[MethodSummary] = []
     acc_by_method: dict[str, np.ndarray] = {}
-    invalid_by_method: dict[str, np.ndarray] = {}
     for m in methods:
-        rows = per_method[str(m)]
-        correct = np.asarray([1.0 if r["correct"] else 0.0 for r in rows], dtype=np.float64)
-        invalid = np.asarray([1.0 if r["invalid"] else 0.0 for r in rows], dtype=np.float64)
+        correct = np.asarray(correct_by_method[str(m)], dtype=np.float64)
+        invalid = np.asarray(invalid_by_method[str(m)], dtype=np.float64)
         acc_by_method[str(m)] = correct
-        invalid_by_method[str(m)] = invalid
-        summaries.append(MethodSummary(method=str(m), n=int(len(rows)), acc=float(correct.mean() if correct.size else 0.0), invalid_rate=float(invalid.mean() if invalid.size else 0.0)))
+        summaries.append(
+            MethodSummary(
+                method=str(m),
+                n=int(correct.size),
+                acc=float(correct.mean() if correct.size else 0.0),
+                invalid_rate=float(invalid.mean() if invalid.size else 0.0),
+            )
+        )
 
     # Paired deltas vs uniform.
     uniform = acc_by_method["uniform"]
@@ -279,6 +329,8 @@ def main(argv: list[str] | None = None) -> int:
         "timings_s": {"preprocess": float(pre_s), "eval": float(eval_s), "total": float(pre_s + eval_s)},
         "summary": [s.__dict__ for s in summaries],
         "delta_vs_uniform": deltas,
+        "allow_missing_videos": bool(args.allow_missing_videos),
+        "skipped_videos": skipped_vids,
         "artifacts": {
             "predictions_jsonl": str(out_dir / "predictions.jsonl"),
             "metrics_json": str(out_dir / "metrics.json"),
@@ -286,14 +338,7 @@ def main(argv: list[str] | None = None) -> int:
         },
     }
 
-    # Write artifacts.
-    (out_dir / "preprocess_meta.json").write_text(json.dumps(pre_meta, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-
-    with (out_dir / "predictions.jsonl").open("w", encoding="utf-8") as f:
-        for m in methods:
-            for r in per_method[str(m)]:
-                f.write(json.dumps(r, ensure_ascii=False) + "\n")
-
+    # Write final metrics (predictions + preprocess_meta are already streamed/persisted above).
     (out_dir / "metrics.json").write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(out_dir / "metrics.json")
     return 0

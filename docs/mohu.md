@@ -7,6 +7,36 @@
 - (none)
 
 ## Resolved (archive)
+- [x] M0187 (plan: C0005 / exp: E0100): Expand EPIC-SOUNDS local downstream proxy to larger coverage (t256/v137) and record evidence.
+  - Evidence:
+    - logs: `artifacts/experiments/E0100_full/run.log`
+    - artifacts:
+      - `runs/E0100_epic_video_cls_local_audio_anchored_full_ms120_t256_v137_s012_20260209-235834/metrics.json`
+      - `runs/E0100_epic_video_cls_local_uniform_full_ms120_t256_v137_s012_20260210-001346/metrics.json`
+      - `runs/E0100_epic_video_cls_local_random_full_ms120_t256_v137_s012_20260210-001929/metrics.json`
+    - key deltas (anchored vs uniform):
+      - mAP: `0.4028 - 0.3346 = +0.0681`
+      - macro_f1@0.5: `0.4194 - 0.3277 = +0.0917`
+    - docs_updates:
+      - `docs/plan.md`: C0005 expanded evidence pointers updated
+      - `docs/experiment.md`: E0100 checklist/results updated with expanded run
+      - `docs/oral_checklist.md`: added a cross-dataset EPIC item with artifact pointers
+  - Notes: when `max_steps==max_seconds`, random==uniform because both select all seconds; anchored still differs via variable-resolution allocation under an equal token budget.
+  - verification: `jq -r '.summary.mAP, .summary[\"macro_f1@0.5\"]' runs/E0100_epic_video_cls_local_audio_anchored_full_ms120_t256_v137_s012_20260209-235834/metrics.json && jq -r '.summary.mAP, .summary[\"macro_f1@0.5\"]' runs/E0100_epic_video_cls_local_uniform_full_ms120_t256_v137_s012_20260210-001346/metrics.json`
+
+- [x] M0186 (plan: C0001,C0002 / exp: E0003): Re-run official AVE verification flow to regenerate local artifacts and refresh evidence paths.
+  - Evidence:
+    - command_ran: `RUN_ROOT=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402 bash scripts/ave_verify_official_after_install.sh`
+    - logs: `artifacts/experiments/E0003/run.log`
+    - artifacts:
+      - `runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/E0002_anchors_official_val/anchor_eval/anchors_metrics.json`
+      - `runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/E0002_anchors_official_test/anchor_eval/anchors_metrics.json`
+      - `runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/p0_train3339_val402_energy_160_224_352_k2_shift1_std1.0_temporal_conv/metrics.json`
+      - `runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/p0_train3339_test402_energy_160_224_352_k2_shift1_std1.0_temporal_conv/metrics.json`
+    - docs_updates:
+      - `docs/plan.md`: C0001/C0002 evidence pointers updated to `runs/REAL_AVE_OFFICIAL_RERUN_*/...` (glob) so the repo is locally reproducible.
+      - `docs/evidence_matrix.md`: regenerated; C0001/C0002 now show “Local artifacts present? yes”.
+    - verification: `python scripts/plan_evidence_matrix.py --write-docs-md`
 - [x] M0179 (plan: C0005 / exp: E0413): Unblock EPIC-SOUNDS real-data run and produce real local mAP/macro-F1 evidence.
   - Decision:
     - Use the currently available real EPIC local videos with `ALLOW_MISSING_VIDEOS=1` (coverage: `mp4_count=33`, train=17, val=16).
