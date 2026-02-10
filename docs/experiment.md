@@ -150,17 +150,31 @@
   - logs: `artifacts/experiments/E0609/run.log`
   - backfill: done (see `### E0609`).
 
-- [ ] E0615 (real; ppl; seed=0): AVQA VLM evaluation under budgeted frame selection (val subset; download drift allowed)
+- [x] E0615 (real; ppl; seed=0): AVQA VLM evaluation under budgeted frame selection (val subset; download drift allowed)
   - command: `OUT_DIR=runs/E0615_avqa_vlm_eval_val_$(date +%Y%m%d-%H%M%S) SPLIT=val LIMIT=256 METHODS=uniform,random,audio,cheap_visual,fused,ql2l_clap,ql2l_asr_bm25,ql2l_clip,text_only B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu QL2L_CLIP_DEVICE=cuda:3 ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=200 bash scripts/e0615_avqa_vlm_eval.sh`
   - configs: []
   - seeds: [0]
   - required_artifacts:
-    - `runs/E0615_avqa_vlm_eval_val_*/metrics.json`
-    - `runs/E0615_avqa_vlm_eval_val_*/predictions.jsonl`
-    - `runs/E0615_avqa_vlm_eval_val_*/preprocess_meta.json`
+    - `runs/E0615_avqa_vlm_eval_val_20260211-043508/metrics.json`
+    - `runs/E0615_avqa_vlm_eval_val_20260211-043508/predictions.jsonl`
+    - `runs/E0615_avqa_vlm_eval_val_20260211-043508/preprocess_meta.json`
   - required_metrics:
     - `metrics.json`: `summary[*].{acc,invalid_rate}`, `delta_vs_uniform`, `skipped_videos`
   - logs: `artifacts/experiments/E0615/run.log`
+  - backfill: done (see `### E0615`).
+
+- [x] E0616 (real; ppl; seed=0; tight budget): AVQA VLM evaluation under budgeted frame selection (`B_FRAMES=4`; selection methods must diverge)
+  - command: `OUT_DIR=runs/E0616_avqa_vlm_eval_val_b4_$(date +%Y%m%d-%H%M%S) SPLIT=val LIMIT=256 METHODS=uniform,random,audio,cheap_visual,fused,ql2l_clap,ql2l_asr_bm25,ql2l_clip,text_only B_FRAMES=4 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu QL2L_CLIP_DEVICE=cuda:3 ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=200 bash scripts/e0615_avqa_vlm_eval.sh`
+  - configs: []
+  - seeds: [0]
+  - required_artifacts:
+    - `runs/E0616_avqa_vlm_eval_val_b4_20260211-051556/metrics.json`
+    - `runs/E0616_avqa_vlm_eval_val_b4_20260211-051556/predictions.jsonl`
+    - `runs/E0616_avqa_vlm_eval_val_b4_20260211-051556/preprocess_meta.json`
+  - required_metrics:
+    - `metrics.json`: `summary[*].{acc,invalid_rate}`, `delta_vs_uniform`, `skipped_videos`
+  - logs: `artifacts/experiments/E0616/run.log`
+  - backfill: done (see `### E0616`).
 
 - [x] E0003: Official AVE full-dataset validation (multi-GPU)
   - command: `RUN_ROOT=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402 bash scripts/ave_verify_official_after_install.sh`
@@ -245,7 +259,8 @@
 | E0608 | success | EgoSchema Subset test (n=256; seed1): uniform acc=0.5859; ql2l_clap acc=0.5352; ql2l_asr_bm25 acc=0.5469 | `runs/E0608_egoschema_eval_subset256_s1_20260210-201700/` | matches seed0; invalid_rate=0 |
 | E0606 | success | EgoSchema Subset test (n=500; seed0): uniform acc=0.5880; ql2l_clip acc=0.5760; ql2l_clap=0.5480; ql2l_asr_bm25=0.5560 (invalid_rate=0) | `runs/E0606_egoschema_eval_subset500_clip_20260211-031138/` | ql2l_clip improves over other ql2l baselines but still < uniform |
 | E0609 | success | IntentQA val (n=253): uniform acc=0.9447; ql2l_clap acc=0.9486; cheap_visual acc=0.9526; ql2l_clip acc=0.9368 (Δ=-0.0079) | `runs/E0609_intentqa_vlm_eval_val_clip_20260211-011407/` | adds CLIP query-relevance baseline; skipped_videos=1 |
-| E0615 | pending | AVQA val subset: add extra dataset + include `text_only` baseline; download drift allowed | `runs/E0615_avqa_vlm_eval_val_*/` | requires AVQA clips (see `data/AVQA/meta/download_ok_val_auto.txt`) |
+| E0615 | success | AVQA val (n=212; seed0): uniform acc=0.8160; text_only acc=0.3113 (others identical to uniform) | `runs/E0615_avqa_vlm_eval_val_20260211-043508/` | budget_frames=16 >= clip duration, so all frame-selection methods degenerate to full coverage; rerun with tighter budget for method separation |
+| E0616 | success | AVQA val (n=212; B_FRAMES=4): uniform acc=0.8113; best=0.8255 (+0.0142; cheap_visual/fused/ql2l_asr_bm25); ql2l_clip=0.8208; audio/ql2l_clap=0.8160; text_only=0.3113 | `runs/E0616_avqa_vlm_eval_val_b4_20260211-051556/` | skipped_videos=44; invalid_rate=0 |
 
 > Note: The authoritative runnable queue for the current `docs/plan.md` is the checklist above. The `## Experiments` catalog below is an archive; its internal `[ ]` fields are not a TODO list.
 
@@ -5322,11 +5337,27 @@ Notes (2026-02-10 rerun; artifact paths locally present):
 | Dataset | AVQA (val). |
 | Model | VLM: Qwen2-VL (default). |
 | Code path | `avs/experiments/avqa_vlm_eval.py`, `scripts/e0615_avqa_vlm_eval.sh`, `avs/datasets/avqa_download.py` |
-| Params | `SPLIT=val`, `LIMIT=256` (matches downloaded subset), `B_FRAMES=16`, `MAX_SECONDS=120`, `SEED=0`, `METHODS=...+text_only`, `ALLOW_MISSING_VIDEOS=1`, `MIN_ITEMS=200`. |
+| Params | `SPLIT=val`, `LIMIT=256` (matches downloaded subset), `B_FRAMES=16`, `MAX_SECONDS=120`, `SEED=0`, `METHODS=...+text_only`, `ALLOW_MISSING_VIDEOS=1`, `MIN_ITEMS=200`. Note: clips are ~10s, so `B_FRAMES=16` effectively selects all seconds (method separation collapses). |
 | Metrics (must save) | `metrics.json` + `predictions.jsonl` + `preprocess_meta.json`. |
 | Full cmd | See the checklist entry (OUT_DIR uses `runs/E0615_avqa_vlm_eval_val_*`). |
 | Smoke | [ ] |
-| Full | [ ] |
+| Full | [x] |
 | Logs | `artifacts/experiments/E0615/run.log` |
-| Artifacts | `runs/E0615_avqa_vlm_eval_val_*/metrics.json` (pending). |
-| Results | Pending. |
+| Artifacts | `runs/E0615_avqa_vlm_eval_val_20260211-043508/metrics.json`, `runs/E0615_avqa_vlm_eval_val_20260211-043508/predictions.jsonl`, `runs/E0615_avqa_vlm_eval_val_20260211-043508/preprocess_meta.json` |
+| Results | Kept `n=212` (skipped_videos=44; invalid_rate=0). All frame-selection methods tie because `B_FRAMES=16 >= duration_seconds≈10`: uniform/random/audio/cheap_visual/fused/ql2l_clap/ql2l_asr_bm25/ql2l_clip all acc=0.8160. `text_only` acc=0.3113 (large gap, so language bias is low on this subset). |
+
+### E0616: AVQA VLM evaluation under budgeted frame selection (tight budget; `B_FRAMES=4`)
+| Field | Value |
+| --- | --- |
+| Objective | Make AVQA a meaningful frame-selection benchmark by enforcing a tighter budget (`B_FRAMES=4`) on ~10s clips, so uniform/random/query-aware methods actually select different frames. |
+| Dataset | AVQA (val). |
+| Model | VLM: Qwen2-VL (default). |
+| Code path | `avs/experiments/avqa_vlm_eval.py`, `scripts/e0615_avqa_vlm_eval.sh` |
+| Params | Same as E0615, except `B_FRAMES=4`. Keep `text_only` in METHODS. |
+| Metrics (must save) | `metrics.json` + `predictions.jsonl` + `preprocess_meta.json`. |
+| Full cmd | See the checklist entry (OUT_DIR uses `runs/E0616_avqa_vlm_eval_val_b4_*`). |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `artifacts/experiments/E0616/run.log` |
+| Artifacts | `runs/E0616_avqa_vlm_eval_val_b4_20260211-051556/metrics.json`, `runs/E0616_avqa_vlm_eval_val_b4_20260211-051556/predictions.jsonl`, `runs/E0616_avqa_vlm_eval_val_b4_20260211-051556/preprocess_meta.json` |
+| Results | Kept `n=212` (skipped_videos=44; invalid_rate=0). Acc by method: uniform=0.8113; random=0.8066; audio=0.8160; cheap_visual=0.8255; fused=0.8255; ql2l_clap=0.8160; ql2l_asr_bm25=0.8255; ql2l_clip=0.8208; text_only=0.3113. |

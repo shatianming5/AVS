@@ -153,9 +153,11 @@ This section is **optional** for the core AVE oral pack, but is a high-leverage 
 
 ### B. Minimum cross-dataset runs (small but decisive)
 
-- [ ] **AVQA (val subset)**: run `scripts/e0615_avqa_vlm_eval.sh` on a downloaded val subset (target `n>=128` after skipping missing videos), and report:
-  - `uniform` / `random` / `audio` / `cheap_visual` / `fused` / `ql2l_clap` / `ql2l_asr_bm25` / `ql2l_clip`
-  - skipped_videos + invalid_rate
+- [x] **AVQA (val subset)**: end-to-end run complete (download drift allowed):
+  - `runs/E0615_avqa_vlm_eval_val_20260211-043508/metrics.json` (kept n=212; skipped_videos=44; invalid_rate=0).
+  - Note: `B_FRAMES=16` exceeds clip duration (~10s), so all frame-selection methods tie; keep this as a *sanity check* + `text_only` language-bias baseline.
+- [x] **AVQA (tight budget)**: rerun with `B_FRAMES=4` so selection methods diverge:
+  - `runs/E0616_avqa_vlm_eval_val_b4_20260211-051556/metrics.json` (best=0.8255 vs uniform=0.8113; `text_only`=0.3113; skipped_videos=44).
 - [x] **EgoSchema Subset (n=500)**: `ql2l_clip` baseline run complete:
   - `runs/E0606_egoschema_eval_subset500_clip_20260211-031138/metrics.json` (uniform acc=0.5880; ql2l_clip acc=0.5760; still < uniform).
 
