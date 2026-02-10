@@ -3438,6 +3438,92 @@ def _compute_scores_by_clip(
             if (i + 1) % 200 == 0 or (i + 1) == len(clip_ids):
                 dt = _time.time() - t0
                 print(f"[scores] {i+1}/{len(clip_ids)} clips ({dt:.1f}s)", flush=True)
+    elif method in ("av_basic_lr", "av_basic_mlp"):
+        # Supervised, lightweight A+cheapV scoring: audio basic features + frame-diff scalar.
+        #
+        # This is mostly a diagnostic Stage-1 backend: it uses a cheap per-second visual motion proxy
+        # derived from pre-extracted frames under processed_dir/<cid>/frames/.
+        if train_ids is None or labels_by_clip is None:
+            raise ValueError(f"{method} requires train_ids and labels_by_clip")
+
+        from avs.audio.features import audio_features_per_second
+        from avs.experiments.ave_p0 import _train_audio_basic_lr_eventness, _train_audio_basic_mlp_eventness
+        from avs.vision.cheap_eventness import frame_diff_eventness, list_frames
+
+        import numpy as np
+        import torch
+
+        train_ids = [str(x) for x in train_ids]
+
+        feats_by_train: dict[str, np.ndarray] = {}
+        for i, cid in enumerate(train_ids):
+            wav_path = processed_dir / cid / "audio.wav"
+            a = audio_features_per_second(wav_path, num_segments=int(num_segments), feature_set="basic").astype(
+                np.float32, copy=False
+            )
+
+            frames_dir = processed_dir / cid / "frames"
+            frames = list_frames(frames_dir) if frames_dir.exists() else []
+            fd = frame_diff_eventness(frames, size=32) if frames else []
+
+            v = np.zeros((int(num_segments), 1), dtype=np.float32)
+            for t, s in enumerate(fd[: int(num_segments)]):
+                v[int(t), 0] = float(s)
+
+            if a.shape[0] != int(num_segments):
+                raise ValueError(f"unexpected audio feature shape for {cid}: {a.shape}")
+
+            feats_by_train[cid] = np.concatenate([a, v], axis=1).astype(np.float32, copy=False)
+
+            if (i + 1) % 200 == 0 or (i + 1) == len(train_ids):
+                dt = _time.time() - t0
+                print(f"[{method}] feats train {i+1}/{len(train_ids)} clips ({dt:.1f}s)", flush=True)
+
+        if method == "av_basic_lr":
+            model = _train_audio_basic_lr_eventness(
+                clip_ids_train=train_ids,
+                labels_by_clip=labels_by_clip,
+                audio_feats_by_clip=feats_by_train,
+                device="cpu",
+            )
+        else:
+            model = _train_audio_basic_mlp_eventness(
+                clip_ids_train=train_ids,
+                labels_by_clip=labels_by_clip,
+                audio_feats_by_clip=feats_by_train,
+                device="cpu",
+            )
+        model_cpu = model.to(torch.device("cpu"))
+        model_cpu.eval()
+
+        for i, cid in enumerate(clip_ids):
+            feats = feats_by_train.get(cid)
+            if feats is None:
+                wav_path = processed_dir / cid / "audio.wav"
+                a = audio_features_per_second(wav_path, num_segments=int(num_segments), feature_set="basic").astype(
+                    np.float32, copy=False
+                )
+
+                frames_dir = processed_dir / cid / "frames"
+                frames = list_frames(frames_dir) if frames_dir.exists() else []
+                fd = frame_diff_eventness(frames, size=32) if frames else []
+
+                v = np.zeros((int(num_segments), 1), dtype=np.float32)
+                for t, s in enumerate(fd[: int(num_segments)]):
+                    v[int(t), 0] = float(s)
+
+                if a.shape[0] != int(num_segments):
+                    raise ValueError(f"unexpected audio feature shape for {cid}: {a.shape}")
+                feats = np.concatenate([a, v], axis=1).astype(np.float32, copy=False)
+
+            with torch.no_grad():
+                logits = model_cpu(torch.from_numpy(feats).float()).squeeze(-1)
+                s_np = logits.detach().cpu().numpy().astype(np.float32)
+            out[cid] = [float(x) for x in s_np.tolist()]
+
+            if (i + 1) % 200 == 0 or (i + 1) == len(clip_ids):
+                dt = _time.time() - t0
+                print(f"[scores] {i+1}/{len(clip_ids)} clips ({dt:.1f}s)", flush=True)
     elif method == "av_panns_embed_clipdiff_mlp":
         # Supervised, lightweight A+V scoring: PANNs embeddings + semantic motion proxy (CLIP feature diff).
         # Trains on train split to predict event vs background; returns per-second logits as Stage-1 scores.

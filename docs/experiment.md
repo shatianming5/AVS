@@ -56,6 +56,41 @@
   - logs: `artifacts/experiments/E0602_full_subset_ppl/run.log`
   - backfill: done (see `### E0602`).
 
+### Run Queue (Long-Video QA; extended; sequential)
+- [x] E0604 (real; ppl; seeds=0,1): IntentQA VLM evaluation under budgeted frame selection (val; multi-seed)
+  - command:
+    - `OUT_DIR=runs/E0604_intentqa_vlm_eval_val_s0_20260210-125048 SPLIT=val LIMIT=256 METHODS=uniform,random,audio,cheap_visual,fused,ql2l_clap,ql2l_asr_bm25 B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=250 bash scripts/e0600_intentqa_vlm_eval.sh`
+    - `OUT_DIR=runs/E0604_intentqa_vlm_eval_val_s1_20260210-125048 SPLIT=val LIMIT=256 METHODS=uniform,random,cheap_visual,ql2l_clap B_FRAMES=16 MAX_SECONDS=120 SEED=1 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=250 bash scripts/e0600_intentqa_vlm_eval.sh`
+  - configs: []
+  - seeds: [0, 1]
+  - required_artifacts:
+    - `runs/E0604_intentqa_vlm_eval_val_s0_20260210-125048/metrics.json`
+    - `runs/E0604_intentqa_vlm_eval_val_s0_20260210-125048/predictions.jsonl`
+    - `runs/E0604_intentqa_vlm_eval_val_s0_20260210-125048/preprocess_meta.json`
+    - `runs/E0604_intentqa_vlm_eval_val_s1_20260210-125048/metrics.json`
+    - `runs/E0604_intentqa_vlm_eval_val_s1_20260210-125048/predictions.jsonl`
+    - `runs/E0604_intentqa_vlm_eval_val_s1_20260210-125048/preprocess_meta.json`
+  - required_metrics:
+    - `metrics.json`: `summary[*].{acc,invalid_rate}`, `delta_vs_uniform`, `skipped_videos`
+  - logs:
+    - `artifacts/experiments/E0604_val_s0/run.log`
+    - `artifacts/experiments/E0604_val_s1/run.log`
+  - backfill: done (see `### E0604`).
+
+- [ ] E0605 (real; ppl; seed=0; CONFIG=Subset full): EgoSchema VLM eval (labeled Subset; full n=500)
+  - command:
+    - `OUT_DIR=runs/E0605_egoschema_eval_subset500_s0_20260210-125048 CONFIG=Subset SPLIT=test LIMIT=0 METHODS=uniform,ql2l_clap,ql2l_asr_bm25 B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu bash scripts/e0602_egoschema_predict.sh`
+  - configs: []
+  - seeds: [0]
+  - required_artifacts:
+    - `runs/E0605_egoschema_eval_subset500_s0_20260210-125048/metrics.json`
+    - `runs/E0605_egoschema_eval_subset500_s0_20260210-125048/predictions.jsonl`
+    - `runs/E0605_egoschema_eval_subset500_s0_20260210-125048/preprocess_meta.json`
+  - required_metrics:
+    - `metrics.json`: `summary[*].acc` (not null for all methods), `summary[*].invalid_rate`
+  - logs:
+    - `artifacts/experiments/E0605_subset500_s0/run.log`
+
 - [x] E0003: Official AVE full-dataset validation (multi-GPU)
   - command: `RUN_ROOT=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402 bash scripts/ave_verify_official_after_install.sh`
   - configs: []
@@ -133,6 +168,8 @@
 | E0600 | success | IntentQA val (n=253): uniform acc=0.9447; cheap_visual acc=0.9526; ql2l_clap acc=0.9486 | `runs/E0600_intentqa_vlm_eval_full_20260210-041911/` | Qwen2-VL-2B; `budget_frames=16`, `max_seconds=120`, `strategy=ppl` |
 | E0601 | success | IntentQA faithfulness (n=253; ql2l_clap): acc=0.9486; acc_drop=0.0000; pred_change_rate=0.0316 | `runs/E0601_intentqa_faithfulness_full_20260210-061137/` | delete-and-predict proxy; invalid_rate=0 |
 | E0602 | success | EgoSchema Subset test (n=256): uniform acc=0.5859; ql2l_clap acc=0.5352; ql2l_asr_bm25 acc=0.5469 | `runs/E0602_egoschema_eval_subset_full_20260210-064250/` | Qwen2-VL-2B; `budget_frames=16`, `max_seconds=120`, `strategy=ppl` |
+| E0604 | success | IntentQA val (n=253): seed0 uniform=0.9447, cheap_visual=0.9526, ql2l_clap=0.9486; seed1 uniform=0.9447, cheap_visual=0.9526, ql2l_clap=0.9486 | `runs/E0604_intentqa_vlm_eval_val_s*_20260210-125048/` | seed1 ran reduced METHODS (uniform,random,cheap_visual,ql2l_clap) due to runtime |
+| E0605 | pending |  | `runs/E0605_egoschema_eval_subset500_s0_20260210-125048/` | Subset full n=500; seed=0 |
 
 > Note: The authoritative runnable queue for the current `docs/plan.md` is the checklist above. The `## Experiments` catalog below is an archive; its internal `[ ]` fields are not a TODO list.
 
@@ -5058,3 +5095,35 @@ Follow-ups (train3339→test402; same token budget=1960):
 | Outputs | `runs/E0603_allocator_ablation_*/allocator_ablation.json` |
 | Artifacts | `runs/E0603_allocator_ablation_20260209-035300/allocator_ablation.json` |
 | Results | Lagrangian knapsack achieves slightly higher utility than greedy at similar/better budget usage (`delta.utility≈+0.0195`, `delta.cost≈+204.6` under `budget=20000`, `num_windows=12`, `seed=0`). |
+
+### E0604: IntentQA VLM evaluation under budgeted frame selection (multi-seed)
+| Field | Value |
+| --- | --- |
+| Objective | Upgrade E0600 from a single-seed run to a small multi-seed evaluation (SEEDS=0,1) under identical budgets/methods. |
+| Dataset | IntentQA (CSV + videos). |
+| Model | VLM: Qwen2-VL (default). |
+| Code path | `avs/experiments/intentqa_vlm_eval.py`, `scripts/e0600_intentqa_vlm_eval.sh` |
+| Params | Same as E0600, plus `SEED∈{0,1}`. |
+| Metrics (must save) | Per-seed `metrics.json` + `predictions.jsonl` + `preprocess_meta.json`. |
+| Full cmd | See the checklist entry (2 exact commands with fixed OUT_DIRs). |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `artifacts/experiments/E0604_val_s*/run.log` |
+| Artifacts | `runs/E0604_intentqa_vlm_eval_val_s*_20260210-125048/*` |
+| Results | Seed0 full METHODS (`uniform,random,audio,cheap_visual,fused,ql2l_clap,ql2l_asr_bm25`): uniform acc=0.944664, random=0.932806, audio=0.944664, cheap_visual=0.952569, fused=0.940711, ql2l_clap=0.948617, ql2l_asr_bm25=0.940711 (invalid_rate=0; n=253). Seed1 reduced METHODS (`uniform,random,cheap_visual,ql2l_clap`): uniform acc=0.944664, random=0.936759, cheap_visual=0.952569, ql2l_clap=0.948617 (invalid_rate=0; n=253). |
+
+### E0605: EgoSchema Subset VLM evaluation under budgeted frame selection (full n=500)
+| Field | Value |
+| --- | --- |
+| Objective | Upgrade E0602 from Subset(256) to the full labeled Subset split (n=500) and run SEED=0 for the complete config backfill. |
+| Dataset | EgoSchema (HF repo clone + extracted videos). |
+| Model | VLM: Qwen2-VL (default). |
+| Code path | `avs/experiments/egoschema_vlm_eval.py`, `scripts/e0602_egoschema_predict.sh` |
+| Params | `CONFIG=Subset`, `SPLIT=test`, `LIMIT=0` (full), `SEED=0`. |
+| Metrics (must save) | Per-seed `metrics.json` + `predictions.jsonl` + `preprocess_meta.json`. |
+| Full cmd | See the checklist entry (1 exact command with fixed OUT_DIR). |
+| Smoke | [ ] |
+| Full | [ ] |
+| Logs | `artifacts/experiments/E0605_subset500_s*/run.log` |
+| Artifacts | `runs/E0605_egoschema_eval_subset500_s*_20260210-125048/*` |
+| Results | pending |
