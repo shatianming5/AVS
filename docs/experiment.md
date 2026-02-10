@@ -5037,6 +5037,17 @@ Follow-ups (train3339→test402; same token budget=1960):
 | Artifacts | `runs/E0505_degradation_accuracy_dense_stride_smoke_20260207-151846/degradation_accuracy.json`, `runs/E0505_degradation_accuracy_dense_stride_full_20260207-161213/degradation_accuracy.json`, `runs/E0505_degradation_accuracy_dense_stride_full_20260207-161213/degradation_plots/*.png` |
 | Results | Full perturbation grid completed (`rows=54`, `shift∈{-0.5,0,0.5}`, `snr∈{20,10,0}`, `silence∈{0,0.5}`, `alpha∈{0,0.5,1}`). `alpha_floor_checks`: `num_fail=0`, `min_margin≈+0.01766` (rule `anchored_top2_mean >= alpha * uniform_mean`). Mean `anchored-uniform` by alpha: `α=0:≈+0.00766`, `α=0.5:≈+0.01300`, `α=1:≈+0.01766`. |
 
+### E0510: Stage-1 sweep on val402 (cheap supervised A+cheapV eventness; `av_basic_mlp`)
+| Field | Value |
+| --- | --- |
+| Objective | Try a lightweight, supervised Stage-1 scoring backend: audio basic features + a cheap frame-diff scalar (`EVENTNESS=av_basic_mlp`). Run the standard official val402 sweep under `candidate_set=ltl_top1med_norm_v1` to test whether this direction is competitive for C0003 (+2% on test402). |
+| Code path | `avs/experiments/ave_p0_sweep.py` (`_compute_scores_by_clip`), `avs/experiments/ave_p0.py` (`_train_audio_basic_mlp_eventness`), `avs/vision/cheap_eventness.py` (`frame_diff_eventness`) |
+| Params | `EVENTNESS=av_basic_mlp`, `CANDIDATE_SET=ltl_top1med_norm_v1`, `SEEDS=0..2`, `AUDIO_DEVICE=cpu`, `TRAIN_DEVICE=cuda:3` |
+| Full cmd | `SEEDS=0,1,2 EVENTNESS=av_basic_mlp CANDIDATE_SET=ltl_top1med_norm_v1 AUDIO_DEVICE=cpu TRAIN_DEVICE=cuda:3 bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh` |
+| Logs | `artifacts/experiments/E0510_av_basic_mlp_val402/run.log` |
+| Artifacts | `runs/E0510_ave_p0_sweep_official_val_av_basic_mlp_ltl_top1med_norm_v1_20260210-161514/sweep_summary.json`, `runs/E0510_ave_p0_sweep_official_val_av_basic_mlp_ltl_top1med_norm_v1_20260210-161514/best_config.json`, `runs/E0510_ave_p0_sweep_official_val_av_basic_mlp_ltl_top1med_norm_v1_20260210-161514/eventness_scores.json` |
+| Results | Best val402 config is near-0: `runs/E0510_ave_p0_sweep_official_val_av_basic_mlp_ltl_top1med_norm_v1_20260210-161514/sweep_summary.json` (best=`ltltop1medn_thr0p7_shift1`, `Δ≈+0.00183`, `p≈0.677`). Conclusion: not competitive; stop before test402. |
+
 ---
 
 ### E0600: IntentQA VLM evaluation under budgeted frame selection

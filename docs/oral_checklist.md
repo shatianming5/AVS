@@ -110,6 +110,7 @@ For any new Stage-1 signal / method targeting C0003:
   - Last attempt: `av_panns_embed_clipdiff_mlp` (E0390) — PANNs embeddings + cheap CLIPdiff scalar → per-second MLP is not competitive on val402 (`runs/E0390_ave_p0_sweep_official_val_av_panns_embed_clipdiff_mlp_ltl_top1med_norm_v1_20260206-102257/sweep_summary.json`, best Δ≈+0.00374, p≈0.542); stop before test402 (skip E0391/E0392).
   - Last attempt: `av_clipdiff_flow_mlp` (E0393) — optical-flow magnitude (Farneback) + CLIPdiff + audio basic features → per-second MLP does not beat baseline on val402 (`runs/E0393_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_ltl_top1med_norm_v1_20260206-104413/sweep_summary.json`, best Δ≈+0.00881, p≈0.0971); stop before test402 (skip E0394/E0395).
   - Last attempt: `ltl_top1med_k1_extreme_v1` with fixed `av_clipdiff_flow_mlp` (E0396) — aggressive Stage-2 dynamic-K search regresses on val402 (`runs/E0396_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_ltl_top1med_k1_extreme_v1_20260206-130114/sweep_summary.json`, best Δ≈-0.00125, p≈0.924); stop before test402 (skip E0397/E0398).
+  - Last attempt: `av_basic_mlp` (E0510) — supervised audio basic + frame-diff scalar is near-0 on val402 (`runs/E0510_ave_p0_sweep_official_val_av_basic_mlp_ltl_top1med_norm_v1_20260210-161514/sweep_summary.json`, best Δ≈+0.00183, p≈0.677); stop before test402.
 
 ---
 
