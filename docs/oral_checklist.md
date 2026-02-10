@@ -147,7 +147,10 @@ This section is **optional** for the core AVE oral pack, but is a high-leverage 
 
 ### A. Minimum baselines (no-cherry-pick)
 
-- [ ] **Question-only baseline** (no frames) on IntentQA/EgoSchema/AVQA to quantify language bias (report acc + invalid_rate).
+- [x] **Question-only baseline** (no frames) on IntentQA/EgoSchema/AVQA to quantify language bias:
+  - IntentQA: `runs/E0617_intentqa_vlm_eval_val_text_only_20260211-053301/metrics.json` (uniform=0.9447; text_only=0.6640).
+  - EgoSchema: `runs/E0618_egoschema_eval_subset500_text_only_20260211-055131/metrics.json` (uniform=0.5880; text_only=0.2720).
+  - AVQA: `runs/E0616_avqa_vlm_eval_val_b4_20260211-051556/metrics.json` (uniform=0.8113; text_only=0.3113).
 - [x] **ql2l_clip baseline added** (query→CLIP text-image relevance; cached image embeddings per video) and evaluated on IntentQA val:
   - `runs/E0609_intentqa_vlm_eval_val_clip_20260211-011407/metrics.json` (`ql2l_clip` is worse than uniform; keep as negative-but-clean evidence).
 

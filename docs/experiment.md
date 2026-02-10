@@ -137,6 +137,19 @@
   - logs: `artifacts/experiments/E0606/run.log`
   - backfill: done (see `### E0606`).
 
+- [x] E0618 (real; ppl; seed=0; text_only): EgoSchema language-bias baseline (uniform vs text_only; Subset n=500)
+  - command: `OUT_DIR=runs/E0618_egoschema_eval_subset500_text_only_$(date +%Y%m%d-%H%M%S) CONFIG=Subset SPLIT=test LIMIT=0 METHODS=uniform,text_only B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cpu QL2L_ASR_DEVICE=cpu QL2L_CLIP_DEVICE=cpu bash scripts/e0602_egoschema_predict.sh`
+  - configs: []
+  - seeds: [0]
+  - required_artifacts:
+    - `runs/E0618_egoschema_eval_subset500_text_only_20260211-055131/metrics.json`
+    - `runs/E0618_egoschema_eval_subset500_text_only_20260211-055131/predictions.jsonl`
+    - `runs/E0618_egoschema_eval_subset500_text_only_20260211-055131/preprocess_meta.json`
+  - required_metrics:
+    - `metrics.json`: `summary[*].acc` (not null), `summary[*].invalid_rate`
+  - logs: `artifacts/experiments/E0618/run.log`
+  - backfill: done (see `### E0618`).
+
 - [x] E0609 (real; ppl; seed=0; +ql2l_clip): IntentQA VLM evaluation under budgeted frame selection (val n=253)
   - command: `OUT_DIR=runs/E0609_intentqa_vlm_eval_val_clip_20260211-011407 SPLIT=val LIMIT=256 METHODS=uniform,random,audio,cheap_visual,fused,ql2l_clap,ql2l_asr_bm25,ql2l_clip B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu QL2L_CLIP_DEVICE=cuda:3 ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=250 bash scripts/e0600_intentqa_vlm_eval.sh`
   - configs: []
@@ -149,6 +162,19 @@
     - `metrics.json`: `summary[*].{acc,invalid_rate}`, `delta_vs_uniform`, `skipped_videos`
   - logs: `artifacts/experiments/E0609/run.log`
   - backfill: done (see `### E0609`).
+
+- [x] E0617 (real; ppl; seed=0; text_only): IntentQA language-bias baseline (uniform vs text_only; val n=253)
+  - command: `OUT_DIR=runs/E0617_intentqa_vlm_eval_val_text_only_20260211-053301 SPLIT=val LIMIT=256 METHODS=uniform,text_only B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cpu QL2L_ASR_DEVICE=cpu QL2L_CLIP_DEVICE=cpu ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=250 bash scripts/e0600_intentqa_vlm_eval.sh`
+  - configs: []
+  - seeds: [0]
+  - required_artifacts:
+    - `runs/E0617_intentqa_vlm_eval_val_text_only_20260211-053301/metrics.json`
+    - `runs/E0617_intentqa_vlm_eval_val_text_only_20260211-053301/predictions.jsonl`
+    - `runs/E0617_intentqa_vlm_eval_val_text_only_20260211-053301/preprocess_meta.json`
+  - required_metrics:
+    - `metrics.json`: `summary[*].{acc,invalid_rate}`, `delta_vs_uniform`, `skipped_videos`
+  - logs: `artifacts/experiments/E0617/run.log`
+  - backfill: done (see `### E0617`).
 
 - [x] E0615 (real; ppl; seed=0): AVQA VLM evaluation under budgeted frame selection (val subset; download drift allowed)
   - command: `OUT_DIR=runs/E0615_avqa_vlm_eval_val_$(date +%Y%m%d-%H%M%S) SPLIT=val LIMIT=256 METHODS=uniform,random,audio,cheap_visual,fused,ql2l_clap,ql2l_asr_bm25,ql2l_clip,text_only B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu QL2L_CLIP_DEVICE=cuda:3 ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=200 bash scripts/e0615_avqa_vlm_eval.sh`
@@ -258,7 +284,9 @@
 | E0607 | success | IntentQA faithfulness (n=253; ql2l_clap; seed1): acc=0.9486; acc_drop=0.0000; pred_change_rate=0.0316 | `runs/E0607_intentqa_faithfulness_val_s1_20260210-194732/` | matches seed0; invalid_rate=0 |
 | E0608 | success | EgoSchema Subset test (n=256; seed1): uniform acc=0.5859; ql2l_clap acc=0.5352; ql2l_asr_bm25 acc=0.5469 | `runs/E0608_egoschema_eval_subset256_s1_20260210-201700/` | matches seed0; invalid_rate=0 |
 | E0606 | success | EgoSchema Subset test (n=500; seed0): uniform acc=0.5880; ql2l_clip acc=0.5760; ql2l_clap=0.5480; ql2l_asr_bm25=0.5560 (invalid_rate=0) | `runs/E0606_egoschema_eval_subset500_clip_20260211-031138/` | ql2l_clip improves over other ql2l baselines but still < uniform |
+| E0618 | success | EgoSchema Subset test (n=500): uniform acc=0.5880; text_only acc=0.2720 (Δ=-0.3160) | `runs/E0618_egoschema_eval_subset500_text_only_20260211-055131/` | invalid_rate=0 |
 | E0609 | success | IntentQA val (n=253): uniform acc=0.9447; ql2l_clap acc=0.9486; cheap_visual acc=0.9526; ql2l_clip acc=0.9368 (Δ=-0.0079) | `runs/E0609_intentqa_vlm_eval_val_clip_20260211-011407/` | adds CLIP query-relevance baseline; skipped_videos=1 |
+| E0617 | success | IntentQA val (n=253): uniform acc=0.9447; text_only acc=0.6640 (Δ=-0.2806) | `runs/E0617_intentqa_vlm_eval_val_text_only_20260211-053301/` | skipped_videos=1; invalid_rate=0 |
 | E0615 | success | AVQA val (n=212; seed0): uniform acc=0.8160; text_only acc=0.3113 (others identical to uniform) | `runs/E0615_avqa_vlm_eval_val_20260211-043508/` | budget_frames=16 >= clip duration, so all frame-selection methods degenerate to full coverage; rerun with tighter budget for method separation |
 | E0616 | success | AVQA val (n=212; B_FRAMES=4): uniform acc=0.8113; best=0.8255 (+0.0142; cheap_visual/fused/ql2l_asr_bm25); ql2l_clip=0.8208; audio/ql2l_clap=0.8160; text_only=0.3113 | `runs/E0616_avqa_vlm_eval_val_b4_20260211-051556/` | skipped_videos=44; invalid_rate=0 |
 
@@ -5314,6 +5342,22 @@ Notes (2026-02-10 rerun; artifact paths locally present):
 | Results | (n=253; seed=0; invalid_rate=0): uniform acc=0.944664; ql2l_clap acc=0.948617; cheap_visual acc=0.952569; ql2l_clip acc=0.936759 (Δ=-0.007905). |
 | Notes | skipped_videos=1. Keep as negative-but-clean baseline coverage (no cherry-pick). |
 
+### E0617: IntentQA language-bias baseline (uniform vs text_only; val n=253)
+| Field | Value |
+| --- | --- |
+| Objective | Quantify how much of IntentQA can be answered from the question alone by running the VLM with **no frames** (`text_only`) vs the standard uniform frame baseline. |
+| Dataset | IntentQA (val). |
+| Model | VLM: Qwen2-VL (default). |
+| Code path | `avs/experiments/intentqa_vlm_eval.py`, `scripts/e0600_intentqa_vlm_eval.sh` |
+| Params | `METHODS=uniform,text_only`, `B_FRAMES=16`, `MAX_SECONDS=120`, `SEED=0` (other knobs match E0600). |
+| Metrics (must save) | `metrics.json` + `predictions.jsonl` + `preprocess_meta.json` |
+| Full cmd | See the checklist entry (1 exact command with fixed OUT_DIR). |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `artifacts/experiments/E0617/run.log` |
+| Artifacts | `runs/E0617_intentqa_vlm_eval_val_text_only_20260211-053301/*` |
+| Results | uniform acc=0.944664; text_only acc=0.664032 (Δ=-0.280632; invalid_rate=0; skipped_videos=1). |
+
 ### E0606: EgoSchema VLM evaluation under budgeted frame selection (+ql2l_clip baseline; full Subset n=500)
 | Field | Value |
 | --- | --- |
@@ -5329,6 +5373,22 @@ Notes (2026-02-10 rerun; artifact paths locally present):
 | Logs | `artifacts/experiments/E0606/run.log` |
 | Artifacts | `runs/E0606_egoschema_eval_subset500_clip_20260211-031138/metrics.json`, `runs/E0606_egoschema_eval_subset500_clip_20260211-031138/predictions.jsonl`, `runs/E0606_egoschema_eval_subset500_clip_20260211-031138/preprocess_meta.json` |
 | Results | Full Subset test run (n=500; seed=0; invalid_rate=0): uniform acc=0.5880; ql2l_clip acc=0.5760; ql2l_clap=0.5480; ql2l_asr_bm25=0.5560. |
+
+### E0618: EgoSchema language-bias baseline (uniform vs text_only; Subset n=500)
+| Field | Value |
+| --- | --- |
+| Objective | Quantify how much of EgoSchema can be answered from the question alone by running the VLM with **no frames** (`text_only`) vs the standard uniform frame baseline. |
+| Dataset | EgoSchema (Subset config; test split; labeled subset). |
+| Model | VLM: Qwen2-VL (default). |
+| Code path | `avs/experiments/egoschema_vlm_eval.py`, `scripts/e0602_egoschema_predict.sh` |
+| Params | `METHODS=uniform,text_only`, `B_FRAMES=16`, `MAX_SECONDS=120`, `SEED=0`. |
+| Metrics (must save) | `metrics.json` + `predictions.jsonl` + `preprocess_meta.json`. |
+| Full cmd | See the checklist entry (OUT_DIR uses `runs/E0618_egoschema_eval_subset500_text_only_*`). |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `artifacts/experiments/E0618/run.log` |
+| Artifacts | `runs/E0618_egoschema_eval_subset500_text_only_20260211-055131/metrics.json`, `runs/E0618_egoschema_eval_subset500_text_only_20260211-055131/predictions.jsonl`, `runs/E0618_egoschema_eval_subset500_text_only_20260211-055131/preprocess_meta.json` |
+| Results | uniform acc=0.5880; text_only acc=0.2720 (invalid_rate=0; n=500). |
 
 ### E0615: AVQA VLM evaluation under budgeted frame selection (val subset; download drift allowed)
 | Field | Value |
