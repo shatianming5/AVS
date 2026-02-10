@@ -723,6 +723,65 @@ def _candidates_ltl_adaptive_v1() -> list[CandidateConfig]:
     return out
 
 
+def _candidates_ltl_adaptive_keepadj_v1() -> list[CandidateConfig]:
+    """
+    Keep-when-adjacent demotion (adaptive_v3) for learned-logit Stage-1 methods.
+
+    Motivation (AVE/P0 / C0003):
+      - Test402 diagnostics show the "2-high" regime can be net harmful when the selected anchors are far apart
+        (context loss under a fixed token budget).
+      - `anchor_high_policy=adaptive_v3` keeps both anchors for base allocation, but only allows 2-high when the
+        two anchors are within `anchor_high_adjacent_dist`.
+
+    Grid:
+      - shift ∈ {0,1}
+      - std_thr ∈ {0.45,0.50,0.55,0.60}
+      - adjacency distance ∈ {1,2}
+      - all other knobs match the ltl_adaptive_v1 defaults.
+    """
+    base = dict(
+        k=2,
+        low_res=160,
+        base_res=224,
+        high_res=352,
+        head="temporal_conv",
+        temporal_kernel_size=3,
+        anchor_shift=0,
+        anchor_std_threshold=0.55,
+        anchor_select="topk",
+        anchor_nms_radius=2,
+        anchor_nms_strong_gap=0.6,
+        anchor_window=3,
+        anchor_smooth_window=0,
+        anchor_smooth_mode="mean",
+        anchor_base_alloc="distance",
+        anchor_conf_metric=None,
+        anchor_conf_threshold=None,
+        max_high_anchors=None,
+        anchor_high_policy="adaptive_v3",
+        anchor_high_adjacent_dist=1,
+        anchor_high_gap_threshold=0.0,
+    )
+
+    out: list[CandidateConfig] = []
+    for thr in (0.45, 0.50, 0.55, 0.60):
+        thr_name = str(thr).replace(".", "p")
+        for shift in (0, 1):
+            for adj in (1, 2):
+                out.append(
+                    CandidateConfig(
+                        name=f"ltlkeepadj_adj{adj}_shift{shift}_std{thr_name}",
+                        **{
+                            **base,
+                            "anchor_shift": int(shift),
+                            "anchor_std_threshold": float(thr),
+                            "anchor_high_adjacent_dist": int(adj),
+                        },
+                    )
+                )
+    return out
+
+
 def _candidates_ltl_smooth_v1() -> list[CandidateConfig]:
     """
     Score-smoothing candidate set for learned-logit Stage-1 methods.
@@ -5295,6 +5354,7 @@ def build_parser() -> argparse.ArgumentParser:
             "ltl_std_v1",
             "ltl_std_v2",
             "ltl_adaptive_v1",
+            "ltl_adaptive_keepadj_v1",
             "ltl_smooth_v1",
             "ltl_adaptive_v2",
             "ltl_adaptive_v3",
@@ -5557,6 +5617,8 @@ def main(argv: list[str] | None = None) -> int:
             candidates = _candidates_ltl_std_v2()
         elif candidate_set == "ltl_adaptive_v1":
             candidates = _candidates_ltl_adaptive_v1()
+        elif candidate_set == "ltl_adaptive_keepadj_v1":
+            candidates = _candidates_ltl_adaptive_keepadj_v1()
         elif candidate_set == "ltl_smooth_v1":
             candidates = _candidates_ltl_smooth_v1()
         elif candidate_set == "ltl_adaptive_v2":
