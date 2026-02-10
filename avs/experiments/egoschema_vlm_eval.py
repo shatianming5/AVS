@@ -147,6 +147,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--strategy", type=str, default="ppl", choices=["ppl", "generate"])
     p.add_argument("--out-dir", type=Path, required=True)
+    p.add_argument(
+        "--resume",
+        action="store_true",
+        help=(
+            "If out_dir/predictions.jsonl already exists, append missing rows and skip already-evaluated "
+            "(question_idx, video_idx, method) triples. Useful for long runs that may be interrupted."
+        ),
+    )
 
     p.add_argument("--model-name", type=str, default=QwenVLConfig.model_name)
     p.add_argument("--device", type=str, default=QwenVLConfig.device)
@@ -170,6 +178,58 @@ def main(argv: list[str] | None = None) -> int:
     if "uniform" not in methods:
         methods = ["uniform"] + methods
     labels_available = all(it.answer_idx is not None for it in items)
+
+    pred_path = out_dir / "predictions.jsonl"
+    metrics_path = out_dir / "metrics.json"
+    resume = bool(args.resume) and pred_path.exists()
+
+    n_by_method: dict[str, int] = {m: 0 for m in methods}
+    invalid_by_method: dict[str, int] = {m: 0 for m in methods}
+    correct_by_method: dict[str, int] = {m: 0 for m in methods}
+    done_keys: set[tuple[str, str, str]] = set()
+    if resume:
+        if metrics_path.exists():
+            # If metrics.json exists, the run should already be complete.
+            print(f"[egoschema] --resume: found existing metrics.json; nothing to do: {metrics_path}", flush=True)
+            print(metrics_path)
+            return 0
+
+        print(f"[egoschema] --resume: scanning existing rows: {pred_path}", flush=True)
+        with pred_path.open("r", encoding="utf-8") as f:
+            for lineno, line in enumerate(f, start=1):
+                s = line.strip()
+                if not s:
+                    continue
+                try:
+                    row = json.loads(s)
+                except json.JSONDecodeError as e:
+                    raise RuntimeError(f"invalid JSON in {pred_path}:{lineno}: {e}") from e
+
+                qidx = str(row.get("question_idx", "")).strip()
+                vidx = str(row.get("video_idx", "")).strip()
+                m = str(row.get("method", "")).strip()
+                if not qidx or not vidx or not m:
+                    raise RuntimeError(f"missing keys in {pred_path}:{lineno}: {sorted(row.keys())}")
+                if m not in n_by_method:
+                    # Don't silently mix experiments in the same output dir.
+                    raise RuntimeError(f"unexpected method={m!r} in {pred_path}:{lineno} (methods={methods})")
+
+                key = (qidx, vidx, m)
+                if key in done_keys:
+                    continue
+                done_keys.add(key)
+
+                n_by_method[m] += 1
+                if bool(row.get("invalid")):
+                    invalid_by_method[m] += 1
+                if labels_available and bool(row.get("correct")):
+                    correct_by_method[m] += 1
+
+        print(
+            f"[egoschema] --resume: loaded {len(done_keys)} rows "
+            f"(n_by_method={n_by_method}, invalid_by_method={invalid_by_method})",
+            flush=True,
+        )
 
     p = egoschema_paths()
     if not p.videos_dir.exists():
@@ -208,16 +268,17 @@ def main(argv: list[str] | None = None) -> int:
         )
     )
 
-    n_by_method: dict[str, int] = {m: 0 for m in methods}
-    invalid_by_method: dict[str, int] = {m: 0 for m in methods}
-    correct_by_method: dict[str, int] = {m: 0 for m in methods}
     t0 = time.time()
-    with (out_dir / "predictions.jsonl").open("w", encoding="utf-8") as f:
+    open_mode = "a" if resume else "w"
+    with pred_path.open(open_mode, encoding="utf-8") as f:
         for j, it in enumerate(items):
             proc_dir = p.processed_video_dir(it.video_idx)
             h = hashlib.sha1(f"{it.question_idx}|{it.video_idx}".encode("utf-8")).hexdigest()
             item_seed = int(args.seed) + int(h[:8], 16)
             for m in methods:
+                key = (str(it.question_idx), str(it.video_idx), str(m))
+                if resume and key in done_keys:
+                    continue
                 row = _eval_one(
                     model=model,
                     item=it,
@@ -231,6 +292,7 @@ def main(argv: list[str] | None = None) -> int:
                     ql2l_asr_device=str(args.ql2l_asr_device),
                 )
                 f.write(json.dumps(row, ensure_ascii=False) + "\n")
+                done_keys.add(key)
                 n_by_method[str(m)] += 1
                 if bool(row["invalid"]):
                     invalid_by_method[str(m)] += 1

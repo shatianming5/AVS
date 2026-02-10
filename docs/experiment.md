@@ -77,7 +77,7 @@
     - `artifacts/experiments/E0604_val_s1/run.log`
   - backfill: done (see `### E0604`).
 
-- [ ] E0605 (real; ppl; seed=0; CONFIG=Subset full): EgoSchema VLM eval (labeled Subset; full n=500)
+- [x] E0605 (real; ppl; seed=0; CONFIG=Subset full): EgoSchema VLM eval (labeled Subset; full n=500)
   - command:
     - `OUT_DIR=runs/E0605_egoschema_eval_subset500_s0_20260210-125048 CONFIG=Subset SPLIT=test LIMIT=0 METHODS=uniform,ql2l_clap,ql2l_asr_bm25 B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu bash scripts/e0602_egoschema_predict.sh`
   - configs: []
@@ -90,6 +90,8 @@
     - `metrics.json`: `summary[*].acc` (not null for all methods), `summary[*].invalid_rate`
   - logs:
     - `artifacts/experiments/E0605_subset500_s0/run.log`
+    - `artifacts/experiments/E0605_subset500_s0_resume1/run.log` (resume)
+  - backfill: done (see `### E0605`).
 
 - [x] E0003: Official AVE full-dataset validation (multi-GPU)
   - command: `RUN_ROOT=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402 bash scripts/ave_verify_official_after_install.sh`
@@ -169,7 +171,7 @@
 | E0601 | success | IntentQA faithfulness (n=253; ql2l_clap): acc=0.9486; acc_drop=0.0000; pred_change_rate=0.0316 | `runs/E0601_intentqa_faithfulness_full_20260210-061137/` | delete-and-predict proxy; invalid_rate=0 |
 | E0602 | success | EgoSchema Subset test (n=256): uniform acc=0.5859; ql2l_clap acc=0.5352; ql2l_asr_bm25 acc=0.5469 | `runs/E0602_egoschema_eval_subset_full_20260210-064250/` | Qwen2-VL-2B; `budget_frames=16`, `max_seconds=120`, `strategy=ppl` |
 | E0604 | success | IntentQA val (n=253): seed0 uniform=0.9447, cheap_visual=0.9526, ql2l_clap=0.9486; seed1 uniform=0.9447, cheap_visual=0.9526, ql2l_clap=0.9486 | `runs/E0604_intentqa_vlm_eval_val_s*_20260210-125048/` | seed1 ran reduced METHODS (uniform,random,cheap_visual,ql2l_clap) due to runtime |
-| E0605 | pending |  | `runs/E0605_egoschema_eval_subset500_s0_20260210-125048/` | Subset full n=500; seed=0 |
+| E0605 | success | EgoSchema Subset test (n=500): uniform acc=0.5880; ql2l_clap acc=0.5480; ql2l_asr_bm25 acc=0.5560 (invalid_rate=0) | `runs/E0605_egoschema_eval_subset500_s0_20260210-125048/` | Subset full n=500; seed=0; resumed after partial run |
 
 > Note: The authoritative runnable queue for the current `docs/plan.md` is the checklist above. The `## Experiments` catalog below is an archive; its internal `[ ]` fields are not a TODO list.
 
@@ -5123,7 +5125,7 @@ Follow-ups (train3339→test402; same token budget=1960):
 | Metrics (must save) | Per-seed `metrics.json` + `predictions.jsonl` + `preprocess_meta.json`. |
 | Full cmd | See the checklist entry (1 exact command with fixed OUT_DIR). |
 | Smoke | [ ] |
-| Full | [ ] |
-| Logs | `artifacts/experiments/E0605_subset500_s*/run.log` |
+| Full | [x] |
+| Logs | `artifacts/experiments/E0605_subset500_s0/run.log` (partial), `artifacts/experiments/E0605_subset500_s0_resume1/run.log` (resume) |
 | Artifacts | `runs/E0605_egoschema_eval_subset500_s*_20260210-125048/*` |
-| Results | pending |
+| Results | Full Subset test run (n=500; seed=0; invalid_rate=0): uniform acc=0.5880, ql2l_clap=0.5480, ql2l_asr_bm25=0.5560. Artifacts: `runs/E0605_egoschema_eval_subset500_s0_20260210-125048/metrics.json`. |
