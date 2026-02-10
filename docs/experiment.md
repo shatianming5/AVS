@@ -150,6 +150,22 @@
   - logs: `artifacts/experiments/E0618/run.log`
   - backfill: done (see `### E0618`).
 
+- [x] E0619 (analysis): QA bucket report (“when does audio help?”) on Long-Video QA add-on outputs
+  - command: `OUT_DIR=runs/E0619_qa_bucket_report_20260211-062907 bash scripts/e0619_qa_bucket_report.sh`
+  - configs: []
+  - seeds: []
+  - required_artifacts:
+    - `runs/E0619_qa_bucket_report_20260211-062907/intentqa/bucket_report.json`
+    - `runs/E0619_qa_bucket_report_20260211-062907/intentqa/bucket_report.md`
+    - `runs/E0619_qa_bucket_report_20260211-062907/avqa/bucket_report.json`
+    - `runs/E0619_qa_bucket_report_20260211-062907/avqa/bucket_report.md`
+    - `runs/E0619_qa_bucket_report_20260211-062907/egoschema/bucket_report.json`
+    - `runs/E0619_qa_bucket_report_20260211-062907/egoschema/bucket_report.md`
+  - required_metrics:
+    - `bucket_report.json`: `overall[*].acc` + per-bucket `delta_vs_uniform` for the primary method.
+  - logs: `artifacts/experiments/E0619/run.log`
+  - backfill: done (see `### E0619`).
+
 - [x] E0609 (real; ppl; seed=0; +ql2l_clip): IntentQA VLM evaluation under budgeted frame selection (val n=253)
   - command: `OUT_DIR=runs/E0609_intentqa_vlm_eval_val_clip_20260211-011407 SPLIT=val LIMIT=256 METHODS=uniform,random,audio,cheap_visual,fused,ql2l_clap,ql2l_asr_bm25,ql2l_clip B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu QL2L_CLIP_DEVICE=cuda:3 ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=250 bash scripts/e0600_intentqa_vlm_eval.sh`
   - configs: []
@@ -5421,3 +5437,18 @@ Notes (2026-02-10 rerun; artifact paths locally present):
 | Logs | `artifacts/experiments/E0616/run.log` |
 | Artifacts | `runs/E0616_avqa_vlm_eval_val_b4_20260211-051556/metrics.json`, `runs/E0616_avqa_vlm_eval_val_b4_20260211-051556/predictions.jsonl`, `runs/E0616_avqa_vlm_eval_val_b4_20260211-051556/preprocess_meta.json` |
 | Results | Kept `n=212` (skipped_videos=44; invalid_rate=0). Acc by method: uniform=0.8113; random=0.8066; audio=0.8160; cheap_visual=0.8255; fused=0.8255; ql2l_clap=0.8160; ql2l_asr_bm25=0.8255; ql2l_clip=0.8208; text_only=0.3113. |
+
+### E0619: QA bucket report (“when does audio help?”) for Long-Video QA add-on
+| Field | Value |
+| --- | --- |
+| Objective | Add a *minimal but decisive* “when does audio help?” narrative artifact by bucketing Long-Video QA results by dataset-provided question type (when available) and by the method’s `q_bar` confidence. |
+| Inputs | Existing `predictions.jsonl` from E0604 (IntentQA), E0616 (AVQA), E0605 (EgoSchema Subset n=500). |
+| Code path | `avs/experiments/qa_bucket_report.py`, `scripts/e0619_qa_bucket_report.sh` |
+| Params | `OUT_DIR=runs/E0619_qa_bucket_report_20260211-062907` (uses the default input paths baked in the wrapper script). |
+| Metrics (must save) | `bucket_report.json` + `bucket_report.md` per dataset. |
+| Full cmd | `OUT_DIR=runs/E0619_qa_bucket_report_20260211-062907 bash scripts/e0619_qa_bucket_report.sh` |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `artifacts/experiments/E0619/run.log` |
+| Artifacts | `runs/E0619_qa_bucket_report_20260211-062907/{intentqa,avqa,egoschema}/bucket_report.{json,md}` |
+| Results | Key deltas (primary method vs uniform): IntentQA: `ql2l_clap` overall `+0.00395` (helps `CH` +2.22pp; hurts `TN` -1.49pp). AVQA: `ql2l_asr_bm25` overall `+0.01415` (helps `Which` +2.80pp; hurts `Come From` -2.22pp). EgoSchema: `ql2l_clap` underperforms uniform across all `q_bar` buckets (negative-but-clean evidence). |

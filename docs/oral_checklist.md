@@ -166,7 +166,11 @@ This section is **optional** for the core AVE oral pack, but is a high-leverage 
 
 ### C. Narrative glue (one page, no new methods)
 
-- [ ] Add a short “when does audio help?” bucketed analysis:
-  - AVQA: group by `question_type` / `question_relation`
-  - IntentQA: group by the dataset’s provided type fields (if present)
-  - EgoSchema: at least by video duration / option entropy proxy (if no types)
+- [x] Add a short “when does audio help?” bucketed analysis:
+  - Artifacts (markdown):
+    - IntentQA: `runs/E0619_qa_bucket_report_20260211-062907/intentqa/bucket_report.md` (bucket by `type` + `q_bar`).
+    - AVQA: `runs/E0619_qa_bucket_report_20260211-062907/avqa/bucket_report.md` (bucket by `question_type` + `q_bar`).
+    - EgoSchema: `runs/E0619_qa_bucket_report_20260211-062907/egoschema/bucket_report.md` (no type labels; bucket by `q_bar` only).
+  - Key takeaways (for slides):
+    - IntentQA: `ql2l_clap` helps more on `CH` (+2.22pp) and hurts on `TN` (-1.49pp).
+    - AVQA: `ql2l_asr_bm25` helps more on `Which` (+2.80pp) and hurts on `Come From` (-2.22pp).
