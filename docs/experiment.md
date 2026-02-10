@@ -829,6 +829,8 @@ Notes (2026-02-10 reruns; artifact paths locally present):
 - `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_adaptive_v1`: `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_adaptive_v1_20260210-182509/sweep_summary.json` (best=`ltladj1_shift0_std0p5`, Δ≈+0.00515, p≈0.204).
 - `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_std_v1`: `runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_std_v1_20260210-183049/sweep_summary.json` (best=`ltlstd_shift1_std0p45`, Δ≈+0.00457, p≈0.618).
 - `EVENTNESS=av_clipdiff_vec_mlp`, `CANDIDATE_SET=ltl_adaptive_v1`: `runs/E0610_ave_p0_sweep_official_val_av_clipdiff_vec_mlp_ltl_adaptive_v1_20260210-200224/sweep_summary.json` (best=`ltladj2_shift1_std0p55`, Δ≈+0.00607, p≈0.248).
+- `EVENTNESS=av_clipdiff_vec_mlp`, `CANDIDATE_SET=ltl_top1med_dropfar_v1`: `runs/E0620_val402_vecmlp_dropfar_20260210-222055/sweep_summary.json` (best=`ltltop1med_thr0p5_shift1_df0`, Δ≈-0.00058, p≈0.921).
+- `EVENTNESS=av_clipdiff_vec_mlp`, `CANDIDATE_SET=ltl_top1med_farfb_v1`: `runs/E0622_val402_vecmlp_farfb_20260210-222352/sweep_summary.json` (best=`ltltop1med_thr0p5_shift1_ff0`, Δ≈-0.00058, p≈0.921).
 
 
 ### E0208: Best-to-test reproduction on test402 for clipdiff-augmented anchors (LTL “拉大”)
@@ -860,6 +862,8 @@ Notes (2026-02-10 reruns; artifact paths locally present):
 - Quick test402 (SEEDS=0..2) for `EVENTNESS=av_clipdiff_mlp`, `CANDIDATE_SET=ltl_std_v1`: `runs/E0208_quick_test402_av_clipdiff_mlp_ltl_std_v1_20260210-183321/metrics.json` (Δ≈+0.00124, p≈0.927).
 - Quick test402 (SEEDS=0..2) for `EVENTNESS=av_clipdiff_vec_mlp`, `CANDIDATE_SET=ltl_adaptive_v1`: `runs/E0611_quick_test402_av_clipdiff_vec_mlp_ltl_adaptive_v1_20260210-200638/metrics.json` (Δ≈+0.01061, p≈0.391; diagnose: `runs/E0611_quick_test402_av_clipdiff_vec_mlp_ltl_adaptive_v1_20260210-200638/diagnose.json`).
 - Full test402 (SEEDS=0..9) for the above: `runs/E0612_full_test402_av_clipdiff_vec_mlp_ltl_adaptive_v1_20260210-200736/metrics.json` (Δ≈+0.00095, p≈0.875; diagnose: `runs/E0612_full_test402_av_clipdiff_vec_mlp_ltl_adaptive_v1_20260210-200736/diagnose.json`).
+- Quick test402 (SEEDS=0..2) for `EVENTNESS=av_clipdiff_vec_mlp` with dropfar (`thr0p5_df1`): `runs/E0621_quick_test402_vecmlp_dropfar_df1_20260210-222801/metrics.json` (Δ≈+0.00166, p≈0.900; diagnose: `runs/E0621_quick_test402_vecmlp_dropfar_df1_20260210-222801/diagnose.json`; note: removes `high_count=2` bucket entirely but does not improve mean).
+- Quick test402 (SEEDS=0..2) for `EVENTNESS=av_clipdiff_vec_mlp` with farfb (`thr0p5_ff1`): `runs/E0623_quick_test402_vecmlp_farfb_ff1_20260210-222856/metrics.json` (Δ≈+0.00274, p≈0.839; diagnose: `runs/E0623_quick_test402_vecmlp_farfb_ff1_20260210-222856/diagnose.json`; note: removes `high_count=2` + dist>1 by construction but does not improve mean).
 
 
 ### E0209: Stage-2 plan sweep on val402 for learned anchors (ltl_adaptive_v2; lower fallback)
