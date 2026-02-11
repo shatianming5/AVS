@@ -7,6 +7,39 @@
 - (none)
 
 ## Resolved (archive)
+- [x] M0190 (oral vNext): Reproducibility seal (datasets + evidence matrix refresh).
+  - Evidence:
+    - command_ran: `bash scripts/datasets/verify_all.sh`
+    - artifact: `runs/datasets_verify_20260212-020117/datasets_verify.json`
+    - command_ran: `python scripts/plan_evidence_matrix.py --write-docs-md`
+    - artifacts:
+      - `runs/evidence_matrix_20260212-020124/evidence_matrix.json`
+      - `runs/evidence_matrix_20260212-020124/evidence_matrix.md`
+      - `docs/evidence_matrix.md` (timestamp updated)
+    - verification: `python -m avs.smoke`
+
+- [x] M0189 (oral vNext): Add “Why +2% is hard” decomposition slide content + Evidence Alignment on best C0003 config.
+  - Evidence:
+    - new_report: `runs/E0720_evidence_alignment_df7_best_20260212-015616/evidence_alignment.json`
+    - slide_content: `docs/oral_narrative.md` (Section 4.1)
+    - supporting_artifacts:
+      - `runs/E0330_mde_pareto_grid_official_av_clipdiff_mlp_local_20260209-235305/pareto_report.json`
+      - `runs/E0643_full_test402_vecmlp_keepadj_adj2_shift1_std0p55_df7_officialids_s0-9_20260211-001604/diagnose.json`
+
+- [x] M0188 (oral vNext): Refresh oral docs to point to locally present artifacts + record C0003 reporting rule.
+  - Evidence:
+    - docs_updates:
+      - `docs/oral_checklist.md` (artifact pointers + C0003 main-result rule)
+      - `docs/oral_narrative.md` (artifact pointers + C0003 decomposition)
+      - `docs/oral_related_work.md` (long-video / frame-selection positioning)
+      - `docs/oral_vnext_checklist.md` (Track A executed)
+      - `docs/experiment.md` (E0720 row)
+    - key_artifacts:
+      - `runs/E0330_mde_pareto_grid_official_av_clipdiff_mlp_local_20260209-235305/pareto_report.json`
+      - `runs/E0331_degradation_accuracy_av_clipdiff_mlp_local_20260209-235316/degradation_accuracy.json`
+      - `runs/E0408_vision_efficiency_20260209-233151/vision_efficiency.json`
+      - `runs/E0202_evidence_alignment_energy_test402_20260209-061145/evidence_alignment.json`
+
 - [x] M0187 (plan: C0005 / exp: E0100): Expand EPIC-SOUNDS local downstream proxy to larger coverage (t256/v137) and record evidence.
   - Evidence:
     - logs: `artifacts/experiments/E0100_full/run.log`

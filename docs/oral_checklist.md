@@ -14,6 +14,7 @@ Canon sources:
 - [ ] **C0003 proven** on official AVE `test402`: `anchored_top2 - uniform ≥ +0.02`, paired `p < 0.05`, `SEEDS=0..9`.
   - Current best full test402 in this workspace is still short: `runs/E0638_full_test402_vecmlp_keepadj_adj2_shift1_std0p55_df5_officialids_s0-9_20260211-001009/metrics.json` (Δ=+0.01117; p=0.109).
   - Best p-value so far (still short on Δ): `runs/E0643_full_test402_vecmlp_keepadj_adj2_shift1_std0p55_df7_officialids_s0-9_20260211-001604/metrics.json` (Δ=+0.01045; p=0.0395).
+  - Reporting rule (for the revised-claim version): use **E0643 (df7)** as the “main” result because it is the only pre-registered far-drop variant with paired `p < 0.05` on `SEEDS=0..9`; treat **E0638 (df5)** as a sensitivity run (higher mean Δ but not significant).
 - [x] If C0003 cannot be proven, **lock a revised claim** (e.g., “consistent +1% at fixed budget + strong Oracle ceiling + robust protocol”) and make the rest of this checklist airtight (so reviewers cannot dismiss as heuristic/cherry-pick).
 
 ---
@@ -23,17 +24,20 @@ Canon sources:
 ### A. “生死图 #1” — Acc–Tok Pareto (Oracle → Predicted)
 
 - [x] **E0330: Multi-budget Pareto grid on AVE** (Oracle / Predicted / Random / Cheap-visual at the same budgets; with CIs).
-  - Goal: one plot answers “mechanism upper bound exists”, “predicted closes the gap”, “not any window works”, and “Pareto holds over budgets”.
+  - Goal: one plot answers “mechanism upper bound exists”, “predicted remains behind Oracle (and can regress)”, “not any window works”, and “Pareto holds over budgets”.
   - Runner/script: `bash scripts/e0330_mde_pareto_grid_official.sh` (see E0330 in `docs/experiment.md`).
   - Artifacts: `runs/E0330_*/pareto_report.json` + `runs/E0330_*/pareto.png` + per-budget raw metrics.
-  - Latest full: `runs/E0330_full_av_clipdiff_mlp_auto_20260205-184559/pareto_report.json`.
+  - Latest full: `runs/E0330_mde_pareto_grid_official_av_clipdiff_mlp_local_20260209-235305/{pareto_report.json,pareto.png}`.
+  - Slide export: `docs/oral_assets/fig1_pareto.png`
 
 ### B. “生死图 #2” — Evidence Alignment + Failure bucketing
 
 - [x] **E0202: Evidence Alignment report** for the current best run (and the next best candidate you propose).
   - Goal: show coverage/consistency signals predict when anchors help/hurt; include the “harmful buckets” (far anchors / 2-high / fallback-heavy).
   - Artifacts: `runs/E0202_*/evidence_alignment.json` and a short “top failure cases” table.
-  - Latest full: `runs/E0411_evidence_alignment_av_clipdiff_flow_mlp_stride_top1med_thr0p5_20260206-182007/evidence_alignment.json` (still weak corr; use this as negative-but-clean evidence and motivate next Stage-1 signal work).
+  - Latest full:
+    - Energy baseline: `runs/E0202_evidence_alignment_energy_test402_20260209-061145/evidence_alignment.json` (weak corr; use as negative-but-clean evidence).
+    - Best C0003 config (df7): `runs/E0720_evidence_alignment_df7_best_20260212-015616/evidence_alignment.json` (weak corr; indicates Coverage@τ is not predictive here).
 
 ### C. “生死图 #3” — Robust degradation protocol (shift/noise/silence × α)
 
@@ -41,15 +45,18 @@ Canon sources:
   - Goal: show predicted anchors degrade gracefully and never go below the computable α-baseline (uniform fallback).
   - Runner/script: `bash scripts/e0331_degradation_accuracy_official.sh` (see E0331 in `docs/experiment.md`).
   - Artifacts: `runs/E0331_*/degradation_accuracy.json` + plots.
-  - Latest full: `runs/E0505_degradation_accuracy_dense_stride_full_20260207-161213/degradation_accuracy.json` (`rows=54`, `alpha_floor_checks.num_fail=0`, `alpha_floor_checks.min_margin≈+0.01766`).
+  - Latest full: `runs/E0331_degradation_accuracy_av_clipdiff_mlp_local_20260209-235316/degradation_accuracy.json` (`rows=54`, `alpha_floor_checks.num_fail=0`, `alpha_floor_checks.min_margin≈+0.00025`).
+  - Slide exports:
+    - `docs/oral_assets/fig3_degradation_delta_acc_alpha0p5.png`
+    - `docs/oral_assets/fig3_degradation_recall_d0_alpha0p5.png`
 
 ### D. Minimal controls (reviewer objections)
 
 - [x] Random anchors (already in `avs.experiments.ave_p0*` and MDE harness) included in the Pareto grid (E0330).
 - [x] Cheap-visual anchors included in the Pareto grid (E0330).
 - [x] Report tokens/FLOPs/latency consistently (table in E0330 output + `docs/plan.md` claims).
-  - Tokens: E0330/E0407 artifacts include strict token-budgeted comparisons.
-  - FLOPs/latency calibration artifact: `runs/E0408_vision_efficiency_20260206-161610/vision_efficiency.json`.
+  - Tokens: E0330 artifacts include strict token-budgeted comparisons.
+  - FLOPs/latency calibration artifact: `runs/E0408_vision_efficiency_20260209-233151/vision_efficiency.json`.
 
 ### E. Cross-dataset proxy — EPIC-SOUNDS long-video recognition (downstream sanity)
 
@@ -76,7 +83,7 @@ Canon sources:
 - [x] **Robustness**: explicit degradation curves + α lower bound. (see `docs/oral_narrative.md`)
 - [x] **Reproducibility**: dataset verify (`bash scripts/datasets/verify_all.sh`), fixed seeds, saved run artifacts.
   - Evidence:
-    - Dataset status snapshot: `runs/datasets_verify_20260210-022759/datasets_verify.json`
+    - Dataset status snapshot: `runs/datasets_verify_20260212-020117/datasets_verify.json`
     - IntentQA LFS pull log (to eliminate pointer mp4s): `artifacts/datasets/intentqa_hf_pull_full_20260210-020508.log`
 
 ---
@@ -92,25 +99,25 @@ For any new Stage-1 signal / method targeting C0003:
   - Last attempt: `ltl_top1med_gate_lr_v1` (E0334→E0335) — gate rescues 0 clips; fallback unchanged; quick test not competitive; do not promote.
   - Last attempt: `ltl_top1med_visfb_v1` (E0336→E0337) — cheap-visual fallback plans regress on val402; skip test.
   - Last attempt: `ltl_top1med_visfb_gated_v1` (E0338→E0339) — gated visfb also regresses on val402; skip test.
-  - Last attempt: `ltl_top1med_band_midres_v1` (E0340→E0343) — mid-res caches + band-budget DP do **not** transfer; winner remains baseline and midres variants regress on test402 quick (`runs/E0342_quick_test402_av_clipdiff_mlp_midres320_band_dist_20260206-005345/metrics.json`, `runs/E0342_quick_test402_av_clipdiff_mlp_midres320_band_bridge_20260206-005718/metrics.json`).
-  - Last attempt: `av_clap_clip_agree` (E0346→E0347) — weak on val402 (best Δ≈+0.00599) and regresses on test402 quick (`runs/E0347_quick_test402_av_clap_clip_agree_20260206-024249/metrics.json`, Δ≈-0.00174); do not promote (skip E0348).
-  - Last attempt: `av_clap_clip_agree_k1` (E0349→E0350) — k=1 removes 2-high harm but triggers heavy fallback on test402 quick (`runs/E0350_quick_test402_av_clap_clip_agree_k1_20260206-030727/metrics.json`, Δ≈+0.00464; fallback≈0.930); do not promote (skip E0351).
-  - Last attempt: `clap_evt` (E0352→E0353) — weak on val402 (best Δ≈+0.00657) and not competitive on test402 quick (`runs/E0353_quick_test402_clap_evt_20260206-040527/metrics.json`, Δ≈+0.00813, p≈0.457; fallback≈0.478; 2-high still harmful); do not promote (skip E0354).
-  - Last attempt: `clap_evt_k1` (E0355→E0356) — k=1 removes 2-high by design, but the confidence gate collapses to heavy fallback on test402 quick (`runs/E0356_quick_test402_clap_evt_k1_20260206-042339/metrics.json`, Δ≈+0.00489, p≈0.289; fallback≈0.998); do not promote (skip E0357).
-  - Last attempt: `clap_lr` (E0358) — regresses on val402 (`runs/E0358_ave_p0_sweep_official_val_clap_lr_ltl_top1med_norm_v1_20260206-045105/sweep_summary.json`, best Δ≈-0.00191, p≈0.625); do not promote (skip E0359/E0360).
-  - Last attempt: `clap_mlp_cls_target` (E0361) — near-0 on val402 (`runs/E0361_ave_p0_sweep_official_val_clap_mlp_cls_target_ltl_top1med_norm_v1_20260206-054923/sweep_summary.json`, best Δ≈+0.00158, p≈0.284); do not promote (skip E0362/E0363).
-  - Last attempt: `ltl_top1med_keepadj_basealloc_highonly_v1` (E0364) — Stage-2 `anchor_base_alloc=*_high` allocates base slots w.r.t. the high-set only, but is near-0 on val402 (`runs/E0364_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_keepadj_basealloc_highonly_v1_20260206-064910/sweep_summary.json`, best Δ≈+0.00291, p≈0.167); do not promote (skip E0365/E0366).
-  - Last attempt: `av_ast_clipdiff_mlp` (E0367) — AST embeddings + cheap CLIPdiff scalar → per-second MLP is near-0 on val402 (`runs/E0367_ave_p0_sweep_official_val_av_ast_clipdiff_mlp_ltl_top1med_norm_v1_20260206-070639/sweep_summary.json`, best Δ≈+0.00183, p≈0.853); do not promote (skip E0368/E0369).
-  - Last attempt: `av_ast_clipalign_bce` (E0370→E0371) — not competitive on test402 quick (`runs/E0370_quick_test402_av_ast_clipalign_bce_20260206-072535/metrics.json`, Δ≈+0.00813, p≈0.365; fallback≈0.570); do not promote (skip E0371).
-  - Last attempt: `ltl_top1med_gate_all_v1` (E0372→E0374) — val402 is modestly positive (`runs/E0372_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_top1med_gate_all_v1_20260206-081233/sweep_summary.json`, best Δ≈+0.00989), but not competitive on test402 quick (`runs/E0373_quick_test402_av_clipdiff_mlp_ltl_top1med_gate_all_v1_20260206-081728/metrics.json`, Δ≈+0.01086, p≈0.1165; fallback≈0.751; no `gate_veto`); do not promote (skip E0374).
-  - Last attempt (control): `vision_binary_mlp` (E0375) — strong cheap-visual supervised anchors regress on val402 (`runs/E0375_ave_p0_sweep_official_val_vision_binary_mlp_ltl_top1med_norm_v1_20260206-082152/sweep_summary.json`, best Δ≈-0.00175); stop before test402.
-  - Last attempt: `panns` (E0378) — pretrained PANNs (AudioSet) eventness anchors under the scale-invariant gate is **not competitive on val402** (`runs/E0378_ave_p0_sweep_official_val_panns_ltl_top1med_norm_v1_20260206-090736/sweep_summary.json`, best Δ≈+0.00998); stop before test402 (skip E0379/E0380).
-  - Last attempt: `panns_lr` (E0381) — supervised calibration on pretrained PANNs outputs regresses on val402 (`runs/E0381_ave_p0_sweep_official_val_panns_lr_ltl_top1med_norm_v1_20260206-093023/sweep_summary.json`, best Δ≈-0.00224); stop before test402 (skip E0382/E0383).
-  - Last attempt: `panns_embed_lr` (E0384) — supervised calibration on pretrained PANNs embeddings is positive but not competitive on val402 (`runs/E0384_ave_p0_sweep_official_val_panns_embed_lr_ltl_top1med_norm_v1_20260206-094428/sweep_summary.json`, best Δ≈+0.00865, p≈0.110); stop before test402 (skip E0385/E0386).
-  - Last attempt: `panns_embed_mlp` (E0387) — supervised MLP calibration on PANNs embeddings is not competitive on val402 (`runs/E0387_ave_p0_sweep_official_val_panns_embed_mlp_ltl_top1med_norm_v1_20260206-095447/sweep_summary.json`, best Δ≈+0.00208, p≈0.785); stop before test402 (skip E0388/E0389).
-  - Last attempt: `av_panns_embed_clipdiff_mlp` (E0390) — PANNs embeddings + cheap CLIPdiff scalar → per-second MLP is not competitive on val402 (`runs/E0390_ave_p0_sweep_official_val_av_panns_embed_clipdiff_mlp_ltl_top1med_norm_v1_20260206-102257/sweep_summary.json`, best Δ≈+0.00374, p≈0.542); stop before test402 (skip E0391/E0392).
-  - Last attempt: `av_clipdiff_flow_mlp` (E0393) — optical-flow magnitude (Farneback) + CLIPdiff + audio basic features → per-second MLP does not beat baseline on val402 (`runs/E0393_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_ltl_top1med_norm_v1_20260206-104413/sweep_summary.json`, best Δ≈+0.00881, p≈0.0971); stop before test402 (skip E0394/E0395).
-  - Last attempt: `ltl_top1med_k1_extreme_v1` with fixed `av_clipdiff_flow_mlp` (E0396) — aggressive Stage-2 dynamic-K search regresses on val402 (`runs/E0396_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_ltl_top1med_k1_extreme_v1_20260206-130114/sweep_summary.json`, best Δ≈-0.00125, p≈0.924); stop before test402 (skip E0397/E0398).
+  - Last attempt: `ltl_top1med_band_midres_v1` (E0340→E0343) — mid-res caches + band-budget DP do **not** transfer; midres variants regress on test402 quick (details in `docs/experiment.md` E0342).
+  - Last attempt: `av_clap_clip_agree` (E0346→E0347) — weak on val402 (best Δ≈+0.00599) and regresses on test402 quick (Δ≈-0.00174); do not promote.
+  - Last attempt: `av_clap_clip_agree_k1` (E0349→E0350) — k=1 removes 2-high harm but triggers heavy fallback on test402 quick (Δ≈+0.00464; fallback≈0.930); do not promote.
+  - Last attempt: `clap_evt` (E0352→E0353) — weak on val402 (best Δ≈+0.00657) and not competitive on test402 quick (Δ≈+0.00813, p≈0.457; fallback≈0.478); do not promote.
+  - Last attempt: `clap_evt_k1` (E0355→E0356) — k=1 removes 2-high by design, but the confidence gate collapses to heavy fallback on test402 quick (Δ≈+0.00489, p≈0.289; fallback≈0.998); do not promote.
+  - Last attempt: `clap_lr` (E0358) — regresses on val402 (best Δ≈-0.00191, p≈0.625); do not promote.
+  - Last attempt: `clap_mlp_cls_target` (E0361) — near-0 on val402 (best Δ≈+0.00158, p≈0.284); do not promote.
+  - Last attempt: `ltl_top1med_keepadj_basealloc_highonly_v1` (E0364) — near-0 on val402 (best Δ≈+0.00291, p≈0.167); do not promote.
+  - Last attempt: `av_ast_clipdiff_mlp` (E0367) — near-0 on val402 (best Δ≈+0.00183, p≈0.853); do not promote.
+  - Last attempt: `av_ast_clipalign_bce` (E0370→E0371) — not competitive on test402 quick (Δ≈+0.00813, p≈0.365; fallback≈0.570); do not promote.
+  - Last attempt: `ltl_top1med_gate_all_v1` (E0372→E0374) — val402 is modestly positive (best Δ≈+0.00989), but not competitive on test402 quick (Δ≈+0.01086, p≈0.1165; fallback≈0.751); do not promote.
+  - Last attempt (control): `vision_binary_mlp` (E0375) — strong cheap-visual supervised anchors regress on val402 (best Δ≈-0.00175); stop before test402.
+  - Last attempt: `panns` (E0378) — pretrained PANNs eventness anchors are not competitive on val402 (best Δ≈+0.00998); stop before test402.
+  - Last attempt: `panns_lr` (E0381) — supervised calibration on pretrained PANNs outputs regresses on val402 (best Δ≈-0.00224); stop before test402.
+  - Last attempt: `panns_embed_lr` (E0384) — positive but not competitive on val402 (best Δ≈+0.00865, p≈0.110); stop before test402.
+  - Last attempt: `panns_embed_mlp` (E0387) — not competitive on val402 (best Δ≈+0.00208, p≈0.785); stop before test402.
+  - Last attempt: `av_panns_embed_clipdiff_mlp` (E0390) — not competitive on val402 (best Δ≈+0.00374, p≈0.542); stop before test402.
+  - Last attempt: `av_clipdiff_flow_mlp` (E0393) — does not beat baseline on val402 (best Δ≈+0.00881, p≈0.0971); stop before test402.
+  - Last attempt: `ltl_top1med_k1_extreme_v1` with fixed `av_clipdiff_flow_mlp` (E0396) — regresses on val402 (best Δ≈-0.00125, p≈0.924); stop before test402.
   - Last attempt: `av_basic_mlp` (E0510) — supervised audio basic + frame-diff scalar is near-0 on val402 (`runs/E0510_ave_p0_sweep_official_val_av_basic_mlp_ltl_top1med_norm_v1_20260210-161514/sweep_summary.json`, best Δ≈+0.00183, p≈0.677); stop before test402.
   - Last attempt: `av_fused_clipdiff_prod` (E0292) — rerun val402 sweep regresses (`runs/E0292_ave_p0_sweep_official_val_av_fused_clipdiff_prod_ltl_top1med_v1_20260210-181356/sweep_summary.json`, best Δ≈-0.00815, p≈0.218); stop before test402.
   - Last attempt: `moe_energy_clipdiff` (E0296) — rerun val402 sweep regresses (`runs/E0296_ave_p0_sweep_official_val_moe_energy_clipdiff_ltl_top1med_moe_v1_20260210-181653/sweep_summary.json`, best Δ≈-0.00923, p≈0.485); stop before test402.

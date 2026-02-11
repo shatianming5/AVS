@@ -339,6 +339,14 @@
     - `evidence_alignment.json`: `cov_by_tau` + `corr_by_tau` with Pearson/Spearman (tau_grid includes `0.3,0.5,0.7`)
   - logs: `artifacts/experiments/E0202/run.log`
 
+- [x] E0720: Evidence Alignment report on best C0003 config (df7 / test402)
+  - command: `python -m avs.experiments.evidence_alignment_report --in-metrics runs/E0643_full_test402_vecmlp_keepadj_adj2_shift1_std0p55_df7_officialids_s0-9_20260211-001604/metrics.json --meta-dir data/AVE/meta --out-dir runs/E0720_evidence_alignment_df7_best_20260212-015616`
+  - configs: []
+  - seeds: []
+  - required_artifacts: [`runs/E0720_evidence_alignment_df7_best_20260212-015616/evidence_alignment.json`]
+  - required_metrics:
+    - `evidence_alignment.json`: `cov_by_tau` + `corr_by_tau` with Pearson/Spearman (tau_grid includes `0.3,0.5,0.7`)
+
 - [x] E0203: Degradation suite (shift/noise/silence grid) on official AVE test402 (energy)
   - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_160_224_352 EVENTNESS=energy AUDIO_DEVICE=cpu bash scripts/e0203_degradation_suite_official.sh`
   - configs: []
@@ -373,6 +381,7 @@
 | E0712 | success | full test402: anchored=0.72331 vs uniform=0.71622 (Δ=+0.00709; p=0.141) | `runs/E0712_full_test402_flowmlp_keepadj_20260212-000835/` | fails C0003 hard gate; below current best full-test Δ |
 | E0713 | success | IntentQA faithfulness (seed=2, n=253): accuracy=0.9486; accuracy_deleted=0.9486; acc_drop=0.0000; pred_change_rate=0.0316 | `runs/E0713_intentqa_faithfulness_val_s2_20260212-000949/` | matches seeds 0/1 behavior; offline HF mode for stability |
 | E0714 | success | EgoSchema Subset test (seed=2, n=256): uniform acc=0.5859; ql2l_clap acc=0.5352; ql2l_asr_bm25 acc=0.5469 (all invalid_rate=0) | `runs/E0714_egoschema_eval_subset256_s2_20260212-004316/` | matches seeds 0/1 behavior; seed-extension reproducibility check passed |
+| E0720 | success | Cov@tau mean≈0.1032; corr pearson≈0.0747 spearman≈-0.0304 (weak) | `runs/E0720_evidence_alignment_df7_best_20260212-015616/evidence_alignment.json` | Evidence Alignment on best C0003 config (E0643 df7); diagnostic only (not predictive) |
 
 > Note: The authoritative runnable queue for the current `docs/plan.md` is the checklist above. The `## Experiments` catalog below is an archive; its internal `[ ]` fields are not a TODO list.
 
