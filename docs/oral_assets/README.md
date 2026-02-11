@@ -22,3 +22,8 @@ Regeneration sources are documented below so the exports are reproducible even i
 - `fig3_degradation_recall_d0_alpha0p5.png`
   - Source: `runs/E0331_degradation_accuracy_av_clipdiff_mlp_local_20260209-235316/degradation_plots/*`
 
+- `fig4_qa_budget_curve_avqa.png`
+  - Source: `runs/E0702_qa_budget_curve_20260211-164607/avqa_curve/budget_curve.png`
+
+- `fig4_qa_budget_curve_intentqa.png`
+  - Source: `runs/E0702_qa_budget_curve_20260211-164607/intentqa_curve/budget_curve.png`

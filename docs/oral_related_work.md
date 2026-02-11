@@ -22,7 +22,9 @@ This page aligns our "listen-then-look" QA add-on with the closest public work, 
 ### Long-video MLLM / Frame Selection
 
 - LongVA (2024): https://arxiv.org/abs/2406.16852
+- LongVU (2024): https://arxiv.org/abs/2410.17434
 - VidF4 (2024): https://arxiv.org/abs/2407.15047
+- Efficient Video Sampling (EVS) (2025): https://arxiv.org/abs/2510.14624
 - M-LLM based Video Frame Selection (2025): https://arxiv.org/abs/2502.19680
 - Adaptive Keyframe Sampling (CVPR 2025): https://openaccess.thecvf.com/content/CVPR2025/html/Tang_Adaptive_Keyframe_Sampling_for_Long_Video_Understanding_CVPR_2025_paper.html
 - FrameMind (2025; RL dynamic sampling during reasoning): https://arxiv.org/abs/2509.24008
@@ -33,6 +35,8 @@ This page aligns our "listen-then-look" QA add-on with the closest public work, 
 - DIG (2025; dynamically balances global vs local selection by query type): https://arxiv.org/abs/2512.04000
 - Video-in-the-Loop (2025; localize-then-answer with token reallocation under a fixed budget): https://arxiv.org/abs/2510.04022
 - VideoBrain (2026; adaptive frame sampling / multi-agent long-video understanding): https://arxiv.org/abs/2602.04094
+- Adaptive Video Understanding Agent (2024; long-form agentic pipeline): https://arxiv.org/abs/2410.20252
+- TiFRe (2026; text-guided frame reduction for video MLLMs): https://arxiv.org/abs/2602.08861
 
 ### Audio-Text Foundation (for query-audio relevance)
 

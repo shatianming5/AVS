@@ -78,6 +78,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("energy_delta_eventness", help="Smoke: energy-delta (novelty/change-point) eventness")
     sub.add_parser("panns_eventness", help="Smoke: PANNs-based audio eventness probe (random weights)")
     sub.add_parser("audiomae_eventness", help="Smoke: AudioMAE(-style) audio eventness probe (random weights)")
+    sub.add_parser("imagebind_eventness", help="Smoke: ImageBind AV-consistency eventness probe (random weights)")
+    sub.add_parser("wavlm_eventness", help="Smoke: WavLM-based supervised eventness (random weights)")
     sub.add_parser("anchor_knobs", help="Smoke: anchor shift + fallback knobs")
     sub.add_parser("anchor_window_select", help="Smoke: windowed anchor selection (window_topk)")
     sub.add_parser("anchor_confidence_gate", help="Smoke: anchor confidence gating (fallback reasons)")
@@ -141,6 +143,8 @@ def main(argv: list[str] | None = None) -> int:
             "energy_delta_eventness",
             "panns_eventness",
             "audiomae_eventness",
+            "imagebind_eventness",
+            "wavlm_eventness",
             "anchor_knobs",
             "anchor_window_select",
             "anchor_confidence_gate",

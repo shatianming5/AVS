@@ -936,6 +936,130 @@ def check_audiomae_eventness(run_dir: Path) -> SmokeResult:
     return SmokeResult(name="audiomae_eventness", ok=ok, details=payload if ok else {"error": "AudioMAE scores invalid"})
 
 
+def check_imagebind_eventness(run_dir: Path) -> SmokeResult:
+    """
+    Smoke check for the ImageBind-based AV-consistency Stage-1.
+
+    Uses random weights (pretrained=False) to avoid downloading large checkpoints in smoke runs.
+    """
+    import math
+    import wave
+
+    import numpy as np
+    from PIL import Image
+
+    from avs.multimodal.imagebind_probe import compute_imagebind_av_sim_scores_by_clip
+
+    clip_id = "clip0"
+    proc_dir = run_dir / "imagebind_processed" / clip_id
+    frames_dir = proc_dir / "frames"
+    frames_dir.mkdir(parents=True, exist_ok=True)
+
+    # Write synthetic frames (10x) and a 10s 16kHz mono WAV.
+    for t in range(10):
+        img = Image.fromarray(np.full((224, 224, 3), fill_value=int(25 * t), dtype=np.uint8))
+        img.save(frames_dir / f"{t}.jpg")
+
+    wav_path = proc_dir / "audio.wav"
+    sr = 16000
+    dur_s = 10
+    tt = np.arange(sr * dur_s, dtype=np.float32) / sr
+    wave_data = 0.1 * np.sin(2 * math.pi * 440.0 * tt)
+    pcm16 = np.clip(wave_data * 32767.0, -32768, 32767).astype(np.int16)
+    with wave.open(str(wav_path), "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sr)
+        wf.writeframes(pcm16.tobytes())
+
+    scores_by_clip = compute_imagebind_av_sim_scores_by_clip(
+        clip_ids=[clip_id],
+        processed_dir=run_dir / "imagebind_processed",
+        num_segments=10,
+        device="cpu",
+        pretrained=False,
+        batch_size=1,
+    )
+    scores = scores_by_clip.get(clip_id) or []
+
+    ok = len(scores) == 10 and all(np.isfinite(scores)) and all(0.0 <= float(x) <= 1.0 for x in scores)
+    payload = {"processed_dir": str(run_dir / "imagebind_processed"), "clip_id": clip_id, "scores": [float(x) for x in scores]}
+    _write_json(run_dir, "imagebind_eventness.json", payload)
+    return SmokeResult(name="imagebind_eventness", ok=ok, details=payload if ok else {"error": "ImageBind scores invalid", **payload})
+
+
+def check_wavlm_eventness(run_dir: Path) -> SmokeResult:
+    """
+    Smoke check for the WavLM-based supervised Stage-1 (`wavlm_evt_mlp`).
+
+    Uses a tiny random WavLM (pretrained=False) to avoid downloads in smoke runs.
+    """
+    import math
+    import wave
+
+    import numpy as np
+    import torch
+
+    from avs.audio.wavlm_probe import WavLMEmbeddingProbe, WavLMProbeConfig
+    from avs.experiments.ave_p0 import _train_audio_basic_mlp_cls_eventness
+
+    clip_id = "clip0"
+    proc_dir = run_dir / "wavlm_processed" / clip_id
+    proc_dir.mkdir(parents=True, exist_ok=True)
+
+    # Write a 10s 16kHz mono WAV.
+    wav_path = proc_dir / "audio.wav"
+    sr = 16000
+    dur_s = 10
+    tt = np.arange(sr * dur_s, dtype=np.float32) / sr
+    wave_data = 0.1 * np.sin(2 * math.pi * 440.0 * tt)
+    pcm16 = np.clip(wave_data * 32767.0, -32768, 32767).astype(np.int16)
+    with wave.open(str(wav_path), "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sr)
+        wf.writeframes(pcm16.tobytes())
+
+    # Synthetic per-second labels (2 classes: 0=bg, 1=event).
+    labels_by_clip = {clip_id: [0, 0, 1, 1, 0, 0, 1, 1, 0, 0]}
+
+    probe = WavLMEmbeddingProbe(WavLMProbeConfig(pretrained=False, device="cpu", dtype="float32"))
+    emb_by_clip = probe.embeddings_per_second_by_clip_ids(
+        clip_ids=[clip_id],
+        processed_dir=run_dir / "wavlm_processed",
+        num_segments=10,
+        batch_size=1,
+    )
+    emb = emb_by_clip.get(clip_id)
+    if emb is None:
+        return SmokeResult(name="wavlm_eventness", ok=False, details={"error": "missing wavlm embedding"})
+
+    model = _train_audio_basic_mlp_cls_eventness(
+        clip_ids_train=[clip_id],
+        labels_by_clip=labels_by_clip,
+        audio_feats_by_clip={clip_id: np.asarray(emb, dtype=np.float32)},
+        num_classes=2,
+        device="cpu",
+        epochs=2,
+        batch_size=64,
+        lr=1e-2,
+        hidden_dim=16,
+        dropout=0.0,
+    ).to(torch.device("cpu"))
+    model.eval()
+
+    with torch.no_grad():
+        logits = model(torch.from_numpy(np.asarray(emb, dtype=np.float32)).float())  # [T, C]
+        bg = logits[:, 0]
+        s = logits[:, 1:].max(dim=-1).values - bg
+        scores = s.detach().cpu().numpy().astype(np.float32).tolist()
+
+    ok = len(scores) == 10 and all(np.isfinite(scores))
+    payload = {"processed_dir": str(run_dir / "wavlm_processed"), "clip_id": clip_id, "scores": [float(x) for x in scores]}
+    _write_json(run_dir, "wavlm_eventness.json", payload)
+    return SmokeResult(name="wavlm_eventness", ok=ok, details=payload if ok else {"error": "WavLM scores invalid", **payload})
+
+
 def check_anchor_knobs(run_dir: Path) -> SmokeResult:
     from avs.audio.eventness import anchors_from_scores
     from avs.sampling.plans import equal_token_budget_anchored_plan
@@ -2253,6 +2377,8 @@ handlers = {
     "energy_delta_eventness": check_energy_delta_eventness,
     "panns_eventness": check_panns_eventness,
     "audiomae_eventness": check_audiomae_eventness,
+    "imagebind_eventness": check_imagebind_eventness,
+    "wavlm_eventness": check_wavlm_eventness,
     "anchor_knobs": check_anchor_knobs,
     "anchor_window_select": check_anchor_window_select,
     "anchor_confidence_gate": check_anchor_confidence_gate,

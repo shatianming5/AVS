@@ -782,6 +782,62 @@ def _candidates_ltl_adaptive_keepadj_v1() -> list[CandidateConfig]:
     return out
 
 
+def _candidates_ltl_adaptive_keepadj_v2() -> list[CandidateConfig]:
+    """
+    Keep-when-adjacent demotion (adaptive_v3) for *bounded* Stage-1 score methods.
+
+    Compared to v1, this set sweeps *lower* std thresholds, intended for methods whose per-second
+    scores are naturally in a narrow range (e.g., cosine-similarity based probes).
+
+    Grid (kept intentionally small / pre-registered):
+      - shift ∈ {0,1}
+      - std_thr ∈ {0.25, 0.28, 0.30, 0.33}
+      - adjacency distance ∈ {1,2}
+      - all other knobs match the ltl_adaptive_keepadj_v1 defaults.
+    """
+    base = dict(
+        k=2,
+        low_res=160,
+        base_res=224,
+        high_res=352,
+        head="temporal_conv",
+        temporal_kernel_size=3,
+        anchor_shift=0,
+        anchor_std_threshold=0.30,
+        anchor_select="topk",
+        anchor_nms_radius=2,
+        anchor_nms_strong_gap=0.6,
+        anchor_window=3,
+        anchor_smooth_window=0,
+        anchor_smooth_mode="mean",
+        anchor_base_alloc="distance",
+        anchor_conf_metric=None,
+        anchor_conf_threshold=None,
+        max_high_anchors=None,
+        anchor_high_policy="adaptive_v3",
+        anchor_high_adjacent_dist=1,
+        anchor_high_gap_threshold=0.0,
+    )
+
+    out: list[CandidateConfig] = []
+    for thr in (0.25, 0.28, 0.30, 0.33):
+        thr_name = str(thr).replace(".", "p")
+        for shift in (0, 1):
+            for adj in (1, 2):
+                out.append(
+                    CandidateConfig(
+                        name=f"ltlkeepadjv2_adj{adj}_shift{shift}_std{thr_name}",
+                        **{
+                            **base,
+                            "anchor_shift": int(shift),
+                            "anchor_std_threshold": float(thr),
+                            "anchor_high_adjacent_dist": int(adj),
+                        },
+                    )
+                )
+    return out
+
+
 def _candidates_ltl_smooth_v1() -> list[CandidateConfig]:
     """
     Score-smoothing candidate set for learned-logit Stage-1 methods.
@@ -3194,6 +3250,24 @@ def _compute_scores_by_clip(
             )
         )
 
+    if method == "imagebind_av_sim":
+        # Cross-modal AV-consistency score in ImageBind embedding space:
+        #   s(t) = cosine(emb_audio(t), emb_image(t))
+        #
+        # This backend is expensive; it is expected to be used with the scores-json cache.
+        import os
+
+        from avs.multimodal.imagebind_probe import compute_imagebind_av_sim_scores_by_clip
+
+        pretrained = os.environ.get("IMAGEBIND_PRETRAINED", "1") != "0"
+        return compute_imagebind_av_sim_scores_by_clip(
+            clip_ids=clip_ids,
+            processed_dir=processed_dir,
+            num_segments=int(num_segments),
+            device=str(audio_device),
+            pretrained=bool(pretrained),
+        )
+
     t0 = _time.time()
     if method == "ast_lr":
         # Supervised, lightweight calibration: train a linear probe on AST logits to predict event vs background.
@@ -4929,12 +5003,76 @@ def _compute_scores_by_clip(
         clap_mlp_cls_model = None
         clap_mlp_cls_emb_by_train: dict[str, np.ndarray] = {}
         clap_num_classes: int | None = None
+        wavlm_probe = None
+        wavlm_emb_by_train: dict[str, np.ndarray] = {}
+        wavlm_mlp_cls_model = None
 
         def _softmax_np(x: np.ndarray, *, axis: int = -1) -> np.ndarray:
             x = np.asarray(x, dtype=np.float32)
             x = x - np.max(x, axis=axis, keepdims=True)
             ex = np.exp(x)
             return ex / (np.sum(ex, axis=axis, keepdims=True) + 1e-12)
+
+        if method == "wavlm_evt_mlp":
+            if train_ids is None or labels_by_clip is None:
+                raise ValueError("wavlm_evt_mlp requires train_ids and labels_by_clip")
+
+            import os
+            import torch
+
+            from avs.audio.wavlm_probe import WavLMEmbeddingProbe, WavLMProbeConfig
+            from avs.experiments.ave_p0 import _train_audio_basic_mlp_cls_eventness
+
+            pretrained = os.environ.get("WAVLM_PRETRAINED", "1") != "0"
+            model_name = os.environ.get("WAVLM_MODEL", "microsoft/wavlm-base-plus")
+            batch_size_env = os.environ.get("WAVLM_BATCH_SIZE")
+            batch_size = int(batch_size_env) if (batch_size_env is not None and str(batch_size_env).strip() != "") else None
+
+            wavlm_probe = WavLMEmbeddingProbe(
+                WavLMProbeConfig(
+                    model_name=str(model_name),
+                    pretrained=bool(pretrained),
+                    device=str(audio_device),
+                    dtype="float32",
+                )
+            )
+
+            train_ids = [str(x) for x in train_ids]
+            wavlm_emb_by_train = wavlm_probe.embeddings_per_second_by_clip_ids(
+                clip_ids=train_ids,
+                processed_dir=processed_dir,
+                num_segments=int(num_segments),
+                batch_size=batch_size,
+            )
+
+            num_classes = 1
+            for cid in train_ids:
+                labs = labels_by_clip.get(cid) or []
+                if labs:
+                    num_classes = max(int(num_classes), int(max(int(x) for x in labs)) + 1)
+
+            wavlm_mlp_cls_model = _train_audio_basic_mlp_cls_eventness(
+                clip_ids_train=train_ids,
+                labels_by_clip=labels_by_clip,
+                audio_feats_by_clip=wavlm_emb_by_train,
+                num_classes=int(num_classes),
+                device="cpu",
+                hidden_dim=128,
+                dropout=0.1,
+            )
+            wavlm_mlp_cls_model = wavlm_mlp_cls_model.to(torch.device("cpu"))
+            wavlm_mlp_cls_model.eval()
+
+            # Precompute embeddings for the remaining ids once to avoid per-clip model overhead.
+            missing_ids = [str(cid) for cid in clip_ids if str(cid) not in wavlm_emb_by_train]
+            if missing_ids:
+                emb_missing = wavlm_probe.embeddings_per_second_by_clip_ids(
+                    clip_ids=missing_ids,
+                    processed_dir=processed_dir,
+                    num_segments=int(num_segments),
+                    batch_size=batch_size,
+                )
+                wavlm_emb_by_train.update(emb_missing)
 
         if method in ("av_clap_clip_agree", "clap_evt", "clap_lr", "clap_mlp_cls", "clap_mlp_cls_target"):
             if meta_dir is None:
@@ -5086,6 +5224,20 @@ def _compute_scores_by_clip(
                 aud_probs = _softmax_np(aud_logits * float(audio_scale), axis=1)
                 s = aud_probs.max(axis=1).astype(np.float32, copy=False)
                 out[cid] = [float(x) for x in s.tolist()]
+            elif method == "wavlm_evt_mlp":
+                if wavlm_probe is None or wavlm_mlp_cls_model is None:
+                    raise ValueError("internal error: wavlm_evt_mlp probes are not initialized")
+                emb = wavlm_emb_by_train.get(cid)
+                if emb is None:
+                    raise ValueError(f"internal error: missing wavlm embedding for clip_id={cid!r}")
+                import torch
+
+                with torch.no_grad():
+                    logits = wavlm_mlp_cls_model(torch.from_numpy(np.asarray(emb, dtype=np.float32)).float())  # [T, C]
+                    bg = logits[:, 0]
+                    s = logits[:, 1:].max(dim=-1).values - bg
+                    s_np = s.detach().cpu().numpy().astype(np.float32)
+                out[cid] = [float(x) for x in s_np.tolist()]
             elif method in ("clap_mlp_cls", "clap_mlp_cls_target"):
                 if clap_probe is None or clap_mlp_cls_model is None:
                     raise ValueError("internal error: clap_mlp_cls probes are not initialized")
@@ -5355,6 +5507,7 @@ def build_parser() -> argparse.ArgumentParser:
             "ltl_std_v2",
             "ltl_adaptive_v1",
             "ltl_adaptive_keepadj_v1",
+            "ltl_adaptive_keepadj_v2",
             "ltl_smooth_v1",
             "ltl_adaptive_v2",
             "ltl_adaptive_v3",
@@ -5619,6 +5772,8 @@ def main(argv: list[str] | None = None) -> int:
             candidates = _candidates_ltl_adaptive_v1()
         elif candidate_set == "ltl_adaptive_keepadj_v1":
             candidates = _candidates_ltl_adaptive_keepadj_v1()
+        elif candidate_set == "ltl_adaptive_keepadj_v2":
+            candidates = _candidates_ltl_adaptive_keepadj_v2()
         elif candidate_set == "ltl_smooth_v1":
             candidates = _candidates_ltl_smooth_v1()
         elif candidate_set == "ltl_adaptive_v2":
@@ -5670,6 +5825,8 @@ def main(argv: list[str] | None = None) -> int:
             "av_clip_mlp_cls",
             "av_clip_mlp_cls_target",
             "av_clipdiff_tcn",
+            "imagebind_av_sim",
+            "wavlm_evt_mlp",
         ):
             scores_json = out_dir / "eventness_scores.json"
         if scores_json is not None:

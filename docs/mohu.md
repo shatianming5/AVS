@@ -7,6 +7,29 @@
 - (none)
 
 ## Resolved (archive)
+- [x] M0192 (oral-competitive / C0003): Add a stronger audio Stage-1 and run the promotion gate to quick test402.
+  - Implementation: `eventness_method=wavlm_evt_mlp` (WavLM base-plus embeddings + supervised per-second MLP head).
+  - Evidence:
+    - code:
+      - `avs/audio/wavlm_probe.py`
+      - `avs/experiments/ave_p0_sweep.py` (`wavlm_evt_mlp`)
+      - `avs/smoke.py` + `avs/smoke_checks.py` (`wavlm_eventness`)
+    - smoke: `python -m avs.smoke wavlm_eventness`
+    - val402 sweep: `runs/E0810_val402_wavlm_20260212-041931/sweep_summary.json` (best Δ≈-0.00424)
+    - quick test402: `runs/E0811_quick_test402_wavlm_20260212-042425/metrics.json` (Δ≈+0.00124; p≈0.918) + `runs/E0811_quick_test402_wavlm_20260212-042425/diagnose.json` (fallback_used_frac≈0.231)
+  - Notes: planned BEATs backend is not available in the current `transformers` wheel; used WavLM as the strongest readily-available HF audio foundation model. Not promoted to full test402.
+
+- [x] M0191 (oral-competitive / C0003): Add ImageBind AV-consistency Stage-1 (`imagebind_av_sim`) and run the promotion gate to quick test402.
+  - Evidence:
+    - code:
+      - `avs/multimodal/imagebind_probe.py`
+      - `avs/experiments/ave_p0_sweep.py` (`imagebind_av_sim`)
+      - `avs/smoke.py` + `avs/smoke_checks.py` (`imagebind_eventness`)
+    - smoke: `python -m avs.smoke imagebind_eventness`
+    - val402 sweep: `runs/E0801_val402_imagebind_keepadjv2_20260212-035956/sweep_summary.json` (best Δ≈-0.00008)
+    - quick test402: `runs/E0802_quick_test402_imagebind_20260212-040440/metrics.json` (Δ≈-0.00265; p≈0.754) + `runs/E0802_quick_test402_imagebind_20260212-040440/diagnose.json` (fallback_used_frac≈0.739)
+  - Notes: not promoted to full test402.
+
 - [x] M0190 (oral vNext): Reproducibility seal (datasets + evidence matrix refresh).
   - Evidence:
     - command_ran: `bash scripts/datasets/verify_all.sh`

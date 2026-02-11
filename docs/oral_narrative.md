@@ -96,6 +96,10 @@ We verify the “listen-then-look” indexing story in a long-video downstream t
 
 Optional diagnostic (tighter budget, `max_steps=60`): see `docs/experiment.md` E0100 notes.
 
+Long-video QA add-on budget curves (slide exports):
+- IntentQA: `docs/oral_assets/fig4_qa_budget_curve_intentqa.png`
+- AVQA: `docs/oral_assets/fig4_qa_budget_curve_avqa.png`
+
 ## 8) Reproducibility (What We Provide)
 
 We maintain:

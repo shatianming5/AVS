@@ -1,6 +1,6 @@
 # Oral vNext Minimal-Decisive Checklist
 
-Date: 2026-02-11
+Date: 2026-02-12
 
 Scope: only the **smallest** set of work that can still change an “oral-level” outcome.
 This is intentionally *not* a full TODO list.
@@ -8,7 +8,7 @@ This is intentionally *not* a full TODO list.
 ## 0) One decision (pick one track)
 
 - [x] **Track A (recommended):** stop chasing `C0003 (+2%)`, lock the revised claim, and make the narrative reviewer-proof.
-- [ ] **Track B:** take one last run at `C0003 (+2%)` (requires a *new* Stage-1 signal; expect iteration + compute).
+- [x] **Track B:** attempted and failed the promotion gate (ImageBind + WavLM); stop chasing `C0003 (+2%)`.
 
 ---
 
@@ -45,13 +45,25 @@ This is intentionally *not* a full TODO list.
     - `runs/datasets_verify_20260212-020117/datasets_verify.json`
     - `runs/evidence_matrix_20260212-020124/evidence_matrix.json`
 
+- [x] A6: Slide assembly helpers (so packaging is truly “done”).
+  - Exports:
+    - `docs/oral_assets/fig4_qa_budget_curve_{intentqa,avqa}.png`
+  - Slide-by-slide outline:
+    - `docs/oral_deck_outline.md`
+
 ---
 
 ## Track B: One Last C0003 Attempt (only if you have time/compute)
 
-- [ ] B1: Commit to **one** new Stage-1 idea that is meaningfully different from existing `energy/*clipdiff*/*panns*/*ast*/*fused*`.
-  - Acceptance: define `EVENTNESS=<new_id>` + 1 runnable sweep script: `val402 sweep (SEEDS=0..2)`.
+- [x] B1: Commit to new Stage-1 ideas (bounded search: 2 ideas max).
+  - Tried:
+    - `imagebind_av_sim` (ImageBind AV-consistency)
+    - `wavlm_evt_mlp` (WavLM supervised eventness)
 
-- [ ] B2: Run the promotion gate exactly once:
-  - `val402 sweep (SEEDS=0..2)` → `quick test402 (SEEDS=0..2)` → `full test402 (SEEDS=0..9)`
-  - Acceptance: only if `full test402` meets `Δ>=+0.02` and paired `p<0.05`, flip `C0003 proven`; otherwise stop and stick to Track A.
+- [x] B2: Run the fixed promotion gate once per idea.
+  - ImageBind:
+    - val402: `runs/E0801_val402_imagebind_keepadjv2_20260212-035956/sweep_summary.json` (best Δ≈-0.00008)
+    - quick test402: `runs/E0802_quick_test402_imagebind_20260212-040440/metrics.json` (Δ≈-0.00265; p≈0.754) → not promoted
+  - WavLM:
+    - val402: `runs/E0810_val402_wavlm_20260212-041931/sweep_summary.json` (best Δ≈-0.00424)
+    - quick test402: `runs/E0811_quick_test402_wavlm_20260212-042425/metrics.json` (Δ≈+0.00124; p≈0.918) → not promoted

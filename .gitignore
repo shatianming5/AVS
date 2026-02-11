@@ -9,4 +9,5 @@ artifacts/
 .rd_queue*/
 
 .venv/
+.checkpoints/
 .DS_Store

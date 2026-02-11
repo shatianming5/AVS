@@ -14,6 +14,71 @@
   - EPIC-SOUNDS (local subset): `data/EPIC_SOUNDS/raw/videos/` + annotations under `data/EPIC_SOUNDS/meta/`
 
 ## Checklist
+### Run Queue (Oral-Competitive C0003 push; sequential)
+- [x] E0801: ImageBind Stage-1 (`imagebind_av_sim`) — val402 sweep (SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=imagebind_av_sim CANDIDATE_SET=ltl_adaptive_keepadj_v2 SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0801_val402_imagebind_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0801_*/sweep_summary.json`
+    - `runs/E0801_*/best_config.json`
+    - `runs/E0801_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+
+- [x] E0802: ImageBind Stage-1 (`imagebind_av_sim`) — quick test402 (SEEDS=0..2) + diagnose
+  - command:
+    - `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0801_*/best_config.json EVENTNESS=imagebind_av_sim SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0802_quick_test402_imagebind_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0802_*/metrics.json OUT_DIR=runs/E0802_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0802_*/metrics.json`
+    - `runs/E0802_*/diagnose.json`
+  - required_metrics:
+    - `metrics.json`: `paired_ttest.anchored_vs_uniform.p`, `summary.anchored_top2.mean`, `summary.uniform.mean` (report Δ)
+
+- [x] E0803: ImageBind Stage-1 (`imagebind_av_sim`) — full test402 (SEEDS=0..9) (skipped: E0802 not promoted)
+  - command:
+    - `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0801_*/best_config.json EVENTNESS=imagebind_av_sim SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0803_full_test402_imagebind_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0803_*/metrics.json OUT_DIR=runs/E0803_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  - required_artifacts: []
+  - required_metrics: []
+
+- [x] E0810: WavLM Stage-1 (`wavlm_evt_mlp`) — val402 sweep (SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=wavlm_evt_mlp CANDIDATE_SET=ltl_adaptive_keepadj_v1 SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 WAVLM_PRETRAINED=1 WAVLM_MODEL=microsoft/wavlm-base-plus WAVLM_BATCH_SIZE=16 OUT_DIR=runs/E0810_val402_wavlm_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0810_*/sweep_summary.json`
+    - `runs/E0810_*/best_config.json`
+    - `runs/E0810_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+
+- [x] E0811: WavLM Stage-1 (`wavlm_evt_mlp`) — quick test402 (SEEDS=0..2) + diagnose
+  - command:
+    - `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0810_*/best_config.json EVENTNESS=wavlm_evt_mlp SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 WAVLM_PRETRAINED=1 WAVLM_MODEL=microsoft/wavlm-base-plus WAVLM_BATCH_SIZE=16 OUT_DIR=runs/E0811_quick_test402_wavlm_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0811_*/metrics.json OUT_DIR=runs/E0811_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0811_*/metrics.json`
+    - `runs/E0811_*/diagnose.json`
+  - required_metrics:
+    - `metrics.json`: `paired_ttest.anchored_vs_uniform.p`, `summary.anchored_top2.mean`, `summary.uniform.mean` (report Δ)
+
+- [x] E0812: WavLM Stage-1 (`wavlm_evt_mlp`) — full test402 (SEEDS=0..9) (skipped: E0811 not promoted)
+  - command:
+    - `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0810_*/best_config.json EVENTNESS=wavlm_evt_mlp SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 WAVLM_PRETRAINED=1 WAVLM_MODEL=microsoft/wavlm-base-plus WAVLM_BATCH_SIZE=16 OUT_DIR=runs/E0812_full_test402_wavlm_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0812_*/metrics.json OUT_DIR=runs/E0812_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  - required_artifacts: []
+  - required_metrics: []
+
 ### Run Queue (Long-Video QA; sequential)
 - [x] E0600 (real; ppl): IntentQA VLM evaluation under budgeted frame selection (val n=253; seed=0)
   - command: `OUT_DIR=runs/E0600_intentqa_vlm_eval_full_20260210-041911 SPLIT=val LIMIT=256 METHODS=uniform,random,audio,cheap_visual,fused,ql2l_clap,ql2l_asr_bm25 B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=250 bash scripts/e0600_intentqa_vlm_eval.sh`
@@ -382,6 +447,10 @@
 | E0713 | success | IntentQA faithfulness (seed=2, n=253): accuracy=0.9486; accuracy_deleted=0.9486; acc_drop=0.0000; pred_change_rate=0.0316 | `runs/E0713_intentqa_faithfulness_val_s2_20260212-000949/` | matches seeds 0/1 behavior; offline HF mode for stability |
 | E0714 | success | EgoSchema Subset test (seed=2, n=256): uniform acc=0.5859; ql2l_clap acc=0.5352; ql2l_asr_bm25 acc=0.5469 (all invalid_rate=0) | `runs/E0714_egoschema_eval_subset256_s2_20260212-004316/` | matches seeds 0/1 behavior; seed-extension reproducibility check passed |
 | E0720 | success | Cov@tau mean≈0.1032; corr pearson≈0.0747 spearman≈-0.0304 (weak) | `runs/E0720_evidence_alignment_df7_best_20260212-015616/evidence_alignment.json` | Evidence Alignment on best C0003 config (E0643 df7); diagnostic only (not predictive) |
+| E0801 | success | val402 sweep best=`ltlkeepadjv2_adj1_shift0_std0p33`: anchored=0.74672 vs uniform=0.74680 (Δ=-0.00008; p=0.9929) | `runs/E0801_val402_imagebind_keepadjv2_20260212-035956/` | ImageBind AV-sim Stage-1; effectively neutral/negative on val |
+| E0802 | success | quick test402: anchored=0.71028 vs uniform=0.71294 (Δ=-0.00265; p=0.7538) | `runs/E0802_quick_test402_imagebind_20260212-040440/` | fallback_used_frac≈0.739; fails promotion gate (no full test) |
+| E0810 | success | val402 sweep best=`ltlkeepadj_adj1_shift0_std0p55`: anchored=0.74256 vs uniform=0.74680 (Δ=-0.00424; p=0.6662) | `runs/E0810_val402_wavlm_20260212-041931/` | WavLM supervised Stage-1 (`wavlm_evt_mlp`) fails val sweep |
+| E0811 | success | quick test402: anchored=0.71418 vs uniform=0.71294 (Δ=+0.00124; p=0.9178) | `runs/E0811_quick_test402_wavlm_20260212-042425/` | fallback_used_frac≈0.231; fails promotion gate (no full test) |
 
 > Note: The authoritative runnable queue for the current `docs/plan.md` is the checklist above. The `## Experiments` catalog below is an archive; its internal `[ ]` fields are not a TODO list.
 

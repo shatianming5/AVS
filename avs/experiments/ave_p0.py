@@ -2049,6 +2049,7 @@ def run_p0_from_caches(
         "vision_binary_mlp",
         "vision_mlp_cls",
         "vision_mlp_cls_target",
+        "imagebind_av_sim",
     ) and any(
         b in baselines for b in ("audio_concat_uniform", "audio_concat_anchored_top2")
     ):
