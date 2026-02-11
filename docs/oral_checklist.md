@@ -174,3 +174,35 @@ This section is **optional** for the core AVE oral pack, but is a high-leverage 
   - Key takeaways (for slides):
     - IntentQA: `ql2l_clap` helps more on `CH` (+2.22pp) and hurts on `TN` (-1.49pp).
     - AVQA: `ql2l_asr_bm25` helps more on `Which` (+2.80pp) and hurts on `Come From` (-2.22pp).
+
+---
+
+## 6) Oral vNext decisive pack (E070x/D0701)
+
+- [x] **R0700: related-work alignment (online scan + positioning matrix)** completed.
+  - Artifact: `docs/oral_related_work.md`
+  - Use: one-page oral rebuttal map for “baseline sufficiency / extra-dataset necessity”.
+
+- [x] **E0704: answer-prior bias baselines** completed (IntentQA/AVQA/EgoSchema).
+  - Artifacts: `runs/E0704_qa_bias_baselines_20260211-161403/{intentqa,avqa,egoschema}/bias_baselines.json`
+  - Key signal: all datasets are substantially above answer-prior; language-only cannot explain uniform-level performance.
+
+- [x] **E0705: bucket significance (bootstrap)** completed.
+  - Artifacts: `runs/E0705_qa_bucket_significance_20260211-161409/{intentqa,avqa,egoschema}/bucket_significance.json`
+  - Key signal: AVQA has a significant positive `q_bar` bucket; EgoSchema has a significant negative high-`q_bar` bucket (must be stated explicitly in oral narrative).
+
+- [x] **D0701: C0003 gate decision helper** completed.
+  - Artifact: `runs/D0701_c0003_gate_20260211-161419/summary.json`
+  - Decision: both `df5/df7` are `revised_claim`; `c0003_proven=false` persists.
+
+- [x] **E0701: multi-seed robustness (IntentQA b16 / AVQA b4)** completed.
+  - Targets: `runs/E0701_intentqa_val_b16_s{1,2}_20260211-162353/metrics.json`, `runs/E0701_avqa_val_b4_s{1,2}_20260211-162353/metrics.json`
+  - Aggregation target: `runs/E0701_qa_multiseed_20260211-162353/{intentqa_multiseed,avqa_multiseed}/metrics_summary.json`
+
+- [x] **E0702: budget curve (B=2/4/8/16)** completed.
+  - Artifacts: `runs/E0702_qa_budget_curve_20260211-164607/{intentqa_curve,avqa_curve}/budget_curve.{json,md,png}`
+  - Key signal: AVQA `ql2l_asr_bm25` is budget-sensitive (best at `B2` Δ=`+2.83pp`, still positive at `B4` Δ=`+1.42pp`, flips at `B8` Δ=`-0.94pp`); IntentQA ql2l gains are only marginal at `B16` (`ql2l_clap` Δ=`+0.40pp`) and non-positive at lower budgets.
+
+- [x] **E0703: AVQA coverage expansion + sensitivity** completed.
+  - Artifacts: `runs/E0703_avqa_coverage_expand_20260211-170526/sensitivity/{coverage_sensitivity.json,coverage_sensitivity.md}`
+  - Key signal: expanded `n=865` keeps ranking stable (`ql2l_asr_bm25` best), with moderate absolute shift vs baseline `n=212`.

@@ -5452,3 +5452,83 @@ Notes (2026-02-10 rerun; artifact paths locally present):
 | Logs | `artifacts/experiments/E0619/run.log` |
 | Artifacts | `runs/E0619_qa_bucket_report_20260211-062907/{intentqa,avqa,egoschema}/bucket_report.{json,md}` |
 | Results | Key deltas (primary method vs uniform): IntentQA: `ql2l_clap` overall `+0.00395` (helps `CH` +2.22pp; hurts `TN` -1.49pp). AVQA: `ql2l_asr_bm25` overall `+0.01415` (helps `Which` +2.80pp; hurts `Come From` -2.22pp). EgoSchema: `ql2l_clap` underperforms uniform across all `q_bar` buckets (negative-but-clean evidence). |
+
+### R0700: Oral related-work scan and positioning matrix (online)
+| Field | Value |
+| --- | --- |
+| Objective | Build a concise, oral-ready related-work map to justify why AVE+Long-Video-QA evidence is sufficient and where extra datasets are necessary vs optional. |
+| Scope | Audio-guided frame selection, long-video QA frame selection, retrieval-augmented video understanding, and benchmark expectations for oral defense. |
+| Artifacts | `docs/oral_related_work.md` |
+| Results | Added a one-page positioning matrix with representative related work, oral objection mapping, and a practical recommendation: keep AVE as main proof, use Long-Video-QA as transfer/add-on evidence, and avoid unscoped extra-dataset expansion before closing core hard-gate narrative. |
+
+### E0704: QA answer-prior bias baselines (IntentQA / AVQA / EgoSchema)
+| Field | Value |
+| --- | --- |
+| Objective | Quantify language-prior floors and compare them against `uniform` / `text_only` to prevent over-claiming on long-video QA add-on tasks. |
+| Code path | `avs/experiments/qa_answer_prior.py`, `scripts/e0704_qa_bias_baselines.sh` |
+| Full cmd | `OUT_DIR=runs/E0704_qa_bias_baselines_20260211-161403 bash scripts/e0704_qa_bias_baselines.sh` |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `artifacts/experiments/E0704/run.log` |
+| Artifacts | `runs/E0704_qa_bias_baselines_20260211-161403/{intentqa,avqa,egoschema}/bias_baselines.{json,md}` |
+| Results | IntentQA (`n=253`): answer-prior=`0.1976`, text_only=`0.6640`, uniform=`0.9447`. AVQA (`n=212`): answer-prior=`0.1651`, text_only=`0.3113`, uniform=`0.8113`. EgoSchema (`n=500`): answer-prior=`0.2340`, text_only=`0.2720`, uniform=`0.5880`. Conclusion: all three tasks remain substantially above answer-prior; language-only is not a sufficient explanation for uniform-level performance. |
+
+### E0705: QA bucket significance (bootstrap CI + p_boot)
+| Field | Value |
+| --- | --- |
+| Objective | Turn bucket narrative into significance-tested evidence for primary methods vs uniform on each QA dataset. |
+| Code path | `avs/experiments/qa_bucket_significance.py`, `scripts/e0705_qa_bucket_significance.sh` |
+| Full cmd | `OUT_DIR=runs/E0705_qa_bucket_significance_20260211-161409 bash scripts/e0705_qa_bucket_significance.sh` |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `artifacts/experiments/E0705/run.log` |
+| Artifacts | `runs/E0705_qa_bucket_significance_20260211-161409/{intentqa,avqa,egoschema}/bucket_significance.{json,md}` |
+| Results | IntentQA primary=`ql2l_clap`: no significant bucket at `min_n=20`. AVQA primary=`ql2l_asr_bm25`: one significant positive bucket (`q_bar=mid1`, `delta=+0.0571`, `p=0.0392`, `n=70`). EgoSchema primary=`ql2l_clap`: one significant negative bucket (`q_bar=high`, `delta=-0.0647`, `p=0.0048`, `n=170`). Interpretation: improvements are localized and dataset-dependent; robust narrative should include both positive and negative significant buckets. |
+
+### D0701: C0003 hard-gate decision helper (no-infinite-search policy)
+| Field | Value |
+| --- | --- |
+| Objective | Enforce a pre-registered gate for C0003 (`delta>=+0.02` and `p<0.05`) and produce an explicit promote/stop decision across candidate lines. |
+| Code path | `avs/experiments/c0003_gate_decision.py`, `scripts/d0701_c0003_gate.sh` |
+| Full cmd | `OUT_DIR=runs/D0701_c0003_gate_20260211-161419 bash scripts/d0701_c0003_gate.sh` |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `artifacts/experiments/D0701/run.log` |
+| Artifacts | `runs/D0701_c0003_gate_20260211-161419/candidate_df5/decision.json`, `runs/D0701_c0003_gate_20260211-161419/candidate_df7/decision.json`, `runs/D0701_c0003_gate_20260211-161419/summary.json` |
+| Results | Candidate `df5`: full `delta=+0.01117`, `p=0.1087` → `revised_claim`. Candidate `df7`: full `delta=+0.01045`, `p=0.0395` → `revised_claim` (significant but below +2%). Selected decision remains `revised_claim`, `c0003_proven=false`. |
+
+### E0701: QA multi-seed robustness (IntentQA b16 / AVQA b4)
+| Field | Value |
+| --- | --- |
+| Objective | Expand Long-Video QA add-on from single-seed to 3-seed robustness summaries on the most oral-relevant settings: IntentQA (`B=16`) and AVQA (`B=4`). |
+| Code path | `scripts/e0701_qa_multiseed.sh`, `avs/experiments/qa_multiseed_summary.py` |
+| Full cmd | Parallelized execution (seed-level sub-jobs): IntentQA `s1/s2` + AVQA `s1/s2`; then aggregation by `qa_multiseed_summary`. |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `artifacts/experiments/E0701/intentqa_s1.log`, `artifacts/experiments/E0701/intentqa_s2.log`, `artifacts/experiments/E0701/avqa_s1.log`, `artifacts/experiments/E0701/avqa_s2.log`, `artifacts/experiments/E0701/run.log` |
+| Artifacts | Seed runs: `runs/E0701_intentqa_val_b16_s{1,2}_20260211-162353/metrics.json`, `runs/E0701_avqa_val_b4_s{1,2}_20260211-162353/metrics.json`; aggregate: `runs/E0701_qa_multiseed_20260211-162353/{intentqa_multiseed,avqa_multiseed}/metrics_summary.json` |
+| Results | IntentQA (3 seeds): uniform=`0.9447`, random=`0.9341` (Δ=`-0.0105`), ql2l_clap=`0.9486` (Δ=`+0.0040`), ql2l_asr_bm25=`0.9407` (Δ=`-0.0040`), text_only=`0.6640` (Δ=`-0.2806`). AVQA (3 seeds): uniform=`0.8113`, random=`0.7909` (Δ=`-0.0204`), ql2l_clap=`0.8160` (Δ=`+0.0047`), ql2l_asr_bm25=`0.8255` (Δ=`+0.0142`), text_only=`0.3113` (Δ=`-0.5000`). |
+
+### E0702: QA budget curve (IntentQA / AVQA, B=2/4/8/16)
+| Field | Value |
+| --- | --- |
+| Objective | Quantify whether ql2l gains are budget-consistent or budget-sensitive by sweeping frame budget (`B=2,4,8,16`) and aggregating to per-task budget curves. |
+| Code path | `scripts/e0702_qa_budget_curve.sh`, `avs/experiments/qa_budget_curve.py` |
+| Full cmd | First run: `OUT_DIR=runs/E0702_qa_budget_curve_20260211-164607 bash scripts/e0702_qa_budget_curve.sh`; then offline resume for interrupted `B=8`: `HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 ...` (`IntentQA` then `AVQA`), followed by curve regeneration (recorded in log). |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `artifacts/experiments/E0702/run.log` |
+| Artifacts | Metrics: `runs/E0702_intentqa_val_b{2,4,8}_s0_20260211-164612/metrics.json`, `runs/E0702_avqa_val_b{2,8}_s0_20260211-164612/metrics.json` (+ existing `B=16` anchors from `runs/E0604_*` / `runs/E0615_*` / `runs/E0616_*` / `runs/E0617_*`); Curves: `runs/E0702_qa_budget_curve_20260211-164607/{intentqa_curve,avqa_curve}/budget_curve.{json,md,png}` |
+| Results | IntentQA (`n=253`): uniform improves monotonically with budget (`B2=0.9012`, `B4=0.9091`, `B8=0.9368`, `B16=0.9447`), while ql2l methods are non-positive at `B2/B4/B8`; only `ql2l_clap` at `B16` stays slightly positive (Δ=`+0.0040`). AVQA (`n=212`): `ql2l_asr_bm25` is strongest at low/mid budget (`B2 Δ=+0.0283`, `B4 Δ=+0.0142`) but flips negative at `B8` (Δ=`-0.0094`), indicating budget over-allocation can dilute gains; `text_only` remains far below uniform at all budgets. Repro note: one HF transient (`client closed`) occurred; resumed in offline mode and completed with full artifacts. |
+
+### E0703: AVQA coverage expansion + sensitivity
+| Field | Value |
+| --- | --- |
+| Objective | Test whether AVQA conclusions hold when coverage expands far beyond the original `n=212` subset used by E0616. |
+| Code path | `scripts/e0703_avqa_coverage_expand.sh`, `avs/datasets/avqa_download.py`, `avs/experiments/qa_coverage_sensitivity.py` |
+| Full cmd | `RUN_ROOT=runs/E0703_avqa_coverage_expand_20260211-170526 SKIP_DOWNLOAD=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 DEVICE=cuda:2 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu QL2L_CLIP_DEVICE=cpu bash scripts/e0703_avqa_coverage_expand.sh` |
+| Smoke | [ ] |
+| Full | [x] |
+| Logs | `artifacts/experiments/E0703/run.log` |
+| Artifacts | `runs/E0703_avqa_vlm_eval_val_b4_expand_20260211-170223/metrics.json`, `runs/E0703_avqa_coverage_expand_20260211-170526/avqa_download_val_full.json`, `runs/E0703_avqa_coverage_expand_20260211-170526/sensitivity/coverage_sensitivity.{json,md}` |
+| Results | Expanded evaluation keeps `n=865` items (`baseline_n=212`). Acc on expanded set: uniform=`0.8312`, cheap_visual=`0.8301`, ql2l_asr_bm25=`0.8324`, text_only=`0.3341`. Coverage-sensitivity deltas (expanded-baseline): uniform `+0.0199`, ql2l_asr_bm25 `+0.0069`, cheap_visual `+0.0046`, text_only `+0.0228`. Interpretation: ranking is stable (`ql2l_asr_bm25` still best), with modest absolute shifts under larger coverage. |
