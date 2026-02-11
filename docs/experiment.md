@@ -218,6 +218,69 @@
   - logs: `artifacts/experiments/E0616/run.log`
   - backfill: done (see `### E0616`).
 
+- [x] E0710 (real; C0003 queue; val402 sweep): dense-stride flow-MLP rerun with `ltl_adaptive_keepadj_v1` on official val402 (`SEEDS=0..2`)
+  - command: `EVENTNESS=av_clipdiff_flow_mlp CANDIDATE_SET=ltl_adaptive_keepadj_v1 SEEDS=0,1,2 PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 IDS_TRAIN=data/AVE/meta/download_ok_train_official.txt IDS_EVAL=data/AVE/meta/download_ok_val_official.txt OUT_DIR=runs/E0710_val402_flowmlp_keepadj_$(date +%Y%m%d-%H%M%S) bash scripts/e0393_ave_p0_sweep_official_val_ltl_top1med_norm_v1_av_clipdiff_flow_mlp.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0710_val402_flowmlp_keepadj_20260212-000010/sweep_summary.json`
+    - `runs/E0710_val402_flowmlp_keepadj_20260212-000010/best_config.json`
+    - `runs/E0710_val402_flowmlp_keepadj_20260212-000010/ltlkeepadj_adj2_shift0_std0p5/metrics.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`, `best.metrics_path`
+  - logs: `artifacts/experiments/E0710/run.log`
+  - backfill: done (see Results table `E0710` row).
+
+- [x] E0711 (real; C0003 queue; quick test402): quick-transfer gate for E0710 val winner (`SEEDS=0..2`)
+  - command: `BEST_CONFIG_JSON=runs/E0710_val402_flowmlp_keepadj_20260212-000010/best_config.json IDS_TRAIN=data/AVE/meta/download_ok_train_official.txt IDS_EVAL=data/AVE/meta/download_ok_test_official.txt PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 SEEDS=0,1,2 OUT_DIR=runs/E0711_quick_test402_flowmlp_keepadj_$(date +%Y%m%d-%H%M%S) bash scripts/e0394_ave_p0_best_to_test_quick_official_av_clipdiff_flow_mlp.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0711_quick_test402_flowmlp_keepadj_20260212-000606/metrics.json`
+    - `runs/E0711_quick_test402_flowmlp_keepadj_20260212-000606/diagnose.json`
+  - required_metrics:
+    - `metrics.json`: `summary.{anchored_top2,uniform}.mean`, `paired_ttest.anchored_vs_uniform.p`
+  - logs: `artifacts/experiments/E0711/run.log`
+  - backfill: done (see Results table `E0711` row).
+
+- [x] E0712 (real; C0003 queue; full test402): full test402 rerun for E0710 val winner (`SEEDS=0..9`)
+  - command: `BEST_CONFIG_JSON=runs/E0710_val402_flowmlp_keepadj_20260212-000010/best_config.json IDS_TRAIN=data/AVE/meta/download_ok_train_official.txt IDS_EVAL=data/AVE/meta/download_ok_test_official.txt PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 SEEDS=0,1,2,3,4,5,6,7,8,9 OUT_DIR=runs/E0712_full_test402_flowmlp_keepadj_$(date +%Y%m%d-%H%M%S) bash scripts/e0395_ave_p0_best_to_test_full_official_av_clipdiff_flow_mlp.sh`
+  - configs: []
+  - seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  - required_artifacts:
+    - `runs/E0712_full_test402_flowmlp_keepadj_20260212-000835/metrics.json`
+    - `runs/E0712_full_test402_flowmlp_keepadj_20260212-000835/diagnose.json`
+  - required_metrics:
+    - `metrics.json`: `summary.{anchored_top2,uniform}.mean`, `paired_ttest.anchored_vs_uniform.p`
+  - logs: `artifacts/experiments/E0712/run.log`
+  - backfill: done (see Results table `E0712` row).
+
+- [x] E0713 (real; Long-Video QA extension; seed=2): IntentQA faithfulness rerun (`ql2l_clap`, val n=253)
+  - command: `OUT_DIR=runs/E0713_intentqa_faithfulness_val_s2_$(date +%Y%m%d-%H%M%S) SPLIT=val LIMIT=256 METHOD=ql2l_clap B_FRAMES=16 MAX_SECONDS=120 SEED=2 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=250 bash scripts/e0601_intentqa_faithfulness.sh`
+  - configs: []
+  - seeds: [2]
+  - required_artifacts:
+    - `runs/E0713_intentqa_faithfulness_val_s2_20260212-000949/faithfulness.json`
+    - `runs/E0713_intentqa_faithfulness_val_s2_20260212-000949/rows.jsonl`
+    - `runs/E0713_intentqa_faithfulness_val_s2_20260212-000949/preprocess_meta.json`
+  - required_metrics:
+    - `faithfulness.json`: `accuracy`, `accuracy_deleted`, `acc_drop`, `pred_change_rate`, `invalid_rate`
+  - logs: `artifacts/experiments/E0713/run.log`
+  - backfill: done (see Results table `E0713` row).
+
+- [x] E0714 (real; Long-Video QA extension; seed=2): EgoSchema Subset eval rerun (`methods=uniform,ql2l_clap,ql2l_asr_bm25`, test n=256)
+  - command: `OUT_DIR=runs/E0714_egoschema_eval_subset256_s2_$(date +%Y%m%d-%H%M%S) CONFIG=Subset SPLIT=test LIMIT=256 METHODS=uniform,ql2l_clap,ql2l_asr_bm25 B_FRAMES=16 MAX_SECONDS=120 SEED=2 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu QL2L_CLIP_DEVICE=cpu HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 bash scripts/e0602_egoschema_predict.sh`
+  - configs: []
+  - seeds: [2]
+  - required_artifacts:
+    - `runs/E0714_egoschema_eval_subset256_s2_20260212-004316/metrics.json`
+    - `runs/E0714_egoschema_eval_subset256_s2_20260212-004316/predictions.jsonl`
+    - `runs/E0714_egoschema_eval_subset256_s2_20260212-004316/preprocess_meta.json`
+  - required_metrics:
+    - `metrics.json`: `summary[*].acc`, `summary[*].invalid_rate`
+  - logs: `artifacts/experiments/E0714/run.log`
+  - backfill: done (see Results table `E0714` row).
+
 - [x] E0003: Official AVE full-dataset validation (multi-GPU)
   - command: `RUN_ROOT=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402 bash scripts/ave_verify_official_after_install.sh`
   - configs: []
@@ -305,6 +368,11 @@
 | E0617 | success | IntentQA val (n=253): uniform acc=0.9447; text_only acc=0.6640 (Δ=-0.2806) | `runs/E0617_intentqa_vlm_eval_val_text_only_20260211-053301/` | skipped_videos=1; invalid_rate=0 |
 | E0615 | success | AVQA val (n=212; seed0): uniform acc=0.8160; text_only acc=0.3113 (others identical to uniform) | `runs/E0615_avqa_vlm_eval_val_20260211-043508/` | budget_frames=16 >= clip duration, so all frame-selection methods degenerate to full coverage; rerun with tighter budget for method separation |
 | E0616 | success | AVQA val (n=212; B_FRAMES=4): uniform acc=0.8113; best=0.8255 (+0.0142; cheap_visual/fused/ql2l_asr_bm25); ql2l_clip=0.8208; audio/ql2l_clap=0.8160; text_only=0.3113 | `runs/E0616_avqa_vlm_eval_val_b4_20260211-051556/` | skipped_videos=44; invalid_rate=0 |
+| E0710 | success | val402 sweep best=`ltlkeepadj_adj2_shift0_std0p5`: anchored-uniform Δ=+0.00648; p=0.0355 | `runs/E0710_val402_flowmlp_keepadj_20260212-000010/` | uses official ids + explicit processed/cache dirs from `REAL_AVE_OFFICIAL_RERUN_20260209-054402` |
+| E0711 | success | quick test402: anchored=0.71982 vs uniform=0.71294 (Δ=+0.00688; p=0.395) | `runs/E0711_quick_test402_flowmlp_keepadj_20260212-000606/` | quick transfer positive but not significant |
+| E0712 | success | full test402: anchored=0.72331 vs uniform=0.71622 (Δ=+0.00709; p=0.141) | `runs/E0712_full_test402_flowmlp_keepadj_20260212-000835/` | fails C0003 hard gate; below current best full-test Δ |
+| E0713 | success | IntentQA faithfulness (seed=2, n=253): accuracy=0.9486; accuracy_deleted=0.9486; acc_drop=0.0000; pred_change_rate=0.0316 | `runs/E0713_intentqa_faithfulness_val_s2_20260212-000949/` | matches seeds 0/1 behavior; offline HF mode for stability |
+| E0714 | success | EgoSchema Subset test (seed=2, n=256): uniform acc=0.5859; ql2l_clap acc=0.5352; ql2l_asr_bm25 acc=0.5469 (all invalid_rate=0) | `runs/E0714_egoschema_eval_subset256_s2_20260212-004316/` | matches seeds 0/1 behavior; seed-extension reproducibility check passed |
 
 > Note: The authoritative runnable queue for the current `docs/plan.md` is the checklist above. The `## Experiments` catalog below is an archive; its internal `[ ]` fields are not a TODO list.
 

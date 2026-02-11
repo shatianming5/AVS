@@ -123,6 +123,7 @@ For any new Stage-1 signal / method targeting C0003:
   - Next attempt (vec-MLP; keepadj + `anchor_drop_far_dist`): target the far-anchor2 harm buckets seen in E0628 (`dist=6/8` strongly negative in diagnose).
     - df7 (`anchor_drop_far_dist=7`, i.e. drop only `dist>=8`): quick test402 `runs/E0636_quick_test402_vecmlp_keepadj_adj2_shift1_std0p55_df7_officialids_20260211-000822/metrics.json` (Δ≈+0.01758, p≈0.142) → full test402 `runs/E0643_full_test402_vecmlp_keepadj_adj2_shift1_std0p55_df7_officialids_s0-9_20260211-001604/metrics.json` (Δ=+0.01045; p=0.0395; significant but still far from +2%).
     - df5 (`anchor_drop_far_dist=5`, i.e. drop `dist>=6`): quick test402 `runs/E0637_quick_test402_vecmlp_keepadj_adj2_shift1_std0p55_df5_officialids_20260211-000915/metrics.json` (Δ≈+0.02421, p≈0.101) → full test402 `runs/E0638_full_test402_vecmlp_keepadj_adj2_shift1_std0p55_df5_officialids_s0-9_20260211-001009/metrics.json` (Δ=+0.01117; p=0.109; higher mean but not significant).
+  - Latest rerun: `av_clipdiff_flow_mlp` + `ltl_adaptive_keepadj_v1` (E0710→E0711→E0712) gives val402 positive (`runs/E0710_val402_flowmlp_keepadj_20260212-000010/sweep_summary.json`, best Δ≈+0.00648, p≈0.0355), quick test402 positive but non-significant (`runs/E0711_quick_test402_flowmlp_keepadj_20260212-000606/metrics.json`, Δ≈+0.00688, p≈0.395), and full test402 still short (`runs/E0712_full_test402_flowmlp_keepadj_20260212-000835/metrics.json`, Δ≈+0.00709, p≈0.141); do not promote.
 
 ---
 
@@ -174,6 +175,15 @@ This section is **optional** for the core AVE oral pack, but is a high-leverage 
   - Key takeaways (for slides):
     - IntentQA: `ql2l_clap` helps more on `CH` (+2.22pp) and hurts on `TN` (-1.49pp).
     - AVQA: `ql2l_asr_bm25` helps more on `Which` (+2.80pp) and hurts on `Come From` (-2.22pp).
+
+### D. Seed-extension reproducibility checks (new)
+
+- [x] **E0713: IntentQA faithfulness seed extension** (`seed=2`) completed.
+  - Artifact: `runs/E0713_intentqa_faithfulness_val_s2_20260212-000949/faithfulness.json`
+  - Signal: `acc_drop=0.0`, `pred_change_rate≈0.0316`, matching seeds 0/1 (stable).
+- [x] **E0714: EgoSchema Subset seed extension** (`seed=2`) completed.
+  - Artifact: `runs/E0714_egoschema_eval_subset256_s2_20260212-004316/metrics.json`
+  - Signal: uniform=`0.5859`, `ql2l_clap=0.5352`, `ql2l_asr_bm25=0.5469` (all `invalid_rate=0`), matching seeds 0/1.
 
 ---
 

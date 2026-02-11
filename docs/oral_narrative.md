@@ -90,3 +90,12 @@ We maintain:
 Dataset verification is captured by:
 - `python scripts/datasets/verify_all.py` (outputs `runs/datasets_verify_*/datasets_verify.json`)
 
+## 9) Latest Queue Update (E071x)
+
+- C0003 retry queue (`E0710→E0711→E0712`) remains below hard gate:
+  - Val sweep winner: `runs/E0710_val402_flowmlp_keepadj_20260212-000010/sweep_summary.json` (best Δ≈+0.00648).
+  - Quick test402: `runs/E0711_quick_test402_flowmlp_keepadj_20260212-000606/metrics.json` (Δ≈+0.00688; non-significant).
+  - Full test402: `runs/E0712_full_test402_flowmlp_keepadj_20260212-000835/metrics.json` (Δ≈+0.00709; p≈0.141).
+- Long-video seed extension status:
+  - IntentQA faithfulness seed=2 done: `runs/E0713_intentqa_faithfulness_val_s2_20260212-000949/faithfulness.json` (stable vs prior seeds).
+  - EgoSchema seed=2 done: `runs/E0714_egoschema_eval_subset256_s2_20260212-004316/metrics.json` (`uniform=0.5859`, `ql2l_clap=0.5352`, `ql2l_asr_bm25=0.5469`; matches prior seeds).
