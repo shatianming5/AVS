@@ -595,3 +595,29 @@ Runs:
 
 Decision:
 - Not promotable: negative on val402; skip quick/full.
+
+## 30) Track AB: WavLM+CLIPdiff vec-MLP Stage-1 Under keepadj (done; not promoted)
+
+Idea:
+- Try upgrading the strongest deployable Stage-1 family (`av_clipdiff_vec_mlp`) by swapping basic audio features → frozen WavLM,
+  while keeping the best-known keepadj Stage-2 configs.
+
+Runs:
+- E0946 val402 sweep (SEEDS=0..2): `runs/E0946_val402_wavlm_clipdiff_vecmlp_keepadj_20260213-030005/sweep_summary.json`
+  - best: `ltlkeepadj_adj1_shift0_std0p6` (Δ=+0.00283; p=0.7692)
+
+Decision:
+- Not promotable: val402 gain is small and non-significant; skip quick/full.
+
+## 31) Track AC: CLIPdiff vec-MLP + Stage-1 SigLIP Cache (Stage-2 unchanged) (done; not promoted)
+
+Idea:
+- Keep Stage-2 on baseline CLIP cache, but swap **only Stage-1 visual features** to SigLIP for `av_clipdiff_vec_mlp` via
+  `STAGE1_CACHES_DIR` (aiming to improve anchor ranking without destabilizing Stage-2).
+
+Runs:
+- E0949 val402 sweep (SEEDS=0..2): `runs/E0949_val402_vecmlp_keepadj_stage1siglip_20260213-030437/sweep_summary.json`
+  - best: `ltlkeepadj_adj2_shift0_std0p6` (Δ=+0.00490; p=0.6126)
+
+Decision:
+- Not promotable: val402 gain is not competitive; skip quick/full.

@@ -992,6 +992,70 @@
   - required_metrics: []
   - results: skipped (E0943 not promotable).
 
+- [x] E0946: WavLM+CLIPdiff vec-MLP Stage-1 (`av_wavlm_clipdiff_vec_mlp`) — val402 sweep (keepadj; SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=av_wavlm_clipdiff_vec_mlp CANDIDATE_SET=ltl_adaptive_keepadj_v1 SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:2 WAVLM_PRETRAINED=1 WAVLM_MODEL=microsoft/wavlm-base-plus WAVLM_BATCH_SIZE=16 OUT_DIR=runs/E0946_val402_wavlm_clipdiff_vecmlp_keepadj_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0946_*/sweep_summary.json`
+    - `runs/E0946_*/best_config.json`
+    - `runs/E0946_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - results: `runs/E0946_val402_wavlm_clipdiff_vecmlp_keepadj_20260213-030005/sweep_summary.json` best=`ltlkeepadj_adj1_shift0_std0p6`, Δ=+0.00283 (p=0.7692) → not promoted.
+
+- [x] E0947: WavLM+CLIPdiff vec-MLP Stage-1 (`av_wavlm_clipdiff_vec_mlp`) — quick test402 (keepadj; SEEDS=0..2) + diagnose
+  - command:
+    - `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0946_*/best_config.json EVENTNESS=av_wavlm_clipdiff_vec_mlp SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:2 WAVLM_PRETRAINED=1 WAVLM_MODEL=microsoft/wavlm-base-plus WAVLM_BATCH_SIZE=16 OUT_DIR=runs/E0947_quick_test402_wavlm_clipdiff_vecmlp_keepadj_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0947_*/metrics.json OUT_DIR=runs/E0947_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts: []
+  - required_metrics: []
+  - results: skipped (E0946 not promotable on val402; do not promote to quick/full).
+
+- [x] E0948: WavLM+CLIPdiff vec-MLP Stage-1 (`av_wavlm_clipdiff_vec_mlp`) — full test402 (keepadj; SEEDS=0..9) + diagnose
+  - command:
+    - `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0946_*/best_config.json EVENTNESS=av_wavlm_clipdiff_vec_mlp SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:2 WAVLM_PRETRAINED=1 WAVLM_MODEL=microsoft/wavlm-base-plus WAVLM_BATCH_SIZE=16 OUT_DIR=runs/E0948_full_test402_wavlm_clipdiff_vecmlp_keepadj_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0948_*/metrics.json OUT_DIR=runs/E0948_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  - required_artifacts: []
+  - required_metrics: []
+  - results: skipped (E0946 not promotable).
+
+- [x] E0949: CLIPdiff vec-MLP Stage-1 (`av_clipdiff_vec_mlp`) — val402 sweep (keepadj; Stage-1 SigLIP cache; SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 STAGE1_CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch16_siglip_224_webli_112_160_224_352_448 EVENTNESS=av_clipdiff_vec_mlp CANDIDATE_SET=ltl_adaptive_keepadj_v1 SEEDS=0,1,2 AUDIO_DEVICE=cpu TRAIN_DEVICE=cuda:2 OUT_DIR=runs/E0949_val402_vecmlp_keepadj_stage1siglip_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0949_*/sweep_summary.json`
+    - `runs/E0949_*/best_config.json`
+    - `runs/E0949_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - results: `runs/E0949_val402_vecmlp_keepadj_stage1siglip_20260213-030437/sweep_summary.json` best=`ltlkeepadj_adj2_shift0_std0p6`, Δ=+0.00490 (p=0.6126) → not promoted.
+
+- [x] E0950: CLIPdiff vec-MLP Stage-1 (`av_clipdiff_vec_mlp`) — quick test402 (keepadj; Stage-1 SigLIP cache; SEEDS=0..2) + diagnose
+  - command:
+    - `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 STAGE1_CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch16_siglip_224_webli_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0949_*/best_config.json EVENTNESS=av_clipdiff_vec_mlp SEEDS=0,1,2 AUDIO_DEVICE=cpu TRAIN_DEVICE=cuda:2 OUT_DIR=runs/E0950_quick_test402_vecmlp_keepadj_stage1siglip_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0950_*/metrics.json OUT_DIR=runs/E0950_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts: []
+  - required_metrics: []
+  - results: skipped (E0949 not promotable on val402; do not promote to quick/full).
+
+- [x] E0951: CLIPdiff vec-MLP Stage-1 (`av_clipdiff_vec_mlp`) — full test402 (keepadj; Stage-1 SigLIP cache; SEEDS=0..9) + diagnose
+  - command:
+    - `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 STAGE1_CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch16_siglip_224_webli_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0949_*/best_config.json EVENTNESS=av_clipdiff_vec_mlp SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cpu TRAIN_DEVICE=cuda:2 OUT_DIR=runs/E0951_full_test402_vecmlp_keepadj_stage1siglip_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0951_*/metrics.json OUT_DIR=runs/E0951_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  - required_artifacts: []
+  - required_metrics: []
+  - results: skipped (E0949 not promotable).
+
 ### Run Queue (Long-Video QA; sequential)
 - [x] E0600 (real; ppl): IntentQA VLM evaluation under budgeted frame selection (val n=253; seed=0)
   - command: `OUT_DIR=runs/E0600_intentqa_vlm_eval_full_20260210-041911 SPLIT=val LIMIT=256 METHODS=uniform,random,audio,cheap_visual,fused,ql2l_clap,ql2l_asr_bm25 B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=250 bash scripts/e0600_intentqa_vlm_eval.sh`
@@ -1425,6 +1489,8 @@
 | E0938 | success | quick test402 (XAttn eventness; Stage-1 SigLIP cache): anchored=0.71857 vs uniform=0.71294 (Δ=+0.00564; p=0.6689) | `runs/E0938_quick_test402_xattn_evt_stage1siglip_20260213-022855/` | diagnose fallback_used_frac≈0.152; fails promotion gate (no full test) |
 | E0940 | success | val402 sweep (XAttn eventness; Stage-1 DINOv2 cache): best=`ltlkeepadj_adj2_shift1_std0p6`, anchored-uniform Δ=-0.00191; p=0.6639 | `runs/E0940_val402_xattn_evt_stage1dinov2_20260213-023423/` | not promoted (negative on val402) |
 | E0943 | success | val402 sweep (XAttn eventness; Stage-1 vis_res=352): best=`ltlkeepadj_adj1_shift1_std0p5`, anchored-uniform Δ=-0.00224; p=0.5038 | `runs/E0943_val402_xattn_evt_vis352_20260213-024540/` | not promoted (negative on val402) |
+| E0946 | success | val402 sweep (WavLM+CLIPdiff vec-MLP; keepadj): best=`ltlkeepadj_adj1_shift0_std0p6`, anchored-uniform Δ=+0.00283; p=0.7692 | `runs/E0946_val402_wavlm_clipdiff_vecmlp_keepadj_20260213-030005/` | not promoted |
+| E0949 | success | val402 sweep (CLIPdiff vec-MLP; keepadj; Stage-1 SigLIP cache): best=`ltlkeepadj_adj2_shift0_std0p6`, anchored-uniform Δ=+0.00490; p=0.6126 | `runs/E0949_val402_vecmlp_keepadj_stage1siglip_20260213-030437/` | not promoted |
 
 > Note: The authoritative runnable queue for the current `docs/plan.md` is the checklist above. The `## Experiments` catalog below is an archive; its internal `[ ]` fields are not a TODO list.
 
