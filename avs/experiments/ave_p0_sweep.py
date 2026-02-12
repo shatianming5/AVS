@@ -1654,6 +1654,63 @@ def _candidates_ltl_top1med_norm_v1() -> list[CandidateConfig]:
     return out
 
 
+def _candidates_ltl_top1medn_maxhigh1_v1() -> list[CandidateConfig]:
+    """
+    Scale-invariant (min-max normalized) top1-minus-median gated candidate set that always uses at most 1 high-res anchor.
+
+    Motivation:
+      - Learned-logit Stage-1 backends can have very different raw score scales (BCE vs MIL vs teacher-distilled),
+        so use `conf_metric=top1_med_norm` to make the confidence gate scale-robust.
+      - Diagnostics on the current best learned-anchor family show the 2-high regime can be net harmful on test402,
+        so fix `max_high_anchors=1` to preserve base-res context under the same equal-token budget.
+
+    Keep the grid small and pre-registered:
+      - thresholds in {0.5, 0.6, 0.7}
+      - shift ∈ {0,1}
+      - triad=160/224/352, fixed high policy, maxHigh=1
+    """
+    base = dict(
+        k=2,
+        low_res=160,
+        base_res=224,
+        high_res=352,
+        head="temporal_conv",
+        temporal_kernel_size=3,
+        anchor_shift=0,
+        anchor_std_threshold=0.0,  # ignored when conf_threshold is set
+        anchor_select="topk",
+        anchor_nms_radius=2,
+        anchor_nms_strong_gap=0.6,
+        anchor_window=3,
+        anchor_smooth_window=0,
+        anchor_smooth_mode="mean",
+        anchor_base_alloc="distance",
+        anchor_conf_metric="top1_med_norm",
+        anchor_conf_threshold=0.6,
+        max_high_anchors=1,
+        anchor_high_policy="fixed",
+        anchor_high_adjacent_dist=1,
+        anchor_high_gap_threshold=0.0,
+    )
+
+    out: list[CandidateConfig] = []
+    for thr in (0.50, 0.60, 0.70):
+        thr_name = str(thr).replace(".", "p")
+        out.append(
+            CandidateConfig(
+                name=f"ltltop1mednmax1_thr{thr_name}_shift0",
+                **{**base, "anchor_shift": 0, "anchor_conf_threshold": thr},
+            )
+        )
+        out.append(
+            CandidateConfig(
+                name=f"ltltop1mednmax1_thr{thr_name}_shift1",
+                **{**base, "anchor_shift": 1, "anchor_conf_threshold": thr},
+            )
+        )
+    return out
+
+
 def _candidates_ltl_sep3_v1() -> list[CandidateConfig]:
     """
     Separation-based confidence gate for learned-logit Stage-1 methods.
@@ -5318,6 +5375,157 @@ def _compute_scores_by_clip(
             if (i + 1) % 200 == 0 or (i + 1) == len(clip_ids):
                 dt = _time.time() - t0
                 print(f"[scores] {i+1}/{len(clip_ids)} clips ({dt:.1f}s)", flush=True)
+    elif method in ("av_wavlm_clip_mlp_cls", "av_wavlm_clip_mlp_cls_target"):
+        # Supervised AV segment classification as Stage-1 scoring:
+        #   feats[t] = concat( l2norm(WavLM emb[t]), l2norm(low-res CLIP emb[t]) )
+        #
+        # Train a multi-class per-second classifier on the train split (0=background, >0=event class),
+        # then convert per-second logits into a scalar anchor score.
+        #
+        # Two scoring rules:
+        #   - av_wavlm_clip_mlp_cls:          max(non-bg) - bg  (margin eventness)
+        #   - av_wavlm_clip_mlp_cls_target:   (logit[clip_cls] - bg), where clip_cls is inferred from mean logits
+        #
+        # Motivation: oracle_top2 uses true event seconds; this is a stronger, class-conditional event localization
+        # attempt than binary (label!=0) BCE.
+        if caches_dir is None:
+            raise ValueError(f"{method} requires caches_dir to load CLIP features")
+        if train_ids is None or labels_by_clip is None:
+            raise ValueError(f"{method} requires train_ids and labels_by_clip")
+
+        import os
+        import numpy as np
+        import torch
+
+        from avs.audio.wavlm_probe import WavLMEmbeddingProbe, WavLMProbeConfig
+        from avs.experiments.ave_p0 import _train_audio_basic_mlp_cls_eventness
+
+        caches_dir = Path(caches_dir)
+        train_ids = [str(x) for x in train_ids]
+
+        pretrained = os.environ.get("WAVLM_PRETRAINED", "1") != "0"
+        model_name = os.environ.get("WAVLM_MODEL", "microsoft/wavlm-base-plus")
+        batch_size_env = os.environ.get("WAVLM_BATCH_SIZE")
+        batch_size = int(batch_size_env) if (batch_size_env is not None and str(batch_size_env).strip() != "") else None
+
+        wavlm_dtype = "float16" if str(audio_device).startswith("cuda") else "float32"
+        wavlm_probe = WavLMEmbeddingProbe(
+            WavLMProbeConfig(
+                model_name=str(model_name),
+                pretrained=bool(pretrained),
+                device=str(audio_device),
+                dtype=str(wavlm_dtype),
+            )
+        )
+
+        wavlm_emb_by_clip = wavlm_probe.embeddings_per_second_by_clip_ids(
+            clip_ids=train_ids,
+            processed_dir=processed_dir,
+            num_segments=int(num_segments),
+            batch_size=batch_size,
+        )
+
+        # Precompute embeddings for the remaining ids once to avoid per-clip probe overhead.
+        missing_ids = [str(cid) for cid in clip_ids if str(cid) not in wavlm_emb_by_clip]
+        if missing_ids:
+            emb_missing = wavlm_probe.embeddings_per_second_by_clip_ids(
+                clip_ids=missing_ids,
+                processed_dir=processed_dir,
+                num_segments=int(num_segments),
+                batch_size=batch_size,
+            )
+            wavlm_emb_by_clip.update(emb_missing)
+
+        def _load_vis_feats_npz_low(cache_path: Path) -> np.ndarray:
+            with np.load(cache_path) as z:
+                if "res_112" in z.files:
+                    v = z["res_112"]
+                else:
+                    avail = sorted(int(k.split("_", 1)[1]) for k in z.files if k.startswith("res_"))
+                    if not avail:
+                        raise ValueError(f"no res_* arrays in cache: {cache_path}")
+                    v = z[f"res_{avail[0]}"]
+            return np.asarray(v, dtype=np.float32)[: int(num_segments)]
+
+        def _l2norm(x: np.ndarray) -> np.ndarray:
+            x = np.asarray(x, dtype=np.float32)
+            denom = np.linalg.norm(x, axis=-1, keepdims=True).astype(np.float32)
+            denom = np.maximum(denom, 1e-6)
+            return (x / denom).astype(np.float32, copy=False)
+
+        feats_by_train: dict[str, np.ndarray] = {}
+        for i, cid in enumerate(train_ids):
+            cache_path = caches_dir / f"{cid}.npz"
+            if not cache_path.exists():
+                raise FileNotFoundError(f"missing cache: {cache_path}")
+            a = wavlm_emb_by_clip.get(cid)
+            if a is None:
+                raise ValueError(f"internal error: missing wavlm embedding for train clip_id={cid!r}")
+            v_low = _load_vis_feats_npz_low(cache_path)
+            if a.shape[0] != int(num_segments):
+                raise ValueError(f"unexpected wavlm embedding shape for {cid}: {a.shape}")
+            if v_low.shape[0] != int(num_segments):
+                raise ValueError(f"unexpected clip feature shape for {cid}: {v_low.shape}")
+            feats_by_train[cid] = np.concatenate([_l2norm(a), _l2norm(v_low)], axis=1).astype(np.float32, copy=False)
+            if (i + 1) % 200 == 0 or (i + 1) == len(train_ids):
+                dt = _time.time() - t0
+                print(f"[{method}] feats train {i+1}/{len(train_ids)} clips ({dt:.1f}s)", flush=True)
+
+        num_classes = 1
+        for cid in train_ids:
+            labs = labels_by_clip.get(cid) or []
+            if labs:
+                num_classes = max(int(num_classes), int(max(int(x) for x in labs)) + 1)
+
+        # Train on CPU to avoid fighting the downstream training GPU(s) inside the sweep.
+        model = _train_audio_basic_mlp_cls_eventness(
+            clip_ids_train=train_ids,
+            labels_by_clip=labels_by_clip,
+            audio_feats_by_clip=feats_by_train,
+            num_classes=int(num_classes),
+            device="cpu",
+            epochs=40,
+            batch_size=1024,
+            lr=1e-3,
+            hidden_dim=256,
+            dropout=0.1,
+        )
+        model_cpu = model.to(torch.device("cpu"))
+        model_cpu.eval()
+
+        for i, cid in enumerate(clip_ids):
+            feats = feats_by_train.get(cid)
+            if feats is None:
+                cache_path = caches_dir / f"{cid}.npz"
+                if not cache_path.exists():
+                    raise FileNotFoundError(f"missing cache: {cache_path}")
+                a = wavlm_emb_by_clip.get(cid)
+                if a is None:
+                    raise ValueError(f"internal error: missing wavlm embedding for clip_id={cid!r}")
+                v_low = _load_vis_feats_npz_low(cache_path)
+                if a.shape[0] != int(num_segments):
+                    raise ValueError(f"unexpected wavlm embedding shape for {cid}: {a.shape}")
+                if v_low.shape[0] != int(num_segments):
+                    raise ValueError(f"unexpected clip feature shape for {cid}: {v_low.shape}")
+                feats = np.concatenate([_l2norm(a), _l2norm(v_low)], axis=1).astype(np.float32, copy=False)
+
+            with torch.no_grad():
+                logits = model_cpu(torch.from_numpy(feats).float())  # [T, C]
+                bg = logits[:, 0]
+                if method == "av_wavlm_clip_mlp_cls":
+                    s = logits[:, 1:].max(dim=-1).values - bg
+                else:
+                    clip_logits = logits.mean(dim=0)
+                    clip_logits = clip_logits.clone()
+                    clip_logits[0] = float("-inf")
+                    cls = int(torch.argmax(clip_logits).item())
+                    s = logits[:, cls] - bg
+                s_np = s.detach().cpu().numpy().astype(np.float32)
+            out[cid] = [float(x) for x in s_np.tolist()]
+
+            if (i + 1) % 200 == 0 or (i + 1) == len(clip_ids):
+                dt = _time.time() - t0
+                print(f"[scores] {i+1}/{len(clip_ids)} clips ({dt:.1f}s)", flush=True)
     elif method in ("av_clip_mlp_cls", "av_clip_mlp_cls_target"):
         # Supervised, lightweight A+V scoring: audio basic features + low-res CLIP features (semantic content).
         # Trains on train split to predict per-second class labels; returns margin-vs-bg as Stage-1 scores.
@@ -6074,6 +6282,7 @@ def build_parser() -> argparse.ArgumentParser:
             "ltl_top1med_gate_all_v1",
             "ltl_top1med_anchor2veto_v1",
             "ltl_top1med_norm_v1",
+            "ltl_top1medn_maxhigh1_v1",
             "ltl_sep3_v1",
             "ltl_top1med_band_v1",
             "ltl_top1med_band_low112_v1",
@@ -6308,6 +6517,8 @@ def main(argv: list[str] | None = None) -> int:
             candidates = _candidates_ltl_top1med_anchor2veto_v1()
         elif candidate_set == "ltl_top1med_norm_v1":
             candidates = _candidates_ltl_top1med_norm_v1()
+        elif candidate_set == "ltl_top1medn_maxhigh1_v1":
+            candidates = _candidates_ltl_top1medn_maxhigh1_v1()
         elif candidate_set == "ltl_sep3_v1":
             candidates = _candidates_ltl_sep3_v1()
         elif candidate_set == "ltl_top1med_band_v1":
@@ -6429,6 +6640,8 @@ def main(argv: list[str] | None = None) -> int:
             "av_wavlm_clip_mil_mlp",
             "av_wavlm_clip_evt_mlp",
             "av_wavlm_clip_evt_tcn",
+            "av_wavlm_clip_mlp_cls",
+            "av_wavlm_clip_mlp_cls_target",
             "av_wavlm_clipdiff_vec_mlp",
         ):
             scores_json = out_dir / "eventness_scores.json"

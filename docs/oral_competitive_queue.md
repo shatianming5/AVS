@@ -205,3 +205,90 @@ Results:
 - Val402 sweep: `runs/E0870_val402_wavlm_clipdiff_vecmlp_20260212-123504/sweep_summary.json` (best Δ=-0.00042; p=0.951).
 - Quick test402: `runs/E0871_quick_test402_wavlm_clipdiff_vecmlp_20260212-123718/metrics.json` (anchored=0.71940 vs uniform=0.71294; Δ=+0.00647; p=0.513; fallback_used_frac≈0.510).
 - Decision: not promoted (skip full).
+
+## 11) Track I: WavLM+CLIP multi-class segment classifier (class-conditional Stage-1)
+
+Idea:
+- Train a lightweight **multi-class** per-second classifier on strong frozen features:
+  - audio: `l2norm(WavLM emb[t])`
+  - vision: `l2norm(low-res CLIP emb[t])`
+- Use a class-conditional margin score as Stage-1 eventness:
+  - infer a clip-level class `cls = argmax(mean_logits[1:])`
+  - score per-second as `(logit[t, cls] - logit[t, bg])`
+- Hypothesis: class-conditional scoring yields sharper anchors than binary `(label!=0)` eventness.
+
+Implementation:
+- New Stage-1 backend: `EVENTNESS=av_wavlm_clip_mlp_cls_target` (code: `avs/experiments/ave_p0_sweep.py`).
+- Reliability: `avs/audio/wavlm_probe.py` now prefers HF local cache (`local_files_only=True`) before online fetches to avoid rerun failures.
+
+Results:
+- Val402 sweep (SEEDS=0..2): `runs/E0880_val402_wavlm_clip_cls_target_20260212-125727/sweep_summary.json`
+  - best: `ltltop1medn_thr0p7_shift0` (Δ≈-0.00283; p≈0.828)
+- Quick test402 (SEEDS=0..2): `runs/E0881_quick_test402_wavlm_clip_cls_target_20260212-130104/metrics.json` (Δ≈+0.00473; p≈0.617)
+  - diagnose: `runs/E0881_quick_test402_wavlm_clip_cls_target_20260212-130104/diagnose.json` (fallback_used_frac≈0.933)
+- Decision: not promoted (skip full).
+
+Follow-up (same family, different scoring rule):
+- Margin variant `EVENTNESS=av_wavlm_clip_mlp_cls`:
+  - val402 sweep: `runs/E0886_val402_wavlm_clip_cls_margin_20260212-131558/sweep_summary.json` (best Δ≈+0.00166; p≈0.888)
+  - quick test402: `runs/E0887_quick_test402_wavlm_clip_cls_margin_20260212-131757/metrics.json` (Δ≈+0.00232; p≈0.678)
+    - diagnose: `runs/E0887_quick_test402_wavlm_clip_cls_margin_20260212-131757/diagnose.json` (fallback_used_frac≈0.923)
+  - Decision: not promoted.
+
+## 12) Track J: Vec-MLP Stage-2 max-high=1 sweep (preserve context; reduce 2-high harm)
+
+Idea:
+- Diagnose on the current best full test402 (`E0643`) shows the **2-high** regime is near-zero delta.
+- Force `max_high_anchors=1` to preserve more `base_res` context under the same equal token budget.
+
+Results:
+- Val402 sweep (SEEDS=0..2): `runs/E0883_val402_vecmlp_maxhigh1_20260212-130225/sweep_summary.json`
+  - best: `ltlmax1_thr0p45_balanced_window3` (Δ≈+0.00939; p≈0.275)
+- Quick test402 (SEEDS=0..2): `runs/E0884_quick_test402_vecmlp_maxhigh1_20260212-130830/metrics.json` (Δ≈+0.01111; p≈0.323)
+  - diagnose: `runs/E0884_quick_test402_vecmlp_maxhigh1_20260212-130830/diagnose.json` (fallback_used_frac≈0.311)
+- Decision: not promoted (skip full).
+
+## 13) Track K: MIL Stage-1 rerun with max-high=1 normalized gate
+
+Motivation:
+- We already tried `av_wavlm_clip_mil_mlp` (E0830/E0831) under a keepadj-style Stage-2 sweep, and it did not transfer.
+- Rerun the same Stage-1 with a **scale-invariant gate** + **max-high=1** to see if this reduces (a) score-scale sensitivity and (b) 2-high harm.
+
+Implementation:
+- New candidate set: `CANDIDATE_SET=ltl_top1medn_maxhigh1_v1` (see `avs/experiments/ave_p0_sweep.py`).
+
+Results:
+- Val402 sweep (SEEDS=0..2): `runs/E0890_val402_wavlm_clip_mil_mlp_20260212-133043/sweep_summary.json`
+  - best: `ltltop1mednmax1_thr0p5_shift0` (anchored=0.74214 vs uniform=0.74680; Δ=-0.00466; p=0.3436)
+- Quick test402 (SEEDS=0..2): `runs/E0891_quick_test402_wavlm_clip_mil_mlp_20260212-133312/metrics.json`
+  - anchored=0.70730 vs uniform=0.71294 (Δ=-0.00564; p=0.5272)
+  - diagnose: `runs/E0891_quick_test402_wavlm_clip_mil_mlp_20260212-133312/diagnose.json` (`anchors_len_fallback_frac≈0.532`)
+- Decision: harmful; skip full.
+
+## 14) Track L: Stage-2 ablations on the current best df7 keepadj config (vec-MLP)
+
+Goal:
+- Reduce the known 2-high harm on test402, and check whether budget-band can preserve context in the 2-high regime.
+
+### L1) Force `max_high_anchors=1` (remove 2-high)
+
+- Quick test402 (SEEDS=0..2): `runs/E0893_quick_test402_vecmlp_df7_maxhigh1_20260212-133857/metrics.json`
+  - anchored=0.72347 vs uniform=0.71294 (Δ=+0.01053; p=0.4780)
+  - diagnose: `runs/E0893_quick_test402_vecmlp_df7_maxhigh1_20260212-133857/diagnose.json` (no 2-high; still fallback≈0.502)
+- Decision: not better than the current best full-test result; not promoted.
+
+### L2) Budget-band + extra low-res 112 (attempt to rescue 2-high)
+
+- Quick test402 (SEEDS=0..2): `runs/E0895_quick_test402_vecmlp_df7_band112_20260212-134114/metrics.json`
+  - anchored=0.72828 vs uniform=0.71294 (Δ=+0.01534; p=0.1997)
+- Full test402 (SEEDS=0..9): `runs/E0896_full_test402_vecmlp_df7_band112_20260212-134215/metrics.json`
+  - anchored=0.72410 vs uniform=0.71622 (Δ=+0.00789; p=0.2531)
+  - diagnose shows 2-high is negative again: `runs/E0896_full_test402_vecmlp_df7_band112_20260212-134215/diagnose.json`
+- Decision: quick looked good but does not hold on full; do not adopt.
+
+### L3) Std-threshold sweep on the max-high=1 variant (try reducing fallback)
+
+- std0.35 quick (SEEDS=0..2): `runs/E0898_quick_test402_vecmlp_df7_maxhigh1_std0p35_20260212-134530/metrics.json` (Δ=+0.00871; p=0.5286; fallback≈0.189)
+- std0.45 quick (SEEDS=0..2): `runs/E0899_quick_test402_vecmlp_df7_maxhigh1_std0p45_20260212-134637/metrics.json` (Δ=+0.00498; p=0.7523; fallback≈0.311)
+- std0.65 quick (SEEDS=0..2): `runs/E0900_quick_test402_vecmlp_df7_maxhigh1_std0p65_20260212-134717/metrics.json` (Δ=+0.00373; p=0.7991; fallback≈0.624)
+- Conclusion: lowering the std gate reduces fallback but hurts Δ on quick; the best remaining df7 family result is still `E0643` on full test402 (Δ=+0.01045; p≈0.0395).

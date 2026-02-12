@@ -57,8 +57,16 @@ class WavLMEmbeddingProbe:
         self.dtype = getattr(torch, str(cfg.dtype))
 
         if bool(cfg.pretrained):
-            self.feature_extractor = AutoFeatureExtractor.from_pretrained(str(cfg.model_name))
-            self.model = WavLMModel.from_pretrained(str(cfg.model_name)).to(self.device, dtype=self.dtype)
+            # Prefer local cache first: repeated sweeps/reruns should not depend on HF hub availability.
+            # If cache is missing/incomplete, fall back to the online code path.
+            try:
+                self.feature_extractor = AutoFeatureExtractor.from_pretrained(str(cfg.model_name), local_files_only=True)
+                self.model = WavLMModel.from_pretrained(str(cfg.model_name), local_files_only=True).to(
+                    self.device, dtype=self.dtype
+                )
+            except Exception:
+                self.feature_extractor = AutoFeatureExtractor.from_pretrained(str(cfg.model_name))
+                self.model = WavLMModel.from_pretrained(str(cfg.model_name)).to(self.device, dtype=self.dtype)
         else:
             # Smoke-friendly tiny random model (no downloads).
             self.feature_extractor = Wav2Vec2FeatureExtractor()
@@ -143,4 +151,3 @@ class WavLMEmbeddingProbe:
                 print(f"[wavlm] {min((step + 1) * batch_size, n)}/{n} clips", flush=True)
 
         return out
-
