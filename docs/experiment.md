@@ -799,6 +799,53 @@
     - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
   - results: best=`ltltop1medn_thr0p6_shift1`, Δ≈+0.00017 (p≈0.9836) → not promoted.
 
+- [ ] E0930: Build SigLIP vision caches (timm backbone; stage-2 candidate) for official AVE (train/val/test)
+  - command:
+    - Train+val cache build:
+      - `HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 python -m avs.pipeline.ave_p0_end2end --mode none --meta-dir data/AVE/meta --processed-dir runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed --preprocess-skip-existing --caches-dir runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch16_siglip_224_webli_112_160_224_352_448 --split-train train --split-eval val --train-ids-file data/AVE/meta/download_ok_train_official.txt --eval-ids-file data/AVE/meta/download_ok_val_official.txt --limit-train 3339 --limit-eval 402 --seeds 0,1 --cache-only --cache-skip-existing --cache-num-workers 4 --cache-devices cuda:0,cuda:1,cuda:2,cuda:4 --cache-resolutions 112,160,224,352,448 --vision-model-name timm:vit_base_patch16_siglip_224.webli --vision-pretrained --out-dir runs/E0930_build_cache_siglip_trainval_$(date +%Y%m%d-%H%M%S)`
+    - Test cache build (incremental):
+      - `HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 python -m avs.pipeline.ave_p0_end2end --mode none --meta-dir data/AVE/meta --processed-dir runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed --preprocess-skip-existing --caches-dir runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch16_siglip_224_webli_112_160_224_352_448 --split-train train --split-eval test --train-ids-file data/AVE/meta/download_ok_train_official.txt --eval-ids-file data/AVE/meta/download_ok_test_official.txt --limit-train 3339 --limit-eval 402 --seeds 0,1 --cache-only --cache-skip-existing --cache-num-workers 4 --cache-devices cuda:0,cuda:1,cuda:2,cuda:4 --cache-resolutions 112,160,224,352,448 --vision-model-name timm:vit_base_patch16_siglip_224.webli --vision-pretrained --out-dir runs/E0930_build_cache_siglip_test_$(date +%Y%m%d-%H%M%S)`
+  - configs: []
+  - seeds: []
+  - required_artifacts:
+    - `runs/E0930_build_cache_siglip_trainval_*/cache_build.json`
+    - `runs/E0930_build_cache_siglip_test_*/cache_build.json`
+    - `runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch16_siglip_224_webli_112_160_224_352_448/*.npz`
+  - required_metrics:
+    - `cache_build.json`: `ok=true`, `missing_caches=[]`, `cache_resolutions=[112,160,224,352,448]`
+  - status: running (train+val cache build started locally; see `ps | rg E0930_build_cache_siglip_trainval`)
+
+- [ ] E0931: SigLIP Stage-2 backbone swap (train+eval on SigLIP caches) — val402 sweep (SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch16_siglip_224_webli_112_160_224_352_448 EVENTNESS=av_clipdiff_vec_mlp CANDIDATE_SET=ltl_adaptive_keepadj_v1 SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0931_val402_siglip_stage2_vecmlp_keepadj_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0931_*/sweep_summary.json`
+    - `runs/E0931_*/best_config.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+
+- [ ] E0932: SigLIP Stage-2 backbone swap — quick test402 (SEEDS=0..2) + diagnose
+  - command:
+    - `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch16_siglip_224_webli_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0931_*/best_config.json EVENTNESS=av_clipdiff_vec_mlp SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0932_quick_test402_siglip_stage2_vecmlp_keepadj_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0932_*/metrics.json OUT_DIR=runs/E0932_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0932_*/metrics.json`
+    - `runs/E0932_*/diagnose.json`
+  - required_metrics:
+    - `metrics.json`: `paired_ttest.anchored_vs_uniform.p`, `summary.anchored_top2.mean`, `summary.uniform.mean` (report Δ)
+
+- [ ] E0933: SigLIP Stage-2 backbone swap — full test402 (SEEDS=0..9) + diagnose (only if E0932 is promoted)
+  - command:
+    - `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch16_siglip_224_webli_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0931_*/best_config.json EVENTNESS=av_clipdiff_vec_mlp SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0933_full_test402_siglip_stage2_vecmlp_keepadj_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0933_*/metrics.json OUT_DIR=runs/E0933_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  - required_artifacts: []
+  - required_metrics: []
+
 ### Run Queue (Long-Video QA; sequential)
 - [x] E0600 (real; ppl): IntentQA VLM evaluation under budgeted frame selection (val n=253; seed=0)
   - command: `OUT_DIR=runs/E0600_intentqa_vlm_eval_full_20260210-041911 SPLIT=val LIMIT=256 METHODS=uniform,random,audio,cheap_visual,fused,ql2l_clap,ql2l_asr_bm25 B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=250 bash scripts/e0600_intentqa_vlm_eval.sh`

@@ -500,3 +500,20 @@ Runs:
 
 Decision:
 - Not promotable; keepadj remains the only semi-competitive Stage-2 family under these scores.
+
+## 25) Track W: SigLIP Stage-2 Backbone Swap (in progress)
+
+Idea:
+- Try a qualitatively stronger vision backbone that is (a) patch16 (token accounting compatible) and (b) known to be strong
+  for vision-language pretraining: SigLIP ViT-B/16.
+- Hypothesis: if the CLIP-frozen Stage-2 head is the bottleneck, swapping the Stage-2 backbone may increase the resolution
+  sensitivity and widen anchored-vs-uniform Δ.
+
+Implementation:
+- Add a timm pooling fallback for models without a CLS token (SigLIP uses attention pooling by default):
+  - `avs/vision/clip_vit.py`: if `global_pool='token'` is unsupported, fall back to the model default `global_pool` (e.g., `map`).
+
+Queue:
+- E0930: build SigLIP caches (train+val then test) under:
+  - `runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch16_siglip_224_webli_112_160_224_352_448/`
+- E0931→E0933: run the standard promotion gate (val402 → quick test402 → full test402 if promoted).
