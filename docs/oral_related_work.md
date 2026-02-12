@@ -19,6 +19,13 @@ This page aligns our "listen-then-look" QA add-on with the closest public work, 
 - AVQA (dataset repo): https://github.com/AlyssaYoung/AVQA
 - MUSIC-AVQA (CVPR 2022): https://arxiv.org/abs/2203.14072
 
+### Audio-Visual Event Localization (AVE / temporal grounding)
+
+- AVE (ECCV 2018) baseline code: https://github.com/YapengTian/AVE-ECCV18
+- CACE-Net (2024): https://arxiv.org/abs/2406.14128
+- UniAV (2024): https://arxiv.org/abs/2406.19381
+- Open-Vocabulary AVEL with Prompt Learning (CVPR 2025): https://arxiv.org/abs/2504.02434
+
 ### Long-video MLLM / Frame Selection
 
 - LongVA (2024): https://arxiv.org/abs/2406.16852
