@@ -617,6 +617,18 @@
     - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
   - logs: `artifacts/experiments/E0913/run.log`
 
+- [x] E0914: XAttn supervised Stage-1 (`av_wavlm_clip_xattn_cls_target`) — val402 sweep (r352; clip+clipdiff; `ltl_top1medn_maxhigh1_v1`; SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=av_wavlm_clip_xattn_cls_target CANDIDATE_SET=ltl_top1medn_maxhigh1_v1 SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 XATTN_TRAIN_DEVICE=cuda:0 XATTN_VIS_RES=352 XATTN_VIS_FEATS=clip+clipdiff XATTN_EPOCHS=60 XATTN_BS=256 XATTN_EVAL_BS=256 XATTN_LR=2e-3 OUT_DIR=runs/E0914_val402_xattn_cls_target_r352_clipdiff_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0914_*/sweep_summary.json`
+    - `runs/E0914_*/best_config.json`
+    - `runs/E0914_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - logs: `artifacts/experiments/E0914/run.log`
+
 ### Run Queue (Long-Video QA; sequential)
 - [x] E0600 (real; ppl): IntentQA VLM evaluation under budgeted frame selection (val n=253; seed=0)
   - command: `OUT_DIR=runs/E0600_intentqa_vlm_eval_full_20260210-041911 SPLIT=val LIMIT=256 METHODS=uniform,random,audio,cheap_visual,fused,ql2l_clap,ql2l_asr_bm25 B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=250 bash scripts/e0600_intentqa_vlm_eval.sh`
@@ -1028,6 +1040,7 @@
 | E0911 | success | val402 sweep best=`ltlkeepadjv2_adj1_shift0_std0p25`: anchored=0.73982 vs uniform=0.74680 (Δ=-0.00698; p=0.3580) | `runs/E0911_val402_avel_bilstm_cls_keepadjv2_20260212-214325/` | keepadjv2 Stage-2 configs are harmful under this Stage-1 |
 | E0912 | success | val402 sweep best=`ltlgini2_gini0p4_shift1`: anchored=0.74888 vs uniform=0.74680 (Δ=+0.00208; p=0.7854) | `runs/E0912_val402_avel_bilstm_cls_gini_v2_20260212-214729/` | gini gate helps slightly but not significant |
 | E0913 | success | val402 sweep best=`ltladjv2_adj1_shift0_std0p2_scoreAlloc`: anchored=0.74007 vs uniform=0.74680 (Δ=-0.00673; p=0.4637) | `runs/E0913_val402_avel_bilstm_cls_adaptive_v2_20260212-215337/` | adaptive Stage-2 configs are harmful under this Stage-1 |
+| E0914 | success | val402 sweep best=`ltltop1mednmax1_thr0p5_shift1`: anchored=0.74422 vs uniform=0.74680 (Δ=-0.00258; p=0.6928) | `runs/E0914_val402_xattn_cls_target_r352_clipdiff_20260212-221441/` | XAttn supervised Stage-1 (`av_wavlm_clip_xattn_cls_target`) is harmful on val |
 
 > Note: The authoritative runnable queue for the current `docs/plan.md` is the checklist above. The `## Experiments` catalog below is an archive; its internal `[ ]` fields are not a TODO list.
 

@@ -373,3 +373,20 @@ Results:
 
 Decision:
 - Not promotable: despite being a “real” temporal localizer, downstream anchored-vs-uniform gains remain near-zero or harmful on val402, so we stop (no quick/full test402).
+
+## 18) Track P: Cross-time A↔V attention (supervised cls-target; XAttn-Cls)
+
+Idea:
+- Take Track M’s explicit A↔V alignment (10×10 attention) but train it **supervised** with AVE segment labels (multi-class CE)
+  instead of MIL, hoping the supervision stabilizes anchor localization.
+
+Implementation:
+- New Stage-1 backend: `EVENTNESS=av_wavlm_clip_xattn_cls_target` (code: `avs/experiments/ave_p0_sweep.py`).
+- Controls: reuse `XATTN_*` env vars (e.g., `XATTN_VIS_RES`, `XATTN_VIS_FEATS`, `XATTN_EPOCHS`, `XATTN_BS`).
+
+Results:
+- Val402 sweep (SEEDS=0..2; `candidate_set=ltl_top1medn_maxhigh1_v1`; r352; clip+clipdiff): `runs/E0914_val402_xattn_cls_target_r352_clipdiff_20260212-221441/sweep_summary.json`
+  - best: `ltltop1mednmax1_thr0p5_shift1` (anchored=0.74422 vs uniform=0.74680; Δ=-0.00258; p=0.693)
+
+Decision:
+- Not promotable (negative on val402); no quick/full test402.
