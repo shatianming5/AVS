@@ -299,3 +299,29 @@ Goal:
   - diagnose: `runs/E0901_quick_test402_vecmlp_df7_k1_20260212-135506/diagnose.json` (`anchors_len_fallback_frac≈0.552`)
 - Decision: modest quick gain, still far from +2; not promoted.
 - Conclusion: lowering the std gate reduces fallback but hurts Δ on quick; the best remaining df7 family result is still `E0643` on full test402 (Δ=+0.01045; p≈0.0395).
+
+## 15) Track M: Cross-time A↔V attention MIL Stage-1 (XAttn MIL)
+
+Idea:
+- Train an audio-conditioned cross-time A↔V attention model to produce per-second anchor scores with a MIL objective,
+  aiming to (a) learn soft temporal alignment and (b) yield sharper anchor distributions (less fallback dilution).
+
+Implementation:
+- New Stage-1 backend: `EVENTNESS=av_wavlm_clip_xattn_mil` (code: `avs/experiments/ave_p0_sweep.py`).
+- Variants are controlled via env vars:
+  - `XATTN_VIS_RES` (e.g., 112/224/352)
+  - `XATTN_VIS_FEATS` (`clip|clipdiff|clip+clipdiff`)
+  - `XATTN_TRAIN_DEVICE` (default cpu; set to cuda for speed)
+
+Results:
+- Baseline val402 sweep (SEEDS=0..2; `candidate_set=ltl_top1medn_maxhigh1_v1`): `runs/E0902_val402_wavlm_clip_xattn_mil_20260212-140250/sweep_summary.json`
+  - best: `ltltop1mednmax1_thr0p7_shift1` (anchored=0.74314 vs uniform=0.74680; Δ=-0.00366; p=0.257)
+- r224 + clip+clipdiff val402 sweep (SEEDS=0..2): `runs/E0903_val402_wavlm_clip_xattn_mil_r224_clipdiff_20260212-141657/sweep_summary.json`
+  - best: `ltltop1mednmax1_thr0p6_shift0` (anchored=0.74746 vs uniform=0.74680; Δ=+0.00066; p=0.911)
+- keepadjv2 Stage-2 sweep using cached E0903 scores (SEEDS=0..2): `runs/E0904_val402_xattn_mil_r224_clipdiff_keepadjv2_20260212-141941/sweep_summary.json`
+  - best: `ltlkeepadjv2_adj2_shift1_std0p25` (anchored=0.74123 vs uniform=0.74680; Δ=-0.00557; p=0.428)
+- r352 + clip val402 sweep (SEEDS=0..2): `runs/E0905_val402_xattn_mil_r352_clip_20260212-142552/sweep_summary.json`
+  - best: `ltltop1mednmax1_thr0p5_shift0` (anchored=0.74722 vs uniform=0.74680; Δ=+0.00042; p=0.950)
+
+Decision:
+- Not promotable: all variants are near-zero/negative on val402, so we stop this direction (no quick/full test402).

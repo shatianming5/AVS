@@ -474,6 +474,53 @@
   - required_metrics:
     - `metrics.json`: `paired_ttest.anchored_vs_uniform.p`, `summary.anchored_top2.mean`, `summary.uniform.mean` (report Δ)
 
+- [x] E0902: WavLM+CLIP XAttn MIL Stage-1 (`av_wavlm_clip_xattn_mil`) — val402 sweep (`ltl_top1medn_maxhigh1_v1`; SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=av_wavlm_clip_xattn_mil CANDIDATE_SET=ltl_top1medn_maxhigh1_v1 SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0902_val402_wavlm_clip_xattn_mil_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0902_*/sweep_summary.json`
+    - `runs/E0902_*/best_config.json`
+    - `runs/E0902_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+
+- [x] E0903: WavLM+CLIP XAttn MIL Stage-1 (`av_wavlm_clip_xattn_mil`) — val402 sweep (r224; clip+clipdiff; SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=av_wavlm_clip_xattn_mil CANDIDATE_SET=ltl_top1medn_maxhigh1_v1 SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 XATTN_TRAIN_DEVICE=cuda:0 XATTN_VIS_RES=224 XATTN_VIS_FEATS=clip+clipdiff OUT_DIR=runs/E0903_val402_wavlm_clip_xattn_mil_r224_clipdiff_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0903_*/sweep_summary.json`
+    - `runs/E0903_*/best_config.json`
+    - `runs/E0903_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - logs: `artifacts/experiments/E0903/run.log`
+
+- [x] E0904: WavLM+CLIP XAttn MIL Stage-1 (`av_wavlm_clip_xattn_mil`) — val402 sweep (keepadjv2; cached scores from E0903)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=av_wavlm_clip_xattn_mil CANDIDATE_SET=ltl_adaptive_keepadj_v2 SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 SCORES_JSON=runs/E0903_*/eventness_scores.json OUT_DIR=runs/E0904_val402_xattn_mil_r224_clipdiff_keepadjv2_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0904_*/sweep_summary.json`
+    - `runs/E0904_*/best_config.json`
+    - `runs/E0903_*/eventness_scores.json` (reused)
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - logs: `artifacts/experiments/E0904/run.log`
+
+- [x] E0905: WavLM+CLIP XAttn MIL Stage-1 (`av_wavlm_clip_xattn_mil`) — val402 sweep (r352; clip; SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=av_wavlm_clip_xattn_mil CANDIDATE_SET=ltl_top1medn_maxhigh1_v1 SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 XATTN_TRAIN_DEVICE=cuda:0 XATTN_VIS_RES=352 XATTN_VIS_FEATS=clip OUT_DIR=runs/E0905_val402_xattn_mil_r352_clip_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0905_*/sweep_summary.json`
+    - `runs/E0905_*/best_config.json`
+    - `runs/E0905_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - logs: `artifacts/experiments/E0905/run.log`
+
 ### Run Queue (Long-Video QA; sequential)
 - [x] E0600 (real; ppl): IntentQA VLM evaluation under budgeted frame selection (val n=253; seed=0)
   - command: `OUT_DIR=runs/E0600_intentqa_vlm_eval_full_20260210-041911 SPLIT=val LIMIT=256 METHODS=uniform,random,audio,cheap_visual,fused,ql2l_clap,ql2l_asr_bm25 B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=250 bash scripts/e0600_intentqa_vlm_eval.sh`
@@ -873,6 +920,10 @@
 | E0899 | success | quick test402: anchored=0.71791 vs uniform=0.71294 (Δ=+0.00498; p=0.7523) | `runs/E0899_quick_test402_vecmlp_df7_maxhigh1_std0p45_20260212-134637/` | maxhigh1 std sweep (0.45): fallback≈0.311; Δ worsens |
 | E0900 | success | quick test402: anchored=0.71667 vs uniform=0.71294 (Δ=+0.00373; p=0.7991) | `runs/E0900_quick_test402_vecmlp_df7_maxhigh1_std0p65_20260212-134717/` | maxhigh1 std sweep (0.65): fallback≈0.624; Δ worsens |
 | E0901 | success | quick test402: anchored=0.72504 vs uniform=0.71294 (Δ=+0.01211; p=0.3983) | `runs/E0901_quick_test402_vecmlp_df7_k1_20260212-135506/` | df7 keepadj ablation (`k=1`): fallback≈0.552; still below +2%; not promoted |
+| E0902 | success | val402 sweep best=`ltltop1mednmax1_thr0p7_shift1`: anchored=0.74314 vs uniform=0.74680 (Δ=-0.00366; p=0.2573) | `runs/E0902_val402_wavlm_clip_xattn_mil_20260212-140250/` | WavLM+CLIP XAttn MIL Stage-1 (`av_wavlm_clip_xattn_mil`); default vis_res=112; negative on val |
+| E0903 | success | val402 sweep best=`ltltop1mednmax1_thr0p6_shift0`: anchored=0.74746 vs uniform=0.74680 (Δ=+0.00066; p=0.9113) | `runs/E0903_val402_wavlm_clip_xattn_mil_r224_clipdiff_20260212-141657/` | XAttn MIL Stage-1 (r224; clip+clipdiff); near-zero on val |
+| E0904 | success | val402 sweep best=`ltlkeepadjv2_adj2_shift1_std0p25`: anchored=0.74123 vs uniform=0.74680 (Δ=-0.00557; p=0.4279) | `runs/E0904_val402_xattn_mil_r224_clipdiff_keepadjv2_20260212-141941/` | keepadjv2 Stage-2 sweep with cached E0903 scores; harmful on val |
+| E0905 | success | val402 sweep best=`ltltop1mednmax1_thr0p5_shift0`: anchored=0.74722 vs uniform=0.74680 (Δ=+0.00042; p=0.9496) | `runs/E0905_val402_xattn_mil_r352_clip_20260212-142552/` | XAttn MIL Stage-1 (r352; clip); near-zero on val |
 
 > Note: The authoritative runnable queue for the current `docs/plan.md` is the checklist above. The `## Experiments` catalog below is an archive; its internal `[ ]` fields are not a TODO list.
 
