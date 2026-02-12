@@ -545,6 +545,78 @@
     - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
   - logs: `artifacts/experiments/E0907/run.log`
 
+- [x] E0908: AVE-localizer-style Stage-1 (`av_wavlm_clip_avel_bilstm_cls_target`) — val402 sweep (r352; clip+clipdiff; `ltl_top1medn_maxhigh1_v1`; SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=av_wavlm_clip_avel_bilstm_cls_target CANDIDATE_SET=ltl_top1medn_maxhigh1_v1 SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 AVEL_TRAIN_DEVICE=cuda:0 AVEL_VIS_RES=352 AVEL_VIS_FEATS=clip+clipdiff AVEL_EPOCHS=60 AVEL_BS=256 AVEL_LR=1e-3 OUT_DIR=runs/E0908_val402_avel_bilstm_cls_r352_clipdiff_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0908_*/sweep_summary.json`
+    - `runs/E0908_*/best_config.json`
+    - `runs/E0908_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - logs: `artifacts/experiments/E0908/run.log`
+
+- [x] E0909: AVE-localizer-style Stage-1 (`av_wavlm_clip_avel_bilstm_cls_target`) — val402 sweep (minmax-normalized score cache; sanity check; cached from E0908)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=av_wavlm_clip_avel_bilstm_cls_target CANDIDATE_SET=ltl_top1medn_maxhigh1_v1 SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 SCORES_JSON=runs/E0908_*/eventness_scores_minmax.json OUT_DIR=runs/E0909_val402_avel_bilstm_cls_r352_clipdiff_minmax_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0909_*/sweep_summary.json`
+    - `runs/E0909_*/best_config.json`
+    - `runs/E0908_*/eventness_scores_minmax.json` (reused)
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - logs: `artifacts/experiments/E0909/run.log`
+
+- [x] E0910: AVE-localizer-style Stage-1 (`av_wavlm_clip_avel_bilstm_cls_target`) — val402 sweep (onset-deriv positive score cache; cached from E0908)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=av_wavlm_clip_avel_bilstm_cls_target CANDIDATE_SET=ltl_top1medn_maxhigh1_v1 SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 SCORES_JSON=runs/E0908_*/eventness_scores_onset_deriv_pos.json OUT_DIR=runs/E0910_val402_avel_bilstm_cls_onset_deriv_pos_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0910_*/sweep_summary.json`
+    - `runs/E0910_*/best_config.json`
+    - `runs/E0908_*/eventness_scores_onset_deriv_pos.json` (reused)
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - logs: `artifacts/experiments/E0910/run.log`
+
+- [x] E0911: AVE-localizer-style Stage-1 (`av_wavlm_clip_avel_bilstm_cls_target`) — val402 sweep (`ltl_adaptive_keepadj_v2`; cached scores from E0908; SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=av_wavlm_clip_avel_bilstm_cls_target CANDIDATE_SET=ltl_adaptive_keepadj_v2 SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 SCORES_JSON=runs/E0908_*/eventness_scores.json OUT_DIR=runs/E0911_val402_avel_bilstm_cls_keepadjv2_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0911_*/sweep_summary.json`
+    - `runs/E0911_*/best_config.json`
+    - `runs/E0908_*/eventness_scores.json` (reused)
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - logs: `artifacts/experiments/E0911/run.log`
+
+- [x] E0912: AVE-localizer-style Stage-1 (`av_wavlm_clip_avel_bilstm_cls_target`) — val402 sweep (`ltl_gini_v2`; cached scores from E0908; SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=av_wavlm_clip_avel_bilstm_cls_target CANDIDATE_SET=ltl_gini_v2 SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 SCORES_JSON=runs/E0908_*/eventness_scores.json OUT_DIR=runs/E0912_val402_avel_bilstm_cls_gini_v2_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0912_*/sweep_summary.json`
+    - `runs/E0912_*/best_config.json`
+    - `runs/E0908_*/eventness_scores.json` (reused)
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - logs: `artifacts/experiments/E0912/run.log`
+
+- [x] E0913: AVE-localizer-style Stage-1 (`av_wavlm_clip_avel_bilstm_cls_target`) — val402 sweep (`ltl_adaptive_v2`; cached scores from E0908; SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=av_wavlm_clip_avel_bilstm_cls_target CANDIDATE_SET=ltl_adaptive_v2 SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 SCORES_JSON=runs/E0908_*/eventness_scores.json OUT_DIR=runs/E0913_val402_avel_bilstm_cls_adaptive_v2_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0913_*/sweep_summary.json`
+    - `runs/E0913_*/best_config.json`
+    - `runs/E0908_*/eventness_scores.json` (reused)
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - logs: `artifacts/experiments/E0913/run.log`
+
 ### Run Queue (Long-Video QA; sequential)
 - [x] E0600 (real; ppl): IntentQA VLM evaluation under budgeted frame selection (val n=253; seed=0)
   - command: `OUT_DIR=runs/E0600_intentqa_vlm_eval_full_20260210-041911 SPLIT=val LIMIT=256 METHODS=uniform,random,audio,cheap_visual,fused,ql2l_clap,ql2l_asr_bm25 B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=250 bash scripts/e0600_intentqa_vlm_eval.sh`
@@ -950,6 +1022,12 @@
 | E0905 | success | val402 sweep best=`ltltop1mednmax1_thr0p5_shift0`: anchored=0.74722 vs uniform=0.74680 (Δ=+0.00042; p=0.9496) | `runs/E0905_val402_xattn_mil_r352_clip_20260212-142552/` | XAttn MIL Stage-1 (r352; clip); near-zero on val |
 | E0906 | success | val402 sweep best=`ltltop1mednmax1_thr0p6_shift0`: anchored=0.73716 vs uniform=0.74680 (Δ=-0.00964; p=0.1157) | `runs/E0906_val402_vision_binary_mlp_r352_20260212-143611/` | High-res vision Stage-1 (`vision_binary_mlp_r352`) is harmful under top1-med gate |
 | E0907 | success | val402 sweep best=`ltlgini2_gini0p35_shift0`: anchored=0.74331 vs uniform=0.74680 (Δ=-0.00349; p=0.7066) | `runs/E0907_val402_vision_binary_mlp_r352_gini_v2_20260212-143837/` | gini gate reduces harm vs E0906 but remains negative on val |
+| E0908 | success | val402 sweep best=`ltltop1mednmax1_thr0p5_shift1`: anchored=0.74796 vs uniform=0.74680 (Δ=+0.00116; p=0.9216) | `runs/E0908_val402_avel_bilstm_cls_r352_clipdiff_20260212-205411/` | AVE-localizer-style Stage-1 (`av_wavlm_clip_avel_bilstm_cls_target`; BiLSTM cls-target) is near-zero on val |
+| E0909 | success | val402 sweep best=`ltltop1mednmax1_thr0p5_shift1`: anchored=0.74796 vs uniform=0.74680 (Δ=+0.00116; p=0.9216) | `runs/E0909_val402_avel_bilstm_cls_r352_clipdiff_minmax_20260212-210652/` | minmax-normalized scores make no difference (ranking-only) |
+| E0910 | success | val402 sweep best=`ltltop1mednmax1_thr0p7_shift1`: anchored=0.74680 vs uniform=0.74680 (Δ=-0.00000; p≈1.0) | `runs/E0910_val402_avel_bilstm_cls_onset_deriv_pos_rerun_20260212-213925/` | onset-like score transform collapses to uniform |
+| E0911 | success | val402 sweep best=`ltlkeepadjv2_adj1_shift0_std0p25`: anchored=0.73982 vs uniform=0.74680 (Δ=-0.00698; p=0.3580) | `runs/E0911_val402_avel_bilstm_cls_keepadjv2_20260212-214325/` | keepadjv2 Stage-2 configs are harmful under this Stage-1 |
+| E0912 | success | val402 sweep best=`ltlgini2_gini0p4_shift1`: anchored=0.74888 vs uniform=0.74680 (Δ=+0.00208; p=0.7854) | `runs/E0912_val402_avel_bilstm_cls_gini_v2_20260212-214729/` | gini gate helps slightly but not significant |
+| E0913 | success | val402 sweep best=`ltladjv2_adj1_shift0_std0p2_scoreAlloc`: anchored=0.74007 vs uniform=0.74680 (Δ=-0.00673; p=0.4637) | `runs/E0913_val402_avel_bilstm_cls_adaptive_v2_20260212-215337/` | adaptive Stage-2 configs are harmful under this Stage-1 |
 
 > Note: The authoritative runnable queue for the current `docs/plan.md` is the checklist above. The `## Experiments` catalog below is an archive; its internal `[ ]` fields are not a TODO list.
 

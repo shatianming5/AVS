@@ -4830,6 +4830,253 @@ def _compute_scores_by_clip(
             if (i + 1) % 200 == 0 or (i + 1) == len(clip_ids):
                 dt = _time.time() - t0
                 print(f"[scores] {i+1}/{len(clip_ids)} clips ({dt:.1f}s)", flush=True)
+    elif method == "av_wavlm_clip_avel_bilstm_cls_target":
+        # AVE-localizer style Stage-1: audio+vision fusion + temporal modeling.
+        #
+        # Inspired by AVE-ECCV18 (A+V-att): fuse audio+visual evidence and use a sequence model to predict
+        # per-second event class; convert logits to a scalar score via class-conditional margin.
+        #
+        # This is intentionally different from per-second MLP/TCN heads: the BiLSTM can leverage local temporal
+        # context when the raw per-second signal is weak/noisy, which is exactly the failure mode behind C0003.
+        if caches_dir is None:
+            raise ValueError(f"{method} requires caches_dir to load CLIP features")
+        if train_ids is None or labels_by_clip is None:
+            raise ValueError(f"{method} requires train_ids and labels_by_clip")
+
+        import math
+        import os
+
+        from avs.audio.wavlm_probe import WavLMEmbeddingProbe, WavLMProbeConfig
+
+        import numpy as np
+        import torch
+        import torch.nn as nn
+
+        caches_dir = Path(caches_dir)
+        train_ids = [str(x) for x in train_ids]
+
+        vis_res = int(os.environ.get("AVEL_VIS_RES", "160"))
+        vis_mode = str(os.environ.get("AVEL_VIS_FEATS", "clip")).strip().lower()
+        if vis_mode not in ("clip", "clipdiff", "clip+clipdiff"):
+            raise ValueError(f"{method}: unknown AVEL_VIS_FEATS={vis_mode!r}; expected clip|clipdiff|clip+clipdiff")
+        train_device = str(os.environ.get("AVEL_TRAIN_DEVICE", "cpu"))
+        epochs = int(os.environ.get("AVEL_EPOCHS", "40"))
+        bs = int(os.environ.get("AVEL_BS", "256"))
+        eval_bs = int(os.environ.get("AVEL_EVAL_BS", "256"))
+        lr = float(os.environ.get("AVEL_LR", "1e-3"))
+        proj_dim = int(os.environ.get("AVEL_PROJ_DIM", "128"))
+        hidden_dim = int(os.environ.get("AVEL_HIDDEN_DIM", "128"))
+        dropout = float(os.environ.get("AVEL_DROPOUT", "0.1"))
+
+        print(
+            f"[{method}] vis_res={vis_res} vis_mode={vis_mode} train_device={train_device} "
+            f"epochs={epochs} bs={bs} lr={lr} proj_dim={proj_dim} hidden_dim={hidden_dim} dropout={dropout}",
+            flush=True,
+        )
+
+        pretrained = os.environ.get("WAVLM_PRETRAINED", "1") != "0"
+        model_name = os.environ.get("WAVLM_MODEL", "microsoft/wavlm-base-plus")
+        batch_size_env = os.environ.get("WAVLM_BATCH_SIZE")
+        wavlm_batch_size = (
+            int(batch_size_env) if (batch_size_env is not None and str(batch_size_env).strip() != "") else None
+        )
+
+        wavlm_dtype = "float16" if str(audio_device).startswith("cuda") else "float32"
+        wavlm_probe = WavLMEmbeddingProbe(
+            WavLMProbeConfig(
+                model_name=str(model_name),
+                pretrained=bool(pretrained),
+                device=str(audio_device),
+                dtype=str(wavlm_dtype),
+            )
+        )
+
+        wavlm_emb_by_clip = wavlm_probe.embeddings_per_second_by_clip_ids(
+            clip_ids=train_ids,
+            processed_dir=processed_dir,
+            num_segments=int(num_segments),
+            batch_size=wavlm_batch_size,
+        )
+
+        missing_ids = [str(cid) for cid in clip_ids if str(cid) not in wavlm_emb_by_clip]
+        if missing_ids:
+            emb_missing = wavlm_probe.embeddings_per_second_by_clip_ids(
+                clip_ids=missing_ids,
+                processed_dir=processed_dir,
+                num_segments=int(num_segments),
+                batch_size=wavlm_batch_size,
+            )
+            wavlm_emb_by_clip.update(emb_missing)
+
+        def _l2norm(x: np.ndarray) -> np.ndarray:
+            x = np.asarray(x, dtype=np.float32)
+            denom = np.linalg.norm(x, axis=-1, keepdims=True).astype(np.float32)
+            denom = np.maximum(denom, 1e-6)
+            return (x / denom).astype(np.float32, copy=False)
+
+        def _load_vis_feats_npz(cache_path: Path) -> np.ndarray:
+            with np.load(cache_path) as z:
+                key = f"res_{int(vis_res)}"
+                if key in z.files:
+                    v = z[key]
+                elif "res_160" in z.files:
+                    v = z["res_160"]
+                elif "res_112" in z.files:
+                    v = z["res_112"]
+                else:
+                    avail = sorted(int(k.split("_", 1)[1]) for k in z.files if k.startswith("res_"))
+                    if not avail:
+                        raise ValueError(f"no res_* arrays in cache: {cache_path}")
+                    v = z[f"res_{avail[0]}"]
+            v = np.asarray(v, dtype=np.float32)[: int(num_segments)]
+            if vis_mode == "clip":
+                return v
+            dv = np.zeros_like(v, dtype=np.float32)
+            if int(v.shape[0]) >= 2:
+                dv[1:] = v[1:] - v[:-1]
+            if vis_mode == "clipdiff":
+                return dv
+            return np.concatenate([v, dv], axis=-1).astype(np.float32, copy=False)
+
+        vis_ids = sorted(set(train_ids + [str(x) for x in clip_ids]))
+        vis_by_clip: dict[str, np.ndarray] = {}
+        for i, cid in enumerate(vis_ids):
+            cache_path = caches_dir / f"{cid}.npz"
+            if not cache_path.exists():
+                raise FileNotFoundError(f"missing cache: {cache_path}")
+            v = _load_vis_feats_npz(cache_path)
+            if v.shape[0] != int(num_segments):
+                raise ValueError(f"unexpected clip feature shape for {cid}: {v.shape}")
+            vis_by_clip[cid] = _l2norm(v)
+            if (i + 1) % 500 == 0 or (i + 1) == len(vis_ids):
+                dt = _time.time() - t0
+                print(f"[{method}] vis {i+1}/{len(vis_ids)} clips ({dt:.1f}s)", flush=True)
+
+        # Determine the number of AVE classes from the training labels.
+        num_classes = 1
+        for cid in train_ids:
+            labs = labels_by_clip.get(cid) or []
+            if labs:
+                num_classes = max(int(num_classes), int(max(int(x) for x in labs)) + 1)
+        if int(num_classes) <= 1:
+            raise ValueError(f"{method}: num_classes must be > 1, got {num_classes}")
+
+        y_by_train: dict[str, np.ndarray] = {}
+        for cid in train_ids:
+            labs = np.asarray(labels_by_clip[cid], dtype=np.int64)[: int(num_segments)]
+            if labs.shape[0] != int(num_segments):
+                raise ValueError(f"{method}: unexpected label shape for {cid}: {labs.shape}")
+            y_by_train[cid] = labs
+
+        # Class reweighting (background dominates in AVE).
+        y_all = np.concatenate([y_by_train[c] for c in train_ids], axis=0)
+        counts = np.bincount(y_all.astype(np.int64), minlength=int(num_classes)).astype(np.float32)
+        total = float(counts.sum())
+        weights = np.zeros((int(num_classes),), dtype=np.float32)
+        nz = counts > 0
+        weights[nz] = total / (float(num_classes) * counts[nz])
+
+        a0 = wavlm_emb_by_clip.get(train_ids[0])
+        v0 = vis_by_clip.get(train_ids[0])
+        if a0 is None or v0 is None:
+            raise ValueError(f"{method}: missing features for training")
+        audio_dim = int(a0.shape[-1])
+        vision_dim = int(v0.shape[-1])
+
+        class _AVELBiLSTM(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.audio_proj = nn.Sequential(
+                    nn.Linear(int(audio_dim), int(proj_dim), bias=False),
+                    nn.LayerNorm(int(proj_dim)),
+                    nn.ReLU(),
+                )
+                self.vision_proj = nn.Sequential(
+                    nn.Linear(int(vision_dim), int(proj_dim), bias=False),
+                    nn.LayerNorm(int(proj_dim)),
+                    nn.ReLU(),
+                )
+                self.gate = nn.Sequential(
+                    nn.Linear(int(3 * proj_dim), int(proj_dim)),
+                    nn.ReLU(),
+                    nn.Linear(int(proj_dim), int(proj_dim)),
+                    nn.Sigmoid(),
+                )
+                self.drop = nn.Dropout(p=float(dropout))
+                self.lstm = nn.LSTM(
+                    input_size=int(proj_dim),
+                    hidden_size=int(hidden_dim),
+                    num_layers=1,
+                    batch_first=True,
+                    bidirectional=True,
+                )
+                self.head = nn.Linear(int(2 * hidden_dim), int(num_classes))
+
+            def forward(self, a: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
+                # a: [B,T,A], v: [B,T,V] -> logits: [B,T,C]
+                if a.ndim != 3 or v.ndim != 3:
+                    raise ValueError(f"expected a/v with shape [B,T,*], got a={tuple(a.shape)}, v={tuple(v.shape)}")
+                a_p = self.audio_proj(a)
+                v_p = self.vision_proj(v)
+                g = self.gate(torch.cat([a_p, v_p, a_p * v_p], dim=-1))
+                fused = g * v_p + (1.0 - g) * a_p
+                fused = self.drop(fused)
+                h, _ = self.lstm(fused)
+                h = self.drop(h)
+                return self.head(h)
+
+        torch.manual_seed(0)
+        device = torch.device(str(train_device))
+        model = _AVELBiLSTM().to(device)
+        opt = torch.optim.AdamW(model.parameters(), lr=float(lr), weight_decay=0.0)
+        loss_fn = nn.CrossEntropyLoss(weight=torch.from_numpy(weights).to(device=device, dtype=torch.float32))
+
+        n = int(len(train_ids))
+        steps = max(1, int(math.ceil(float(n) / float(bs))))
+        for _epoch in range(int(epochs)):
+            perm = torch.randperm(n)
+            for step in range(int(steps)):
+                idx = perm[step * int(bs) : (step + 1) * int(bs)].tolist()
+                cids = [train_ids[int(i)] for i in idx]
+
+                a_np = np.stack([_l2norm(wavlm_emb_by_clip[c]) for c in cids], axis=0).astype(np.float32, copy=False)
+                v_np = np.stack([vis_by_clip[c] for c in cids], axis=0).astype(np.float32, copy=False)
+                y_np = np.stack([y_by_train[c] for c in cids], axis=0).astype(np.int64, copy=False)
+
+                a_t = torch.from_numpy(a_np).to(device=device, dtype=torch.float32)
+                v_t = torch.from_numpy(v_np).to(device=device, dtype=torch.float32)
+                y_t = torch.from_numpy(y_np).to(device=device, dtype=torch.long)
+
+                logits = model(a_t, v_t)  # [B,T,C]
+                c = int(logits.shape[-1])
+                loss = loss_fn(logits.view(-1, c), y_t.view(-1))
+                opt.zero_grad(set_to_none=True)
+                loss.backward()
+                opt.step()
+
+        model_cpu = model.to(torch.device("cpu"))
+        model_cpu.eval()
+
+        clip_ids = [str(x) for x in clip_ids]
+        for i0 in range(0, len(clip_ids), int(eval_bs)):
+            batch = clip_ids[i0 : i0 + int(eval_bs)]
+            a_np = np.stack([_l2norm(wavlm_emb_by_clip[c]) for c in batch], axis=0).astype(np.float32, copy=False)
+            v_np = np.stack([vis_by_clip[c] for c in batch], axis=0).astype(np.float32, copy=False)
+            with torch.no_grad():
+                logits = model_cpu(torch.from_numpy(a_np).float(), torch.from_numpy(v_np).float())  # [B,T,C]
+                logits_np = logits.detach().cpu().numpy().astype(np.float32)
+
+            for j, cid in enumerate(batch):
+                logit_rows = logits_np[int(j)]  # [T,C]
+                clip_logits = logit_rows.mean(axis=0).astype(np.float32, copy=True)
+                clip_logits[0] = float("-inf")
+                cls = int(np.argmax(clip_logits).item())
+                s = (logit_rows[:, cls] - logit_rows[:, 0]).astype(np.float32, copy=False)
+                out[cid] = [float(x) for x in s.tolist()]
+
+            if (i0 + len(batch)) % 500 == 0 or (i0 + len(batch)) == len(clip_ids):
+                dt = _time.time() - t0
+                print(f"[scores] {i0+len(batch)}/{len(clip_ids)} clips ({dt:.1f}s)", flush=True)
     elif method in (
         "av_clipdiff_lr",
         "av_clipdiff_mlp",
@@ -6882,6 +7129,7 @@ def main(argv: list[str] | None = None) -> int:
             "av_wavlm_clip_xattn_mil",
             "av_wavlm_clip_evt_mlp",
             "av_wavlm_clip_evt_tcn",
+            "av_wavlm_clip_avel_bilstm_cls_target",
             "av_wavlm_clip_mlp_cls",
             "av_wavlm_clip_mlp_cls_target",
             "av_wavlm_clipdiff_vec_mlp",

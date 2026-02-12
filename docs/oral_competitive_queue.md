@@ -343,3 +343,33 @@ Results:
 
 Decision:
 - Harmful/negative on val402 even with gini gating; stop (no quick/full test402).
+
+## 17) Track O: AVE-localizer-style Stage-1 (A+V fusion + BiLSTM cls-target)
+
+Idea:
+- Replace Stage-1 with a **true temporal event localizer** trained on AVE segment labels:
+  - audio (WavLM per-second embeddings) + vision (cached CLIP / CLIPdiff features)
+  - gated A+V fusion + BiLSTM over time
+  - per-second event class logits → score via **class-conditional margin** (`logit[class*] - logit[bg]`)
+
+Implementation:
+- New Stage-1 backend: `EVENTNESS=av_wavlm_clip_avel_bilstm_cls_target` (code: `avs/experiments/ave_p0_sweep.py`).
+- Controlled via env vars:
+  - `AVEL_VIS_RES` (default 160; used 352)
+  - `AVEL_VIS_FEATS` (`clip|clipdiff|clip+clipdiff`; used `clip+clipdiff`)
+  - `AVEL_TRAIN_DEVICE`, `AVEL_EPOCHS`, `AVEL_BS`, `AVEL_LR`, etc.
+
+Results:
+- Baseline val402 sweep (SEEDS=0..2; `candidate_set=ltl_top1medn_maxhigh1_v1`): `runs/E0908_val402_avel_bilstm_cls_r352_clipdiff_20260212-205411/sweep_summary.json`
+  - best: `ltltop1mednmax1_thr0p5_shift1` (anchored=0.74796 vs uniform=0.74680; Δ=+0.00116; p=0.922)
+- Minmax-normalized score cache sanity check (SEEDS=0..2): `runs/E0909_val402_avel_bilstm_cls_r352_clipdiff_minmax_20260212-210652/sweep_summary.json`
+  - identical to E0908 (ranking-only)
+- Onset-like score transform (positive derivative + minmax; SEEDS=0..2): `runs/E0910_val402_avel_bilstm_cls_onset_deriv_pos_rerun_20260212-213925/sweep_summary.json`
+  - best: `ltltop1mednmax1_thr0p7_shift1` (anchored≈uniform; Δ≈0.0; p≈1.0)
+- Stage-2 candidate set variations using cached E0908 scores:
+  - keepadjv2: `runs/E0911_val402_avel_bilstm_cls_keepadjv2_20260212-214325/sweep_summary.json` (best Δ≈-0.00698; p≈0.358)
+  - gini gate: `runs/E0912_val402_avel_bilstm_cls_gini_v2_20260212-214729/sweep_summary.json` (best Δ≈+0.00208; p≈0.785)
+  - adaptive_v2: `runs/E0913_val402_avel_bilstm_cls_adaptive_v2_20260212-215337/sweep_summary.json` (best Δ≈-0.00673; p≈0.464)
+
+Decision:
+- Not promotable: despite being a “real” temporal localizer, downstream anchored-vs-uniform gains remain near-zero or harmful on val402, so we stop (no quick/full test402).
