@@ -79,6 +79,76 @@
   - required_artifacts: []
   - required_metrics: []
 
+- [x] E0820: Oracle-distilled Stage-1 (`av_wavlm_clip_lossgain_mlp`) — val402 sweep (SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=av_wavlm_clip_lossgain_mlp CANDIDATE_SET=ltl_adaptive_keepadj_v2 SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 WAVLM_PRETRAINED=1 WAVLM_MODEL=microsoft/wavlm-base-plus WAVLM_BATCH_SIZE=16 OUT_DIR=runs/E0820_val402_wavlm_cliplossgain_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0820_*/sweep_summary.json`
+    - `runs/E0820_*/best_config.json`
+    - `runs/E0820_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+
+- [x] E0821: Oracle-distilled Stage-1 (`av_wavlm_clip_lossgain_mlp`) — quick test402 (SEEDS=0..2) + diagnose
+  - command:
+    - `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0820_*/best_config.json EVENTNESS=av_wavlm_clip_lossgain_mlp SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 WAVLM_PRETRAINED=1 WAVLM_MODEL=microsoft/wavlm-base-plus WAVLM_BATCH_SIZE=16 OUT_DIR=runs/E0821_quick_test402_wavlm_cliplossgain_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0821_*/metrics.json OUT_DIR=runs/E0821_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0821_*/metrics.json`
+    - `runs/E0821_*/diagnose.json`
+  - required_metrics:
+    - `metrics.json`: `paired_ttest.anchored_vs_uniform.p`, `summary.anchored_top2.mean`, `summary.uniform.mean` (report Δ)
+
+- [x] E0822: Oracle-distilled Stage-1 (`av_wavlm_clip_lossgain_mlp`) — full test402 (SEEDS=0..9) (skipped: E0821 not promoted)
+  - command:
+    - `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0820_*/best_config.json EVENTNESS=av_wavlm_clip_lossgain_mlp SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 WAVLM_PRETRAINED=1 WAVLM_MODEL=microsoft/wavlm-base-plus WAVLM_BATCH_SIZE=16 OUT_DIR=runs/E0822_full_test402_wavlm_cliplossgain_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0822_*/metrics.json OUT_DIR=runs/E0822_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  - required_artifacts:
+    - `runs/E0822_*/metrics.json`
+    - `runs/E0822_*/diagnose.json`
+  - required_metrics:
+    - `metrics.json`: `paired_ttest.anchored_vs_uniform.p`, `summary.anchored_top2.mean`, `summary.uniform.mean` (report Δ)
+
+- [x] E0830: MIL Stage-1 (`av_wavlm_clip_mil_mlp`) — val402 sweep (SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=av_wavlm_clip_mil_mlp CANDIDATE_SET=ltl_adaptive_keepadj_v2 SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 WAVLM_PRETRAINED=1 WAVLM_MODEL=microsoft/wavlm-base-plus WAVLM_BATCH_SIZE=16 OUT_DIR=runs/E0830_val402_wavlm_clipmil_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0830_*/sweep_summary.json`
+    - `runs/E0830_*/best_config.json`
+    - `runs/E0830_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+
+- [x] E0831: MIL Stage-1 (`av_wavlm_clip_mil_mlp`) — quick test402 (SEEDS=0..2) + diagnose
+  - command:
+    - `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0830_*/best_config.json EVENTNESS=av_wavlm_clip_mil_mlp SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 WAVLM_PRETRAINED=1 WAVLM_MODEL=microsoft/wavlm-base-plus WAVLM_BATCH_SIZE=16 OUT_DIR=runs/E0831_quick_test402_wavlm_clipmil_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0831_*/metrics.json OUT_DIR=runs/E0831_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0831_*/metrics.json`
+    - `runs/E0831_*/diagnose.json`
+  - required_metrics:
+    - `metrics.json`: `paired_ttest.anchored_vs_uniform.p`, `summary.anchored_top2.mean`, `summary.uniform.mean` (report Δ)
+
+- [x] E0832: MIL Stage-1 (`av_wavlm_clip_mil_mlp`) — full test402 (SEEDS=0..9) (skipped: E0831 not promoted)
+  - command:
+    - `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0830_*/best_config.json EVENTNESS=av_wavlm_clip_mil_mlp SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 WAVLM_PRETRAINED=1 WAVLM_MODEL=microsoft/wavlm-base-plus WAVLM_BATCH_SIZE=16 OUT_DIR=runs/E0832_full_test402_wavlm_clipmil_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0832_*/metrics.json OUT_DIR=runs/E0832_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  - required_artifacts:
+    - `runs/E0832_*/metrics.json`
+    - `runs/E0832_*/diagnose.json`
+  - required_metrics:
+    - `metrics.json`: `paired_ttest.anchored_vs_uniform.p`, `summary.anchored_top2.mean`, `summary.uniform.mean` (report Δ)
+
 ### Run Queue (Long-Video QA; sequential)
 - [x] E0600 (real; ppl): IntentQA VLM evaluation under budgeted frame selection (val n=253; seed=0)
   - command: `OUT_DIR=runs/E0600_intentqa_vlm_eval_full_20260210-041911 SPLIT=val LIMIT=256 METHODS=uniform,random,audio,cheap_visual,fused,ql2l_clap,ql2l_asr_bm25 B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=250 bash scripts/e0600_intentqa_vlm_eval.sh`
@@ -451,6 +521,10 @@
 | E0802 | success | quick test402: anchored=0.71028 vs uniform=0.71294 (Δ=-0.00265; p=0.7538) | `runs/E0802_quick_test402_imagebind_20260212-040440/` | fallback_used_frac≈0.739; fails promotion gate (no full test) |
 | E0810 | success | val402 sweep best=`ltlkeepadj_adj1_shift0_std0p55`: anchored=0.74256 vs uniform=0.74680 (Δ=-0.00424; p=0.6662) | `runs/E0810_val402_wavlm_20260212-041931/` | WavLM supervised Stage-1 (`wavlm_evt_mlp`) fails val sweep |
 | E0811 | success | quick test402: anchored=0.71418 vs uniform=0.71294 (Δ=+0.00124; p=0.9178) | `runs/E0811_quick_test402_wavlm_20260212-042425/` | fallback_used_frac≈0.231; fails promotion gate (no full test) |
+| E0820 | success | val402 sweep best=`ltlkeepadjv2_adj2_shift0_std0p25`: anchored=0.74564 vs uniform=0.74680 (Δ=-0.00116; p=0.9163) | `runs/E0820_val402_wavlm_cliplossgain_20260212-112651/` | Oracle-distilled loss-gain Stage-1 (`av_wavlm_clip_lossgain_mlp`); fallback_used_frac≈0.983; fails val sweep |
+| E0821 | success | quick test402: anchored=0.71443 vs uniform=0.71294 (Δ=+0.00149; p=0.9007) | `runs/E0821_quick_test402_wavlm_cliplossgain_20260212-113152/` | fallback_used_frac≈0.970; fails promotion gate (no full test) |
+| E0830 | success | val402 sweep best=`ltlkeepadjv2_adj2_shift0_std0p25`: anchored=0.74530 vs uniform=0.74680 (Δ=-0.00150; p=0.5286) | `runs/E0830_val402_wavlm_clipmil_20260212-115213/` | WavLM+CLIP MIL Stage-1 (`av_wavlm_clip_mil_mlp`); fallback_used_frac=0.0; fails val sweep |
+| E0831 | success | quick test402: anchored=0.71153 vs uniform=0.71294 (Δ=-0.00141; p=0.8594) | `runs/E0831_quick_test402_wavlm_clipmil_20260212-115656/` | fallback_used_frac=0.0; fails promotion gate (no full test) |
 
 > Note: The authoritative runnable queue for the current `docs/plan.md` is the checklist above. The `## Experiments` catalog below is an archive; its internal `[ ]` fields are not a TODO list.
 
