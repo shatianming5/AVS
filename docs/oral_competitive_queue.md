@@ -582,3 +582,16 @@ Runs:
 
 Decision:
 - Not promotable: negative on val402, skip quick/full.
+
+## 29) Track AA: XAttn Eventness + Higher Stage-1 Visual Resolution (done; not promoted)
+
+Idea:
+- Increase Stage-1 visual resolution (use cached `res_352` CLIP features) for the XAttn eventness localizer, hoping to reduce
+  the Oracle→Pred gap by improving temporal localization quality.
+
+Runs:
+- E0943 val402 sweep (SEEDS=0..2): `runs/E0943_val402_xattn_evt_vis352_20260213-024540/sweep_summary.json`
+  - best: `ltlkeepadj_adj1_shift1_std0p5` (Δ=-0.00224; p=0.5038)
+
+Decision:
+- Not promotable: negative on val402; skip quick/full.
