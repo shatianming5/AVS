@@ -109,7 +109,22 @@ class ClipVisionEncoder:
 
             self.backend = "timm"
             model_name = str(cfg.model_name).split(":", 1)[1]
-            self.model = timm.create_model(model_name, pretrained=bool(cfg.pretrained), num_classes=0, global_pool="token").to(self.device)
+            # Many timm ViTs support "token" pooling (CLS token), but some (e.g., SigLIP variants)
+            # are trained without a class token and require average pooling.
+            try:
+                self.model = timm.create_model(
+                    model_name,
+                    pretrained=bool(cfg.pretrained),
+                    num_classes=0,
+                    global_pool="token",
+                ).to(self.device)
+            except AssertionError:
+                # Fall back to the model's default global_pool (e.g., SigLIP uses attention pooling via global_pool='map').
+                self.model = timm.create_model(
+                    model_name,
+                    pretrained=bool(cfg.pretrained),
+                    num_classes=0,
+                ).to(self.device)
             self._timm_data_cfg = resolve_model_data_config(self.model)
         else:
             if cfg.pretrained:
