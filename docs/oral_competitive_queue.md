@@ -444,3 +444,59 @@ Results:
 
 Decision:
 - Not promoted to full test402 (Δ is still far from +2% and not significant on quick).
+
+## 21) Track S: DINOv2 Stage-1-only + Dense-Stride Stage-1 (`av_clipdiff_flow_mlp_stride`)
+
+Idea:
+- The dense-stride family (`av_clipdiff_flow_mlp_stride`) is one of the strongest non-oracle Stage-1s on official test402,
+  but its Stage-1 proxy may be bottlenecked by CLIP features.
+- Swap the Stage-1 cache to DINOv2 via `STAGE1_CACHES_DIR`, keep Stage-2 fixed to the official CLIP cache for comparability.
+
+Runs:
+- Val402 sweep (`candidate_set=ltl_top1med_k1_extreme_v1`; SEEDS=0..2): `runs/E0923_val402_flow_stride_stage1dinov2_20260213-003820/sweep_summary.json`
+  - best: `ltltop1medk1ext_thr0p6_shift0_score` (Δ≈+0.00333; p≈0.551)
+- Quick test402 (SEEDS=0..2): `runs/E0924_quick_test402_flow_stride_stage1dinov2_20260213-004520/metrics.json`
+  - anchored=0.71401 vs uniform=0.71294 (Δ≈+0.00108; p≈0.922)
+  - diagnose: `runs/E0924_quick_test402_flow_stride_stage1dinov2_20260213-004520/diagnose.json`
+
+Decision:
+- Not promotable (quick Δ collapses); skip full test402.
+
+## 22) Track T: DINOv2 Stage-1-only + AVE-localizer BiLSTM (cls-target)
+
+Idea:
+- Re-run the AVE-localizer-style BiLSTM Stage-1 (`av_wavlm_clip_avel_bilstm_cls_target`) but swap the Stage-1 cache
+  to DINOv2 via `STAGE1_CACHES_DIR` (Stage-2 remains baseline CLIP cache).
+
+Runs:
+- Val402 sweep (SEEDS=0..2; `candidate_set=ltl_top1medn_maxhigh1_v1`): `runs/E0926_val402_avel_bilstm_cls_stage1dinov2_20260213-005021/sweep_summary.json`
+  - best: `ltltop1mednmax1_thr0p7_shift1` (Δ≈-0.00898; p≈0.2298)
+
+Decision:
+- Not promotable (negative on val402); no quick/full test402.
+
+## 23) Track U: DINOv2 Stage-1-only + XAttn supervised cls-target
+
+Idea:
+- Same as Track P, but swap Stage-1 cache to DINOv2 to test whether stronger visual features make the
+  cross-time A↔V attention Stage-1 usable.
+
+Runs:
+- Val402 sweep (SEEDS=0..2; `candidate_set=ltl_top1medn_maxhigh1_v1`): `runs/E0927_val402_xattn_cls_target_stage1dinov2_20260213-005232/sweep_summary.json`
+  - best: `ltltop1mednmax1_thr0p5_shift1` (Δ≈+0.00324; p≈0.688)
+
+Decision:
+- Not promotable (small Δ on val402); no quick/full test402.
+
+## 24) Track V: DINOv2 Stage-1 scores reuse + top1med_norm Stage-2 sweep
+
+Idea:
+- Reuse the DINOv2 Stage-1 score cache from Track R (`SCORES_JSON`) and resweep a different Stage-2 candidate set
+  (`ltl_top1med_norm_v1`) to test whether a different gate transfers better than keepadj.
+
+Runs:
+- Val402 sweep (SEEDS=0..2): `runs/E0928_val402_vecmlp_top1medn_scores_dinov2_20260213-005513/sweep_summary.json`
+  - best: `ltltop1medn_thr0p6_shift1` (Δ≈+0.00017; p≈0.984)
+
+Decision:
+- Not promotable; keepadj remains the only semi-competitive Stage-2 family under these scores.

@@ -731,6 +731,74 @@
   - required_metrics:
     - `metrics.json`: `paired_ttest.anchored_vs_uniform.p`, `summary.anchored_top2.mean`, `summary.uniform.mean` (report Δ)
 
+- [x] E0923: DINOv2 Stage-1-only caches (`STAGE1_CACHES_DIR`) — val402 sweep (`av_clipdiff_flow_mlp_stride`; `ltl_top1med_k1_extreme_v1`; SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 STAGE1_CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch14_dinov2_112_160_224_352_448 EVENTNESS=av_clipdiff_flow_mlp_stride CANDIDATE_SET=ltl_top1med_k1_extreme_v1 SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0923_val402_flow_stride_stage1dinov2_$(date +%Y%m%d-%H%M%S) bash scripts/e0400_ave_p0_sweep_official_val_ltl_top1med_k1_extreme_v1_av_clipdiff_flow_mlp_stride.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0923_*/sweep_summary.json`
+    - `runs/E0923_*/best_config.json`
+    - `runs/E0923_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - results: best=`ltltop1medk1ext_thr0p6_shift0_score`, Δ≈+0.00333 (p≈0.5507) → promoted to quick test402 (E0924).
+
+- [x] E0924: DINOv2 Stage-1-only caches (`STAGE1_CACHES_DIR`) — quick test402 (`av_clipdiff_flow_mlp_stride`; SEEDS=0..2) + diagnose
+  - command:
+    - `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 STAGE1_CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch14_dinov2_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0923_*/best_config.json EVENTNESS=av_clipdiff_flow_mlp_stride SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0924_quick_test402_flow_stride_stage1dinov2_$(date +%Y%m%d-%H%M%S) bash scripts/e0401_ave_p0_best_to_test_quick_official_av_clipdiff_flow_mlp_stride.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0924_*/metrics.json`
+    - `runs/E0924_*/diagnose.json`
+  - required_metrics:
+    - `metrics.json`: `paired_ttest.anchored_vs_uniform.p`, `summary.anchored_top2.mean`, `summary.uniform.mean` (report Δ)
+  - results: anchored=0.71401 vs uniform=0.71294 (Δ≈+0.00108; p≈0.9222) → not promoted.
+
+- [x] E0925: DINOv2 Stage-1-only caches (`STAGE1_CACHES_DIR`) — full test402 (`av_clipdiff_flow_mlp_stride`; SEEDS=0..9) + diagnose (skipped: E0924 not promoted)
+  - command:
+    - `STAGE1_CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch14_dinov2_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0923_*/best_config.json EVENTNESS=av_clipdiff_flow_mlp_stride SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0925_full_test402_flow_stride_stage1dinov2_$(date +%Y%m%d-%H%M%S) bash scripts/e0402_ave_p0_best_to_test_full_official_av_clipdiff_flow_mlp_stride.sh`
+    - `IN_METRICS=runs/E0925_*/metrics.json OUT_DIR=runs/E0925_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  - required_artifacts: []
+  - required_metrics: []
+
+- [x] E0926: DINOv2 Stage-1-only caches (`STAGE1_CACHES_DIR`) — val402 sweep (AVE-localizer BiLSTM; SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 STAGE1_CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch14_dinov2_112_160_224_352_448 EVENTNESS=av_wavlm_clip_avel_bilstm_cls_target CANDIDATE_SET=ltl_top1medn_maxhigh1_v1 SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 AVEL_TRAIN_DEVICE=cuda:0 AVEL_VIS_RES=352 AVEL_VIS_FEATS=clip+clipdiff AVEL_EPOCHS=60 AVEL_BS=256 AVEL_LR=1e-3 OUT_DIR=runs/E0926_val402_avel_bilstm_cls_stage1dinov2_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0926_*/sweep_summary.json`
+    - `runs/E0926_*/best_config.json`
+    - `runs/E0926_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - results: best=`ltltop1mednmax1_thr0p7_shift1`, Δ≈-0.00898 (p≈0.2298) → not promoted.
+
+- [x] E0927: DINOv2 Stage-1-only caches (`STAGE1_CACHES_DIR`) — val402 sweep (XAttn cls-target; SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 STAGE1_CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch14_dinov2_112_160_224_352_448 EVENTNESS=av_wavlm_clip_xattn_cls_target CANDIDATE_SET=ltl_top1medn_maxhigh1_v1 SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 XATTN_TRAIN_DEVICE=cuda:0 XATTN_VIS_RES=352 XATTN_VIS_FEATS=clip+clipdiff XATTN_EPOCHS=60 XATTN_BS=256 XATTN_EVAL_BS=256 XATTN_LR=2e-3 OUT_DIR=runs/E0927_val402_xattn_cls_target_stage1dinov2_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0927_*/sweep_summary.json`
+    - `runs/E0927_*/best_config.json`
+    - `runs/E0927_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - results: best=`ltltop1mednmax1_thr0p5_shift1`, Δ≈+0.00324 (p≈0.6881) → not promoted.
+
+- [x] E0928: DINOv2 Stage-1 scores reused (`SCORES_JSON`) — val402 sweep (`ltl_top1med_norm_v1`; SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=av_clipdiff_vec_mlp CANDIDATE_SET=ltl_top1med_norm_v1 SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 SCORES_JSON=runs/E0920_val402_vecmlp_keepadj_stage1dinov2_20260213-001634/eventness_scores.json OUT_DIR=runs/E0928_val402_vecmlp_top1medn_scores_dinov2_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0928_*/sweep_summary.json`
+    - `runs/E0928_*/best_config.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - results: best=`ltltop1medn_thr0p6_shift1`, Δ≈+0.00017 (p≈0.9836) → not promoted.
+
 ### Run Queue (Long-Video QA; sequential)
 - [x] E0600 (real; ppl): IntentQA VLM evaluation under budgeted frame selection (val n=253; seed=0)
   - command: `OUT_DIR=runs/E0600_intentqa_vlm_eval_full_20260210-041911 SPLIT=val LIMIT=256 METHODS=uniform,random,audio,cheap_visual,fused,ql2l_clap,ql2l_asr_bm25 B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=250 bash scripts/e0600_intentqa_vlm_eval.sh`
@@ -1150,6 +1218,11 @@
 | E0919 | success | DINOv2 caches built for official AVE: train+val=3703 clips, test=394 clips (total caches=4097 `.npz`; r∈{112,160,224,352,448}) | `runs/E0919_build_cache_dinov2_fill_trainval_20260213-001226/` `runs/E0919_build_cache_dinov2_fill_test_20260213-002118/` | caches: `runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch14_dinov2_112_160_224_352_448/` |
 | E0920 | success | val402 sweep (DINOv2 Stage-1 only; keepadj): best=`ltlkeepadj_adj2_shift0_std0p55`: anchored=0.75520 vs uniform=0.74680 (Δ=+0.00840; p=0.4031) | `runs/E0920_val402_vecmlp_keepadj_stage1dinov2_20260213-001634/` | uses `STAGE1_CACHES_DIR` override; promoted to quick test402 |
 | E0921 | success | quick test402: anchored=0.72189 vs uniform=0.71294 (Δ=+0.00896; p=0.5825) | `runs/E0921_quick_test402_vecmlp_keepadj_stage1dinov2_20260213-002346/` | diagnose: `runs/E0921_quick_test402_vecmlp_keepadj_stage1dinov2_20260213-002346/diagnose.json`; not promoted to full |
+| E0923 | success | val402 sweep (`av_clipdiff_flow_mlp_stride`; DINOv2 Stage-1 only): best=`ltltop1medk1ext_thr0p6_shift0_score`, Δ=+0.00333 (p=0.5507) | `runs/E0923_val402_flow_stride_stage1dinov2_20260213-003820/` | uses `STAGE1_CACHES_DIR` override; promoted to quick test402 |
+| E0924 | success | quick test402 (`av_clipdiff_flow_mlp_stride`; DINOv2 Stage-1 only): anchored=0.71401 vs uniform=0.71294 (Δ=+0.00108; p=0.9222) | `runs/E0924_quick_test402_flow_stride_stage1dinov2_20260213-004520/` | diagnose: `runs/E0924_quick_test402_flow_stride_stage1dinov2_20260213-004520/diagnose.json`; not promoted |
+| E0926 | success | val402 sweep (AVE-localizer BiLSTM cls-target; DINOv2 Stage-1 only): best=`ltltop1mednmax1_thr0p7_shift1`, Δ=-0.00898 (p=0.2298) | `runs/E0926_val402_avel_bilstm_cls_stage1dinov2_20260213-005021/` | not promoted |
+| E0927 | success | val402 sweep (XAttn cls-target; DINOv2 Stage-1 only): best=`ltltop1mednmax1_thr0p5_shift1`, Δ=+0.00324 (p=0.6881) | `runs/E0927_val402_xattn_cls_target_stage1dinov2_20260213-005232/` | not promoted |
+| E0928 | success | val402 sweep (DINOv2 Stage-1 scores reused; top1med_norm): best=`ltltop1medn_thr0p6_shift1`, Δ=+0.00017 (p=0.9836) | `runs/E0928_val402_vecmlp_top1medn_scores_dinov2_20260213-005513/` | uses `SCORES_JSON` from E0920; not promoted |
 
 > Note: The authoritative runnable queue for the current `docs/plan.md` is the checklist above. The `## Experiments` catalog below is an archive; its internal `[ ]` fields are not a TODO list.
 

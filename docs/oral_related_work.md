@@ -22,9 +22,10 @@ This page aligns our "listen-then-look" QA add-on with the closest public work, 
 ### Audio-Visual Event Localization (AVE / temporal grounding)
 
 - AVE (ECCV 2018) baseline code: https://github.com/YapengTian/AVE-ECCV18
-- CACE-Net (2024): https://arxiv.org/abs/2406.14128
-- UniAV (2024): https://arxiv.org/abs/2406.19381
-- Open-Vocabulary AVEL with Prompt Learning (CVPR 2025): https://arxiv.org/abs/2504.02434
+- AVE-CLIP (2022): https://arxiv.org/abs/2210.05060
+- CACE-Net (2024): https://arxiv.org/abs/2408.01952
+- UniAV (2024): https://arxiv.org/abs/2404.03179
+- Towards Open-Vocabulary Audio-Visual Event Localization (2024): https://arxiv.org/abs/2411.11278
 
 ### Long-video MLLM / Frame Selection
 
