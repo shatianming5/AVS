@@ -527,3 +527,29 @@ Runs:
 
 Decision:
 - Not promotable: quick test402 collapses and fallback is much higher than baseline.
+
+## 26) Track X: Oracle-Aligned Temporal Localizer as Stage-1 (XAttn binary eventness)
+
+Idea:
+- Stop doing similarity/MLP tweaks and switch Stage-1 to an explicit **temporal AV eventness localizer** trained on AVE labels:
+  `y(t)=1[label(t)!=0]`, matching the oracle_top2 definition.
+- Use an audio-conditioned attention model to allow soft A↔V temporal alignment, and add a clip-level max loss to push
+  a peakier score distribution (reduce fallback dilution).
+
+Implementation:
+- New Stage-1 backend: `EVENTNESS=av_wavlm_clip_xattn_evt` (WavLM audio + low-res CLIP(+CLIPdiff) vision → per-second logit).
+- Tunables are fixed via env vars (pre-registered in the run commands): `XATTN_*`, `WAVLM_*`.
+
+Queue:
+- E0934→E0936: standard promotion gate (val402 → quick test402 → full test402 if promoted).
+
+Runs:
+- E0934 val402 sweep (SEEDS=0..2): `runs/E0934_val402_xattn_evt_20260213-021028/sweep_summary.json`
+  - best: `ltlkeepadj_adj2_shift1_std0p45` (Δ=+0.00208; p=0.8075)
+- E0935 quick test402 (SEEDS=0..2): `runs/E0935_quick_test402_xattn_evt_20260213-021503/metrics.json`
+  - anchored=0.71915 vs uniform=0.71294; Δ=+0.00622; p=0.5305
+  - diagnose: `runs/E0935_quick_test402_xattn_evt_20260213-021503/diagnose.json` (fallback_used_frac≈0.077)
+- E0936 full test402: skipped (E0935 not promoted).
+
+Decision:
+- Not promotable: transfer is positive but far from +2% (and not significant) on quick test402.
