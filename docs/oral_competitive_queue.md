@@ -570,3 +570,15 @@ Runs:
 
 Decision:
 - Not promotable: quick test402 does not materially improve over the existing best full-test result.
+
+## 28) Track Z: XAttn Eventness + Stage-1 DINOv2 Cache (Stage-2 unchanged)
+
+Idea:
+- Same as Track Y, but use DINOv2 caches for Stage-1 visual features via `STAGE1_CACHES_DIR`.
+
+Runs:
+- E0940 val402 sweep (SEEDS=0..2): `runs/E0940_val402_xattn_evt_stage1dinov2_20260213-023423/sweep_summary.json`
+  - best: `ltlkeepadj_adj2_shift1_std0p6` (Δ=-0.00191; p=0.6639)
+
+Decision:
+- Not promotable: negative on val402, skip quick/full.

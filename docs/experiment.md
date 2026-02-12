@@ -928,6 +928,38 @@
   - required_metrics: []
   - results: skipped (E0938 quick test402 not promoted).
 
+- [x] E0940: XAttn binary eventness Stage-1 (`av_wavlm_clip_xattn_evt`) — val402 sweep (Stage-1 DINOv2 cache; SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 STAGE1_CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch14_dinov2_112_160_224_352_448 EVENTNESS=av_wavlm_clip_xattn_evt CANDIDATE_SET=ltl_adaptive_keepadj_v1 SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 WAVLM_PRETRAINED=1 WAVLM_MODEL=microsoft/wavlm-base-plus WAVLM_BATCH_SIZE=16 XATTN_TRAIN_DEVICE=cuda:0 XATTN_VIS_RES=112 XATTN_VIS_FEATS=clip+clipdiff XATTN_EPOCHS=60 XATTN_BS=256 XATTN_EVAL_BS=256 XATTN_LR=2e-3 XATTN_PROJ_DIM=128 XATTN_DROPOUT=0.1 XATTN_EVT_CLIP_LOSS_WEIGHT=0.5 OUT_DIR=runs/E0940_val402_xattn_evt_stage1dinov2_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0940_*/sweep_summary.json`
+    - `runs/E0940_*/best_config.json`
+    - `runs/E0940_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - results: `runs/E0940_val402_xattn_evt_stage1dinov2_20260213-023423/sweep_summary.json` best=`ltlkeepadj_adj2_shift1_std0p6`, Δ=-0.00191 (p=0.6639) → not promoted.
+
+- [x] E0941: XAttn binary eventness Stage-1 (`av_wavlm_clip_xattn_evt`) — quick test402 (Stage-1 DINOv2 cache; SEEDS=0..2) + diagnose
+  - command:
+    - `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 STAGE1_CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch14_dinov2_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0940_*/best_config.json EVENTNESS=av_wavlm_clip_xattn_evt SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 WAVLM_PRETRAINED=1 WAVLM_MODEL=microsoft/wavlm-base-plus WAVLM_BATCH_SIZE=16 XATTN_TRAIN_DEVICE=cuda:0 XATTN_VIS_RES=112 XATTN_VIS_FEATS=clip+clipdiff XATTN_EPOCHS=60 XATTN_BS=256 XATTN_EVAL_BS=256 XATTN_LR=2e-3 XATTN_PROJ_DIM=128 XATTN_DROPOUT=0.1 XATTN_EVT_CLIP_LOSS_WEIGHT=0.5 OUT_DIR=runs/E0941_quick_test402_xattn_evt_stage1dinov2_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0941_*/metrics.json OUT_DIR=runs/E0941_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts: []
+  - required_metrics: []
+  - results: skipped (E0940 val402 sweep is negative; do not promote to quick/full).
+
+- [x] E0942: XAttn binary eventness Stage-1 (`av_wavlm_clip_xattn_evt`) — full test402 (Stage-1 DINOv2 cache; SEEDS=0..9) + diagnose
+  - command:
+    - `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 STAGE1_CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch14_dinov2_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0940_*/best_config.json EVENTNESS=av_wavlm_clip_xattn_evt SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 WAVLM_PRETRAINED=1 WAVLM_MODEL=microsoft/wavlm-base-plus WAVLM_BATCH_SIZE=16 XATTN_TRAIN_DEVICE=cuda:0 XATTN_VIS_RES=112 XATTN_VIS_FEATS=clip+clipdiff XATTN_EPOCHS=60 XATTN_BS=256 XATTN_EVAL_BS=256 XATTN_LR=2e-3 XATTN_PROJ_DIM=128 XATTN_DROPOUT=0.1 XATTN_EVT_CLIP_LOSS_WEIGHT=0.5 OUT_DIR=runs/E0942_full_test402_xattn_evt_stage1dinov2_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0942_*/metrics.json OUT_DIR=runs/E0942_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  - required_artifacts: []
+  - required_metrics: []
+  - results: skipped (E0940 val402 sweep not promotable).
+
 ### Run Queue (Long-Video QA; sequential)
 - [x] E0600 (real; ppl): IntentQA VLM evaluation under budgeted frame selection (val n=253; seed=0)
   - command: `OUT_DIR=runs/E0600_intentqa_vlm_eval_full_20260210-041911 SPLIT=val LIMIT=256 METHODS=uniform,random,audio,cheap_visual,fused,ql2l_clap,ql2l_asr_bm25 B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=250 bash scripts/e0600_intentqa_vlm_eval.sh`
@@ -1359,6 +1391,7 @@
 | E0935 | success | quick test402 (XAttn binary eventness): anchored=0.71915 vs uniform=0.71294 (Δ=+0.00622; p=0.5305) | `runs/E0935_quick_test402_xattn_evt_20260213-021503/` | diagnose fallback_used_frac≈0.077; fails promotion gate (no full test) |
 | E0937 | success | val402 sweep (XAttn eventness; Stage-1 SigLIP cache): best=`ltlkeepadj_adj1_shift0_std0p6`, anchored-uniform Δ=+0.00682; p=0.4311 | `runs/E0937_val402_xattn_evt_stage1siglip_20260213-021919/` | `STAGE1_CACHES_DIR` SigLIP; Stage-2 remains CLIP cache |
 | E0938 | success | quick test402 (XAttn eventness; Stage-1 SigLIP cache): anchored=0.71857 vs uniform=0.71294 (Δ=+0.00564; p=0.6689) | `runs/E0938_quick_test402_xattn_evt_stage1siglip_20260213-022855/` | diagnose fallback_used_frac≈0.152; fails promotion gate (no full test) |
+| E0940 | success | val402 sweep (XAttn eventness; Stage-1 DINOv2 cache): best=`ltlkeepadj_adj2_shift1_std0p6`, anchored-uniform Δ=-0.00191; p=0.6639 | `runs/E0940_val402_xattn_evt_stage1dinov2_20260213-023423/` | not promoted (negative on val402) |
 
 > Note: The authoritative runnable queue for the current `docs/plan.md` is the checklist above. The `## Experiments` catalog below is an archive; its internal `[ ]` fields are not a TODO list.
 
