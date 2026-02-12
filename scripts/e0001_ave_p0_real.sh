@@ -32,6 +32,7 @@ ANCHOR_HIGH_ADJACENT_DIST="${ANCHOR_HIGH_ADJACENT_DIST:-}"
 ANCHOR_HIGH_GAP_THRESHOLD="${ANCHOR_HIGH_GAP_THRESHOLD:-}"
 
 VISION_PRETRAINED="${VISION_PRETRAINED:-1}"   # 1 downloads CLIP weights from HF
+VISION_MODEL_NAME="${VISION_MODEL_NAME:-}"
 if [[ -z "${DEVICE:-}" ]]; then
   if command -v nvidia-smi >/dev/null 2>&1 && [[ "$(nvidia-smi -L 2>/dev/null | wc -l | tr -d ' ')" -gt 0 ]]; then
     DEVICE="cuda:0"
@@ -106,6 +107,9 @@ fi
 
 if [[ "${VISION_PRETRAINED}" == "1" ]]; then
   args+=(--vision-pretrained)
+fi
+if [[ -n "${VISION_MODEL_NAME}" ]]; then
+  args+=(--vision-model-name "${VISION_MODEL_NAME}")
 fi
 
 python -m avs.pipeline.ave_p0_end2end "${args[@]}"

@@ -72,3 +72,10 @@ This is intentionally *not* a full TODO list.
   - XAttn MIL Stage-1 (`av_wavlm_clip_xattn_mil`): `E0902~E0905` (near-zero/negative on val; not promotable).
   - High-res vision binary Stage-1 (`vision_binary_mlp_r352`): `E0906~E0907` (negative on val; not promotable).
   - See: `docs/oral_competitive_queue.md` (Track M/N) + `docs/experiment.md` (E0902~E0907).
+
+- [x] B4: Vision backbone swap attempt (timm EVA02 caches; Stage-2 swap + Stage-1-only override) — still not competitive.
+  - Cache build (112/160/224/352): `runs/E0915_build_cache_eva02_clip_p16_112_160_224_352_20260212-225043/cache_build.json` + `runs/E0915_build_cache_eva02_clip_p16_112_160_224_352_test_20260212-230913/cache_build.json`
+  - Val402 sweeps:
+    - EVA02 Stage-2: `runs/E0916_ave_p0_sweep_official_val_av_clipdiff_vec_mlp_ltl_adaptive_keepadj_v1_eva02_20260212-231218/sweep_summary.json` (best Δ≈+0.00241)
+    - EVA02 Stage-1 only: `runs/E0917_ave_p0_sweep_official_val_av_clipdiff_vec_mlp_ltl_adaptive_keepadj_v1_stage1eva02_20260212-231759/sweep_summary.json` (best Δ≈+0.00324), `runs/E0918_ave_p0_sweep_official_val_av_clipdiff_vec_mlp_ltl_top1med_norm_v1_stage1eva02_20260212-232240/sweep_summary.json` (best Δ≈+0.00183)
+  - Decision: not promoted to test402.

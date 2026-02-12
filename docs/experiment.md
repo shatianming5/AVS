@@ -629,6 +629,104 @@
     - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
   - logs: `artifacts/experiments/E0914/run.log`
 
+- [x] E0915: Build EVA02 vision caches (timm backbone) for official AVE (train3339/val402/test402)
+  - command:
+    - Train+val cache build:
+      - `python -m avs.pipeline.ave_p0_end2end --mode none --allow-missing --meta-dir data/AVE/meta --processed-dir runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed --caches-dir runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_eva02_base_patch16_clip_224_112_160_224_352 --split-train train --split-eval val --train-ids-file data/AVE/meta/download_ok_train_official.txt --eval-ids-file data/AVE/meta/download_ok_val_official.txt --limit-train 3339 --limit-eval 402 --seeds 0,1 --cache-only --cache-skip-existing --cache-num-workers 5 --cache-devices cuda:0,cuda:1,cuda:2,cuda:3,cuda:4 --cache-resolutions 112,160,224,352 --vision-model-name timm:eva02_base_patch16_clip_224 --vision-pretrained --out-dir runs/E0915_build_cache_eva02_clip_p16_112_160_224_352_20260212-225043`
+    - Test cache build (incremental):
+      - `python -m avs.pipeline.ave_p0_end2end --mode none --allow-missing --meta-dir data/AVE/meta --processed-dir runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed --caches-dir runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_eva02_base_patch16_clip_224_112_160_224_352 --split-train train --split-eval test --train-ids-file data/AVE/meta/download_ok_train_official.txt --eval-ids-file data/AVE/meta/download_ok_test_official.txt --limit-train 3339 --limit-eval 402 --seeds 0,1 --cache-only --cache-skip-existing --cache-num-workers 5 --cache-devices cuda:0,cuda:1,cuda:2,cuda:3,cuda:4 --cache-resolutions 112,160,224,352 --vision-model-name timm:eva02_base_patch16_clip_224 --vision-pretrained --out-dir runs/E0915_build_cache_eva02_clip_p16_112_160_224_352_test_20260212-230913`
+  - configs: []
+  - seeds: []
+  - required_artifacts:
+    - `runs/E0915_build_cache_eva02_clip_p16_112_160_224_352_20260212-225043/cache_build.json`
+    - `runs/E0915_build_cache_eva02_clip_p16_112_160_224_352_test_20260212-230913/cache_build.json`
+    - `runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_eva02_base_patch16_clip_224_112_160_224_352/*.npz`
+  - required_metrics:
+    - `cache_build.json`: `ok=true`, `missing_caches=[]`, `cache_resolutions=[112,160,224,352]`
+
+- [x] E0916: EVA02 Stage-2 backbone swap (train+eval on EVA02 caches) — val402 sweep (SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_eva02_base_patch16_clip_224_112_160_224_352 EVENTNESS=av_clipdiff_vec_mlp CANDIDATE_SET=ltl_adaptive_keepadj_v1 SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0916_ave_p0_sweep_official_val_av_clipdiff_vec_mlp_ltl_adaptive_keepadj_v1_eva02_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0916_*/sweep_summary.json`
+    - `runs/E0916_*/best_config.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - decision: not promoted (val402 not competitive)
+
+- [x] E0917: EVA02 Stage-1-only caches (Stage-2 stays baseline) — val402 sweep (keepadj; SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 STAGE1_CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_eva02_base_patch16_clip_224_112_160_224_352 EVENTNESS=av_clipdiff_vec_mlp CANDIDATE_SET=ltl_adaptive_keepadj_v1 SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0917_ave_p0_sweep_official_val_av_clipdiff_vec_mlp_ltl_adaptive_keepadj_v1_stage1eva02_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0917_*/sweep_summary.json`
+    - `runs/E0917_*/best_config.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - decision: not promoted (val402 not competitive)
+
+- [x] E0918: EVA02 Stage-1-only caches (Stage-2 stays baseline) — val402 sweep (top1med_norm; SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 STAGE1_CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_eva02_base_patch16_clip_224_112_160_224_352 EVENTNESS=av_clipdiff_vec_mlp CANDIDATE_SET=ltl_top1med_norm_v1 SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0918_ave_p0_sweep_official_val_av_clipdiff_vec_mlp_ltl_top1med_norm_v1_stage1eva02_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0918_*/sweep_summary.json`
+    - `runs/E0918_*/best_config.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - decision: not promoted (val402 not competitive)
+
+- [ ] E0919: Build DINOv2 vision caches (timm backbone) for official AVE (train3339/val402/test402)
+  - command:
+    - Train+val cache build:
+      - `python -m avs.pipeline.ave_p0_end2end --mode none --allow-missing --meta-dir data/AVE/meta --processed-dir runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed --caches-dir runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch14_dinov2_112_160_224_352 --split-train train --split-eval val --train-ids-file data/AVE/meta/download_ok_train_official.txt --eval-ids-file data/AVE/meta/download_ok_val_official.txt --limit-train 3339 --limit-eval 402 --seeds 0,1 --cache-only --cache-skip-existing --cache-num-workers 5 --cache-devices cuda:0,cuda:1,cuda:2,cuda:3,cuda:4 --cache-resolutions 112,160,224,352 --vision-model-name timm:vit_base_patch14_dinov2 --vision-pretrained --out-dir runs/E0919_build_cache_dinov2_p14_112_160_224_352_$(date +%Y%m%d-%H%M%S)`
+    - Test cache build (incremental):
+      - `python -m avs.pipeline.ave_p0_end2end --mode none --allow-missing --meta-dir data/AVE/meta --processed-dir runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed --caches-dir runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch14_dinov2_112_160_224_352 --split-train train --split-eval test --train-ids-file data/AVE/meta/download_ok_train_official.txt --eval-ids-file data/AVE/meta/download_ok_test_official.txt --limit-train 3339 --limit-eval 402 --seeds 0,1 --cache-only --cache-skip-existing --cache-num-workers 5 --cache-devices cuda:0,cuda:1,cuda:2,cuda:3,cuda:4 --cache-resolutions 112,160,224,352 --vision-model-name timm:vit_base_patch14_dinov2 --vision-pretrained --out-dir runs/E0919_build_cache_dinov2_p14_112_160_224_352_test_$(date +%Y%m%d-%H%M%S)`
+  - configs: []
+  - seeds: []
+  - required_artifacts:
+    - `runs/E0919_build_cache_dinov2_p14_112_160_224_352_*/cache_build.json`
+    - `runs/E0919_build_cache_dinov2_p14_112_160_224_352_test_*/cache_build.json`
+    - `runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch14_dinov2_112_160_224_352/*.npz`
+  - required_metrics:
+    - `cache_build.json`: `ok=true`, `missing_caches=[]`, `cache_resolutions=[112,160,224,352]`
+
+- [ ] E0920: DINOv2 Stage-1-only caches (`STAGE1_CACHES_DIR`) — val402 sweep (keepadj; SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 STAGE1_CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch14_dinov2_112_160_224_352 EVENTNESS=av_clipdiff_vec_mlp CANDIDATE_SET=ltl_adaptive_keepadj_v1 SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0920_val402_vecmlp_keepadj_stage1dinov2_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0920_*/sweep_summary.json`
+    - `runs/E0920_*/best_config.json`
+    - `runs/E0920_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+
+- [ ] E0921: DINOv2 Stage-1-only caches (`STAGE1_CACHES_DIR`) — quick test402 (SEEDS=0..2) + diagnose
+  - command:
+    - `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 STAGE1_CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch14_dinov2_112_160_224_352 BEST_CONFIG_JSON=runs/E0920_*/best_config.json EVENTNESS=av_clipdiff_vec_mlp SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0921_quick_test402_vecmlp_keepadj_stage1dinov2_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0921_*/metrics.json OUT_DIR=runs/E0921_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0921_*/metrics.json`
+    - `runs/E0921_*/diagnose.json`
+  - required_metrics:
+    - `metrics.json`: `paired_ttest.anchored_vs_uniform.p`, `summary.anchored_top2.mean`, `summary.uniform.mean` (report Δ)
+
+- [ ] E0922: DINOv2 Stage-1-only caches (`STAGE1_CACHES_DIR`) — full test402 (SEEDS=0..9) + diagnose (only if E0921 promoted)
+  - command:
+    - `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 STAGE1_CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch14_dinov2_112_160_224_352 BEST_CONFIG_JSON=runs/E0920_*/best_config.json EVENTNESS=av_clipdiff_vec_mlp SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0922_full_test402_vecmlp_keepadj_stage1dinov2_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0922_*/metrics.json OUT_DIR=runs/E0922_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  - required_artifacts:
+    - `runs/E0922_*/metrics.json`
+    - `runs/E0922_*/diagnose.json`
+  - required_metrics:
+    - `metrics.json`: `paired_ttest.anchored_vs_uniform.p`, `summary.anchored_top2.mean`, `summary.uniform.mean` (report Δ)
+
 ### Run Queue (Long-Video QA; sequential)
 - [x] E0600 (real; ppl): IntentQA VLM evaluation under budgeted frame selection (val n=253; seed=0)
   - command: `OUT_DIR=runs/E0600_intentqa_vlm_eval_full_20260210-041911 SPLIT=val LIMIT=256 METHODS=uniform,random,audio,cheap_visual,fused,ql2l_clap,ql2l_asr_bm25 B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=250 bash scripts/e0600_intentqa_vlm_eval.sh`
@@ -1041,6 +1139,10 @@
 | E0912 | success | val402 sweep best=`ltlgini2_gini0p4_shift1`: anchored=0.74888 vs uniform=0.74680 (Δ=+0.00208; p=0.7854) | `runs/E0912_val402_avel_bilstm_cls_gini_v2_20260212-214729/` | gini gate helps slightly but not significant |
 | E0913 | success | val402 sweep best=`ltladjv2_adj1_shift0_std0p2_scoreAlloc`: anchored=0.74007 vs uniform=0.74680 (Δ=-0.00673; p=0.4637) | `runs/E0913_val402_avel_bilstm_cls_adaptive_v2_20260212-215337/` | adaptive Stage-2 configs are harmful under this Stage-1 |
 | E0914 | success | val402 sweep best=`ltltop1mednmax1_thr0p5_shift1`: anchored=0.74422 vs uniform=0.74680 (Δ=-0.00258; p=0.6928) | `runs/E0914_val402_xattn_cls_target_r352_clipdiff_20260212-221441/` | XAttn supervised Stage-1 (`av_wavlm_clip_xattn_cls_target`) is harmful on val |
+| E0915 | success | EVA02 caches built for official AVE: train+val=3703 clips, test=394 clips (total caches=4097 `.npz`; r∈{112,160,224,352}) | `runs/E0915_build_cache_eva02_clip_p16_112_160_224_352_20260212-225043/` `runs/E0915_build_cache_eva02_clip_p16_112_160_224_352_test_20260212-230913/` | caches: `runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_eva02_base_patch16_clip_224_112_160_224_352/` |
+| E0916 | success | val402 sweep (EVA02 Stage-2): best=`ltlkeepadj_adj1_shift0_std0p6`: anchored=0.76110 vs uniform=0.75869 (Δ=+0.00241; p=0.6538) | `runs/E0916_ave_p0_sweep_official_val_av_clipdiff_vec_mlp_ltl_adaptive_keepadj_v1_eva02_20260212-231218/` | uniform is high already; selection gain collapses; not promoted |
+| E0917 | success | val402 sweep (EVA02 Stage-1 only; keepadj): best=`ltlkeepadj_adj1_shift0_std0p45`: anchored=0.75004 vs uniform=0.74680 (Δ=+0.00324; p=0.5702) | `runs/E0917_ave_p0_sweep_official_val_av_clipdiff_vec_mlp_ltl_adaptive_keepadj_v1_stage1eva02_20260212-231759/` | uses `STAGE1_CACHES_DIR` override; not promoted |
+| E0918 | success | val402 sweep (EVA02 Stage-1 only; top1med_norm): best=`ltltop1medn_thr0p5_shift0`: anchored=0.74863 vs uniform=0.74680 (Δ=+0.00183; p=0.8223) | `runs/E0918_ave_p0_sweep_official_val_av_clipdiff_vec_mlp_ltl_top1med_norm_v1_stage1eva02_20260212-232240/` | not promoted |
 
 > Note: The authoritative runnable queue for the current `docs/plan.md` is the checklist above. The `## Experiments` catalog below is an archive; its internal `[ ]` fields are not a TODO list.
 

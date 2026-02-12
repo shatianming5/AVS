@@ -14,6 +14,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--clip-id", action="append", default=[], help="Clip id to cache (repeatable)")
     p.add_argument("--resolutions", type=str, default="112,224,448")
     p.add_argument("--out-dir", type=Path, default=Path("runs") / f"features_cache_{time.strftime('%Y%m%d-%H%M%S')}")
+    p.add_argument(
+        "--model-name",
+        type=str,
+        default=ClipVisionEncoderConfig().model_name,
+        help="HuggingFace model id for CLIPVisionModel.",
+    )
     p.add_argument("--pretrained", action="store_true", help="Use pretrained CLIP weights (downloads from HF)")
     p.add_argument("--device", type=str, default="cpu")
     return p
@@ -25,7 +31,7 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("at least one --clip-id is required")
 
     resolutions = [int(x) for x in str(args.resolutions).split(",") if str(x).strip()]
-    encoder = ClipVisionEncoder(ClipVisionEncoderConfig(pretrained=bool(args.pretrained), device=args.device))
+    encoder = ClipVisionEncoder(ClipVisionEncoderConfig(model_name=str(args.model_name), pretrained=bool(args.pretrained), device=args.device))
 
     for cid in args.clip_id:
         frames_dir = args.processed_dir / cid / "frames"
@@ -38,4 +44,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

@@ -65,6 +65,7 @@ HEAD_DROPOUT="${HEAD_DROPOUT:-0.0}"
 TEMPORAL_KERNEL_SIZE="${TEMPORAL_KERNEL_SIZE:-3}"
 
 VISION_PRETRAINED="${VISION_PRETRAINED:-1}"
+VISION_MODEL_NAME="${VISION_MODEL_NAME:-}"
 
 if [[ -z "${DEVICE:-}" ]]; then
   if command -v nvidia-smi >/dev/null 2>&1 && [[ "$(nvidia-smi -L 2>/dev/null | wc -l | tr -d ' ')" -gt 0 ]]; then
@@ -162,6 +163,9 @@ fi
 
 if [[ "${VISION_PRETRAINED}" == "1" ]]; then
   args+=(--vision-pretrained)
+fi
+if [[ -n "${VISION_MODEL_NAME}" ]]; then
+  args+=(--vision-model-name "${VISION_MODEL_NAME}")
 fi
 
 cd "${REPO_ROOT}"

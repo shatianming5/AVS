@@ -390,3 +390,52 @@ Results:
 
 Decision:
 - Not promotable (negative on val402); no quick/full test402.
+
+## 19) Track Q: Vision Backbone Swap via timm EVA02 (cache rebuild)
+
+Idea:
+- Try a qualitatively different lever than swapping Stage-1 heads: **change the vision backbone** used for caching
+  (and optionally only for Stage-1 scoring) to improve anchor reliability and/or downstream robustness.
+
+Implementation (repo changes; see the uncommitted diff in this workspace):
+- `avs/vision/clip_vit.py`: add `timm:` backend (preprocess + `timm.create_model(..., num_classes=0)`).
+- `avs/pipeline/ave_p0_end2end.py`: add `--vision-model-name` and write backbone metadata into `cache_build.json`.
+- `avs/experiments/ave_p0_sweep.py`: allow `STAGE1_CACHES_DIR` override so Stage-1 can use a different cache than Stage-2.
+
+Runs:
+- EVA02 caches built (r∈{112,160,224,352}):
+  - Train+val: `runs/E0915_build_cache_eva02_clip_p16_112_160_224_352_20260212-225043/cache_build.json` (3703 clips)
+  - Test (incremental): `runs/E0915_build_cache_eva02_clip_p16_112_160_224_352_test_20260212-230913/cache_build.json` (394 clips)
+  - Cache dir: `runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_eva02_base_patch16_clip_224_112_160_224_352/` (total `.npz`=4097)
+
+Results:
+- Stage-2 swapped to EVA02 caches (train+eval):
+  - Val402 sweep: `runs/E0916_ave_p0_sweep_official_val_av_clipdiff_vec_mlp_ltl_adaptive_keepadj_v1_eva02_20260212-231218/sweep_summary.json`
+    - best: `ltlkeepadj_adj1_shift0_std0p6` (anchored=0.76110 vs uniform=0.75869; Δ=+0.00241; p=0.6538)
+  - Interpretation: uniform rises a lot; selection gain collapses.
+
+- Stage-1-only EVA02 caches (`STAGE1_CACHES_DIR`), Stage-2 stays baseline:
+  - keepadj candidate set: `runs/E0917_ave_p0_sweep_official_val_av_clipdiff_vec_mlp_ltl_adaptive_keepadj_v1_stage1eva02_20260212-231759/sweep_summary.json`
+    - best: `ltlkeepadj_adj1_shift0_std0p45` (anchored=0.75004 vs uniform=0.74680; Δ=+0.00324; p=0.5702)
+  - top1med_norm candidate set: `runs/E0918_ave_p0_sweep_official_val_av_clipdiff_vec_mlp_ltl_top1med_norm_v1_stage1eva02_20260212-232240/sweep_summary.json`
+    - best: `ltltop1medn_thr0p5_shift0` (anchored=0.74863 vs uniform=0.74680; Δ=+0.00183; p=0.8223)
+
+Decision:
+- Not competitive on val402 in any setup; do not promote to quick/full test402.
+
+## 20) Track R (planned): DINOv2 Stage-1-only caches (`STAGE1_CACHES_DIR`)
+
+Idea:
+- Try a non-CLIP self-supervised backbone for Stage-1 scoring (motion/change proxy via feature diffs),
+  while keeping Stage-2 fixed to the official CLIP cache for comparability.
+
+Plan (fixed gate; sequential):
+1) Build DINOv2 caches for official train+val+test (112/160/224/352).
+2) Run val402 sweep with `EVENTNESS=av_clipdiff_vec_mlp` under keepadj candidate set.
+3) Promote only if val402 Δ is competitive vs the current best family; otherwise stop (no test402 spend).
+
+Queue (see `docs/experiment.md`):
+- E0919: cache build (`timm:vit_base_patch14_dinov2`)
+- E0920: val402 sweep (Stage-1-only caches)
+- E0921: quick test402 + diagnose (only if promoted)
+- E0922: full test402 + diagnose (only if promoted)

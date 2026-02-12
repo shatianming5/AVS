@@ -79,6 +79,7 @@ def _cache_worker(
     clip_ids: list[str],
     resolutions: list[int],
     device: str,
+    model_name: str,
     pretrained: bool,
     skip_existing: bool,
     out_path: Path,
@@ -93,7 +94,13 @@ def _cache_worker(
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        encoder = ClipVisionEncoder(ClipVisionEncoderConfig(pretrained=bool(pretrained), device=str(device)))
+        encoder = ClipVisionEncoder(
+            ClipVisionEncoderConfig(
+                model_name=str(model_name),
+                pretrained=bool(pretrained),
+                device=str(device),
+            )
+        )
 
         for cid in clip_ids:
             cache_path = caches_dir / f"{cid}.npz"
@@ -333,6 +340,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--train-device", type=str, default="cpu", help="Device for training the classifier head (cpu or cuda:<i>).")
 
     p.add_argument("--vision-pretrained", action="store_true", help="Use pretrained CLIP weights (downloads from HF)")
+    p.add_argument(
+        "--vision-model-name",
+        type=str,
+        default=ClipVisionEncoderConfig().model_name,
+        help="HuggingFace model id for the CLIP vision backbone used to build caches.",
+    )
     p.add_argument("--device", type=str, default="cpu")
     p.add_argument(
         "--audio-device",
@@ -469,6 +482,8 @@ def main(argv: list[str] | None = None) -> int:
             "cache_devices": [str(x) for x in cache_devices],
             "cache_resolutions": [int(x) for x in resolutions],
             "skip_existing": True,
+            "vision_model_name": str(args.vision_model_name),
+            "vision_pretrained": bool(args.vision_pretrained),
             "workers": [],
             "missing_caches": [],
             "exitcodes": [],
@@ -478,7 +493,13 @@ def main(argv: list[str] | None = None) -> int:
         (out_dir / "cache_build.json").write_text(json.dumps(cache_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     else:
         if cache_num_workers == 1:
-            encoder = ClipVisionEncoder(ClipVisionEncoderConfig(pretrained=bool(args.vision_pretrained), device=args.device))
+            encoder = ClipVisionEncoder(
+                ClipVisionEncoderConfig(
+                    model_name=str(args.vision_model_name),
+                    pretrained=bool(args.vision_pretrained),
+                    device=args.device,
+                )
+            )
             cached: set[str] = set()
             for cid in ids_to_cache:
                 out_path = caches_dir / f"{cid}.npz"
@@ -518,6 +539,7 @@ def main(argv: list[str] | None = None) -> int:
                         "clip_ids": shards[wid],
                         "resolutions": resolutions,
                         "device": str(device),
+                        "model_name": str(args.vision_model_name),
                         "pretrained": bool(args.vision_pretrained),
                         "skip_existing": bool(args.cache_skip_existing),
                         "out_path": worker_out,
@@ -552,6 +574,8 @@ def main(argv: list[str] | None = None) -> int:
                 "cache_devices": [str(x) for x in cache_devices],
                 "cache_resolutions": [int(x) for x in resolutions],
                 "skip_existing": bool(args.cache_skip_existing),
+                "vision_model_name": str(args.vision_model_name),
+                "vision_pretrained": bool(args.vision_pretrained),
                 "workers": worker_results,
                 "missing_caches": missing_caches,
                 "exitcodes": [p.exitcode for p in procs],

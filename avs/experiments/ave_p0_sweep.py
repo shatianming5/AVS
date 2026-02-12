@@ -3256,6 +3256,7 @@ def _compute_scores_by_clip(
     labels_by_clip: dict[str, list[int]] | None = None,
 ) -> dict[str, list[float]]:
     import time as _time
+    import os
     import numpy as np
 
     from avs.audio.eventness import (
@@ -3267,6 +3268,13 @@ def _compute_scores_by_clip(
     method = str(eventness_method)
     clip_ids = [str(x) for x in clip_ids]
     out: dict[str, list[float]] = {}
+
+    stage1_caches_env = os.environ.get("STAGE1_CACHES_DIR")
+    if stage1_caches_env is not None and str(stage1_caches_env).strip() != "":
+        # Allow using a different vision backbone / cache just for Stage-1 scoring while keeping
+        # Stage-2 (downstream) caches unchanged. Stage-2 caches are loaded elsewhere.
+        caches_dir = Path(str(stage1_caches_env))
+        print(f"[scores] STAGE1_CACHES_DIR overrides caches_dir: {caches_dir}", flush=True)
 
     ast_probe = None
     needs_ast = method in (
