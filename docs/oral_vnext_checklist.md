@@ -42,8 +42,8 @@ This is intentionally *not* a full TODO list.
     - `python scripts/plan_evidence_matrix.py --write-docs-md`
   - Acceptance: all referenced artifacts exist locally; docs update is consistent with the latest run roots.
   - Evidence:
-    - `runs/datasets_verify_20260212-020117/datasets_verify.json`
-    - `runs/evidence_matrix_20260212-020124/evidence_matrix.json`
+    - `runs/datasets_verify_20260212-204612/datasets_verify.json`
+    - `runs/evidence_matrix_20260212-204618/evidence_matrix.json`
 
 - [x] A6: Slide assembly helpers (so packaging is truly “done”).
   - Exports:
