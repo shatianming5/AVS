@@ -67,3 +67,8 @@ This is intentionally *not* a full TODO list.
   - WavLM:
     - val402: `runs/E0810_val402_wavlm_20260212-041931/sweep_summary.json` (best Δ≈-0.00424)
     - quick test402: `runs/E0811_quick_test402_wavlm_20260212-042425/metrics.json` (Δ≈+0.00124; p≈0.918) → not promoted
+
+- [x] B3: Extra “qualitatively different” Stage-1 probes (override stop rule; still failed on val402).
+  - XAttn MIL Stage-1 (`av_wavlm_clip_xattn_mil`): `E0902~E0905` (near-zero/negative on val; not promotable).
+  - High-res vision binary Stage-1 (`vision_binary_mlp_r352`): `E0906~E0907` (negative on val; not promotable).
+  - See: `docs/oral_competitive_queue.md` (Track M/N) + `docs/experiment.md` (E0902~E0907).
