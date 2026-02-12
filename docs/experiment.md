@@ -521,6 +521,30 @@
     - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
   - logs: `artifacts/experiments/E0905/run.log`
 
+- [x] E0906: High-res vision Stage-1 (`vision_binary_mlp_r352`) — val402 sweep (`ltl_top1medn_maxhigh1_v1`; SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=vision_binary_mlp_r352 CANDIDATE_SET=ltl_top1medn_maxhigh1_v1 SEEDS=0,1,2 TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0906_val402_vision_binary_mlp_r352_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0906_*/sweep_summary.json`
+    - `runs/E0906_*/best_config.json`
+    - `runs/E0906_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - logs: `artifacts/experiments/E0906/run.log`
+
+- [x] E0907: High-res vision Stage-1 (`vision_binary_mlp_r352`) — val402 sweep (`ltl_gini_v2`; cached scores from E0906; SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=vision_binary_mlp_r352 CANDIDATE_SET=ltl_gini_v2 SEEDS=0,1,2 TRAIN_DEVICE=cuda:0 SCORES_JSON=runs/E0906_*/eventness_scores.json OUT_DIR=runs/E0907_val402_vision_binary_mlp_r352_gini_v2_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0907_*/sweep_summary.json`
+    - `runs/E0907_*/best_config.json`
+    - `runs/E0906_*/eventness_scores.json` (reused)
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - logs: `artifacts/experiments/E0907/run.log`
+
 ### Run Queue (Long-Video QA; sequential)
 - [x] E0600 (real; ppl): IntentQA VLM evaluation under budgeted frame selection (val n=253; seed=0)
   - command: `OUT_DIR=runs/E0600_intentqa_vlm_eval_full_20260210-041911 SPLIT=val LIMIT=256 METHODS=uniform,random,audio,cheap_visual,fused,ql2l_clap,ql2l_asr_bm25 B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=250 bash scripts/e0600_intentqa_vlm_eval.sh`
@@ -924,6 +948,8 @@
 | E0903 | success | val402 sweep best=`ltltop1mednmax1_thr0p6_shift0`: anchored=0.74746 vs uniform=0.74680 (Δ=+0.00066; p=0.9113) | `runs/E0903_val402_wavlm_clip_xattn_mil_r224_clipdiff_20260212-141657/` | XAttn MIL Stage-1 (r224; clip+clipdiff); near-zero on val |
 | E0904 | success | val402 sweep best=`ltlkeepadjv2_adj2_shift1_std0p25`: anchored=0.74123 vs uniform=0.74680 (Δ=-0.00557; p=0.4279) | `runs/E0904_val402_xattn_mil_r224_clipdiff_keepadjv2_20260212-141941/` | keepadjv2 Stage-2 sweep with cached E0903 scores; harmful on val |
 | E0905 | success | val402 sweep best=`ltltop1mednmax1_thr0p5_shift0`: anchored=0.74722 vs uniform=0.74680 (Δ=+0.00042; p=0.9496) | `runs/E0905_val402_xattn_mil_r352_clip_20260212-142552/` | XAttn MIL Stage-1 (r352; clip); near-zero on val |
+| E0906 | success | val402 sweep best=`ltltop1mednmax1_thr0p6_shift0`: anchored=0.73716 vs uniform=0.74680 (Δ=-0.00964; p=0.1157) | `runs/E0906_val402_vision_binary_mlp_r352_20260212-143611/` | High-res vision Stage-1 (`vision_binary_mlp_r352`) is harmful under top1-med gate |
+| E0907 | success | val402 sweep best=`ltlgini2_gini0p35_shift0`: anchored=0.74331 vs uniform=0.74680 (Δ=-0.00349; p=0.7066) | `runs/E0907_val402_vision_binary_mlp_r352_gini_v2_20260212-143837/` | gini gate reduces harm vs E0906 but remains negative on val |
 
 > Note: The authoritative runnable queue for the current `docs/plan.md` is the checklist above. The `## Experiments` catalog below is an archive; its internal `[ ]` fields are not a TODO list.
 

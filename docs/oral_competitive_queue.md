@@ -325,3 +325,21 @@ Results:
 
 Decision:
 - Not promotable: all variants are near-zero/negative on val402, so we stop this direction (no quick/full test402).
+
+## 16) Track N: High-res vision-only Stage-1 (binary CLIP eventness @ r352)
+
+Idea:
+- As an aggressive Stage-1 attempt aligned with the `oracle_top2 = (label!=0)` teacher, train a binary visual eventness
+  model on cached CLIP features at **r352** (`vision_binary_mlp_r352`) and use its logits as per-second scores.
+
+Implementation:
+- New Stage-1 backend: `EVENTNESS=vision_binary_mlp_r352` (code: `avs/experiments/ave_p0_sweep.py`).
+
+Results:
+- Val402 sweep (SEEDS=0..2; `candidate_set=ltl_top1medn_maxhigh1_v1`): `runs/E0906_val402_vision_binary_mlp_r352_20260212-143611/sweep_summary.json`
+  - best: `ltltop1mednmax1_thr0p6_shift0` (anchored=0.73716 vs uniform=0.74680; Δ=-0.00964; p=0.116; fallback≈0.728 by `conf_below_threshold`)
+- Val402 sweep (SEEDS=0..2; `candidate_set=ltl_gini_v2`; cached E0906 scores): `runs/E0907_val402_vision_binary_mlp_r352_gini_v2_20260212-143837/sweep_summary.json`
+  - best: `ltlgini2_gini0p35_shift0` (anchored=0.74331 vs uniform=0.74680; Δ=-0.00349; p=0.707)
+
+Decision:
+- Harmful/negative on val402 even with gini gating; stop (no quick/full test402).

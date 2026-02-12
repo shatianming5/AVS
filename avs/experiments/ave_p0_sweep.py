@@ -5860,9 +5860,12 @@ def _compute_scores_by_clip(
             if (i + 1) % 200 == 0 or (i + 1) == len(clip_ids):
                 dt = _time.time() - t0
                 print(f"[scores] {i+1}/{len(clip_ids)} clips ({dt:.1f}s)", flush=True)
-    elif method in ("vision_binary_lr", "vision_binary_mlp"):
-        # Supervised cheap-visual anchors: train a tiny binary model on frozen CLIP features (low-res) to predict
+    elif method in ("vision_binary_lr", "vision_binary_mlp", "vision_binary_mlp_r224", "vision_binary_mlp_r352"):
+        # Supervised visual anchors: train a tiny binary model on frozen CLIP features to predict
         # event vs background; use per-second logits as Stage-1 scores.
+        #
+        # Note: the default `vision_binary_*` methods are "cheap-visual" controls (low-res). The `_r224`/`_r352`
+        # variants intentionally use higher-res cached features as a higher-capacity Stage-1 signal.
         if caches_dir is None:
             raise ValueError(f"{method} requires caches_dir to load CLIP features")
         if train_ids is None or labels_by_clip is None:
@@ -5878,7 +5881,14 @@ def _compute_scores_by_clip(
 
         def _load_vis_feats_npz(cache_path: Path) -> np.ndarray:
             with np.load(cache_path) as z:
-                if "res_160" in z.files:
+                prefer = None
+                if method == "vision_binary_mlp_r352":
+                    prefer = "res_352"
+                elif method == "vision_binary_mlp_r224":
+                    prefer = "res_224"
+                if prefer is not None and prefer in z.files:
+                    v = z[prefer]
+                elif "res_160" in z.files:
                     v = z["res_160"]
                 elif "res_112" in z.files:
                     v = z["res_112"]
@@ -5887,7 +5897,7 @@ def _compute_scores_by_clip(
                     if not avail:
                         raise ValueError(f"no res_* arrays in cache: {cache_path}")
                     v = z[f"res_{avail[0]}"]
-            v = np.asarray(v, dtype=np.float32)
+            v = np.asarray(v, dtype=np.float32)[: int(num_segments)]
             return v
 
         feats_by_train: dict[str, np.ndarray] = {}
