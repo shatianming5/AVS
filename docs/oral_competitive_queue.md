@@ -147,3 +147,61 @@ Results:
 - Val402 sweep (best): `runs/E0830_val402_wavlm_clipmil_20260212-115213/sweep_summary.json` (best Δ=-0.00150; p=0.5286).
 - Quick test402: `runs/E0831_quick_test402_wavlm_clipmil_20260212-115656/metrics.json` (Δ=-0.00141; p=0.8594; fallback_used_frac=0.0).
 - Decision: not promoted (skip full).
+
+## 7) Track E: WavLM+CLIP supervised eventness (BCE MLP)
+
+Idea:
+- Train a lightweight per-second eventness head on frozen **WavLM audio** + **low-res CLIP vision** to predict `(label!=0)`.
+- Use logits as Stage-1 scores, hoping to reduce far-anchor errors without relying on similarity heuristics.
+
+Implementation:
+- New Stage-1 backend: `EVENTNESS=av_wavlm_clip_evt_mlp` (see `avs/experiments/ave_p0_sweep.py`).
+
+Runs:
+- Val402 sweep:
+  - `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=av_wavlm_clip_evt_mlp CANDIDATE_SET=ltl_top1med_norm_v1 SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 WAVLM_PRETRAINED=1 WAVLM_MODEL=microsoft/wavlm-base-plus WAVLM_BATCH_SIZE=16 OUT_DIR=runs/E0840_val402_wavlm_clipevt_mlp_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+- Quick test402 + diagnose:
+  - `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0840_*/best_config.json EVENTNESS=av_wavlm_clip_evt_mlp SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 WAVLM_PRETRAINED=1 WAVLM_MODEL=microsoft/wavlm-base-plus WAVLM_BATCH_SIZE=16 OUT_DIR=runs/E0841_quick_test402_wavlm_clipevt_mlp_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+  - `IN_METRICS=runs/E0841_*/metrics.json OUT_DIR=runs/E0841_* bash scripts/e0344_ave_p0_diagnose.sh`
+- Full test402: skipped if not promoted.
+
+Results:
+- Val402 sweep (best): `runs/E0840_val402_wavlm_clipevt_mlp_20260212-121939/sweep_summary.json` (anchored=0.74023 vs uniform=0.74680; Δ=-0.00657; p=0.5425).
+- Quick test402: `runs/E0841_quick_test402_wavlm_clipevt_mlp_20260212-122228/metrics.json` (anchored=0.71526 vs uniform=0.71294; Δ=+0.00232; p=0.243; fallback_used_frac≈0.483).
+- Decision: not promoted (skip full).
+
+## 8) Track F: WavLM+CLIP supervised eventness (TCN)
+
+Idea:
+- Same as Track E, but use a tiny temporal conv net (TCN) to leverage local temporal context.
+
+Implementation:
+- New Stage-1 backend: `EVENTNESS=av_wavlm_clip_evt_tcn` (see `avs/experiments/ave_p0_sweep.py`).
+
+Results:
+- Val402 sweep (best): `runs/E0850_val402_wavlm_clipevt_tcn_20260212-122411/sweep_summary.json` (anchored=0.74813 vs uniform=0.74680; Δ=+0.00133; p=0.900).
+- Quick test402: `runs/E0851_quick_test402_wavlm_clipevt_tcn_20260212-122630/metrics.json` (anchored=0.70597 vs uniform=0.71294; Δ=-0.00697; p=0.673; fallback_used_frac≈0.679).
+- Decision: not promoted (skip full).
+
+## 9) Track G: Stage-2 sep3 gate on vec-MLP (sanity sweep)
+
+Idea:
+- Try the scale-invariant separation gate (`conf_metric=top3_bottom3_gap_norm`) as the Stage-2 confidence filter for `av_clipdiff_vec_mlp`.
+
+Results:
+- Val402 sweep: `runs/E0860_val402_vecmlp_sep3_20260212-122905/sweep_summary.json` (best Δ=-0.00540; p=0.253).
+- Quick test402: `runs/E0861_quick_test402_vecmlp_sep3_20260212-123220/metrics.json` (Δ=-0.00680; p=0.599; fallback_used_frac≈0.231).
+- Decision: harmful; skip full.
+
+## 10) Track H: WavLM + CLIPdiff vector MLP (upgrade the current best family)
+
+Idea:
+- Replace `av_clipdiff_vec_mlp`’s basic audio features with frozen **WavLM embeddings** while keeping the strongest visual motion proxy (**CLIPdiff vector**).
+
+Implementation:
+- New Stage-1 backend: `EVENTNESS=av_wavlm_clipdiff_vec_mlp` (see `avs/experiments/ave_p0_sweep.py`).
+
+Results:
+- Val402 sweep: `runs/E0870_val402_wavlm_clipdiff_vecmlp_20260212-123504/sweep_summary.json` (best Δ=-0.00042; p=0.951).
+- Quick test402: `runs/E0871_quick_test402_wavlm_clipdiff_vecmlp_20260212-123718/metrics.json` (anchored=0.71940 vs uniform=0.71294; Δ=+0.00647; p=0.513; fallback_used_frac≈0.510).
+- Decision: not promoted (skip full).

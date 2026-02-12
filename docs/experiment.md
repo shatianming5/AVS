@@ -149,6 +149,133 @@
   - required_metrics:
     - `metrics.json`: `paired_ttest.anchored_vs_uniform.p`, `summary.anchored_top2.mean`, `summary.uniform.mean` (report Δ)
 
+- [x] E0840: WavLM+CLIP supervised eventness (`av_wavlm_clip_evt_mlp`) — val402 sweep (SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=av_wavlm_clip_evt_mlp CANDIDATE_SET=ltl_top1med_norm_v1 SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 WAVLM_PRETRAINED=1 WAVLM_MODEL=microsoft/wavlm-base-plus WAVLM_BATCH_SIZE=16 OUT_DIR=runs/E0840_val402_wavlm_clipevt_mlp_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0840_*/sweep_summary.json`
+    - `runs/E0840_*/best_config.json`
+    - `runs/E0840_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+
+- [x] E0841: WavLM+CLIP supervised eventness (`av_wavlm_clip_evt_mlp`) — quick test402 (SEEDS=0..2) + diagnose
+  - command:
+    - `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0840_*/best_config.json EVENTNESS=av_wavlm_clip_evt_mlp SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 WAVLM_PRETRAINED=1 WAVLM_MODEL=microsoft/wavlm-base-plus WAVLM_BATCH_SIZE=16 OUT_DIR=runs/E0841_quick_test402_wavlm_clipevt_mlp_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0841_*/metrics.json OUT_DIR=runs/E0841_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0841_*/metrics.json`
+    - `runs/E0841_*/diagnose.json`
+  - required_metrics:
+    - `metrics.json`: `paired_ttest.anchored_vs_uniform.p`, `summary.anchored_top2.mean`, `summary.uniform.mean` (report Δ)
+
+- [x] E0842: WavLM+CLIP supervised eventness (`av_wavlm_clip_evt_mlp`) — full test402 (SEEDS=0..9) (skipped: E0841 not promoted)
+  - command:
+    - `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0840_*/best_config.json EVENTNESS=av_wavlm_clip_evt_mlp SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 WAVLM_PRETRAINED=1 WAVLM_MODEL=microsoft/wavlm-base-plus WAVLM_BATCH_SIZE=16 OUT_DIR=runs/E0842_full_test402_wavlm_clipevt_mlp_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0842_*/metrics.json OUT_DIR=runs/E0842_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  - required_artifacts: []
+  - required_metrics: []
+
+- [x] E0850: WavLM+CLIP supervised eventness (`av_wavlm_clip_evt_tcn`) — val402 sweep (SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=av_wavlm_clip_evt_tcn CANDIDATE_SET=ltl_top1med_norm_v1 SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 WAVLM_PRETRAINED=1 WAVLM_MODEL=microsoft/wavlm-base-plus WAVLM_BATCH_SIZE=16 OUT_DIR=runs/E0850_val402_wavlm_clipevt_tcn_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0850_*/sweep_summary.json`
+    - `runs/E0850_*/best_config.json`
+    - `runs/E0850_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+
+- [x] E0851: WavLM+CLIP supervised eventness (`av_wavlm_clip_evt_tcn`) — quick test402 (SEEDS=0..2) + diagnose
+  - command:
+    - `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0850_*/best_config.json EVENTNESS=av_wavlm_clip_evt_tcn SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 WAVLM_PRETRAINED=1 WAVLM_MODEL=microsoft/wavlm-base-plus WAVLM_BATCH_SIZE=16 OUT_DIR=runs/E0851_quick_test402_wavlm_clipevt_tcn_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0851_*/metrics.json OUT_DIR=runs/E0851_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0851_*/metrics.json`
+    - `runs/E0851_*/diagnose.json`
+  - required_metrics:
+    - `metrics.json`: `paired_ttest.anchored_vs_uniform.p`, `summary.anchored_top2.mean`, `summary.uniform.mean` (report Δ)
+
+- [x] E0852: WavLM+CLIP supervised eventness (`av_wavlm_clip_evt_tcn`) — full test402 (SEEDS=0..9) (skipped: E0851 not promoted)
+  - command:
+    - `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0850_*/best_config.json EVENTNESS=av_wavlm_clip_evt_tcn SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 WAVLM_PRETRAINED=1 WAVLM_MODEL=microsoft/wavlm-base-plus WAVLM_BATCH_SIZE=16 OUT_DIR=runs/E0852_full_test402_wavlm_clipevt_tcn_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0852_*/metrics.json OUT_DIR=runs/E0852_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  - required_artifacts: []
+  - required_metrics: []
+
+- [x] E0860: Vec-MLP Stage-1 (`av_clipdiff_vec_mlp`) — val402 sweep (`ltl_sep3_v1`; SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=av_clipdiff_vec_mlp CANDIDATE_SET=ltl_sep3_v1 SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 SCORES_JSON=runs/E0610_ave_p0_sweep_official_val_av_clipdiff_vec_mlp_ltl_adaptive_v1_20260210-200224/eventness_scores.json OUT_DIR=runs/E0860_val402_vecmlp_sep3_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0860_*/sweep_summary.json`
+    - `runs/E0860_*/best_config.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+
+- [x] E0861: Vec-MLP Stage-1 (`av_clipdiff_vec_mlp`) — quick test402 (`ltl_sep3_v1`; SEEDS=0..2) + diagnose
+  - command:
+    - `BEST_CONFIG_JSON=runs/E0860_*/best_config.json EVENTNESS=av_clipdiff_vec_mlp SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0861_quick_test402_vecmlp_sep3_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0861_*/metrics.json OUT_DIR=runs/E0861_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0861_*/metrics.json`
+    - `runs/E0861_*/diagnose.json`
+  - required_metrics:
+    - `metrics.json`: `paired_ttest.anchored_vs_uniform.p`, `summary.anchored_top2.mean`, `summary.uniform.mean` (report Δ)
+
+- [x] E0862: Vec-MLP Stage-1 (`av_clipdiff_vec_mlp`) — full test402 (`ltl_sep3_v1`; SEEDS=0..9) (skipped: E0861 not promoted)
+  - command:
+    - `BEST_CONFIG_JSON=runs/E0860_*/best_config.json EVENTNESS=av_clipdiff_vec_mlp SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0862_full_test402_vecmlp_sep3_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0862_*/metrics.json OUT_DIR=runs/E0862_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  - required_artifacts: []
+  - required_metrics: []
+
+- [x] E0870: WavLM+CLIPdiff vec-MLP Stage-1 (`av_wavlm_clipdiff_vec_mlp`) — val402 sweep (SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=av_wavlm_clipdiff_vec_mlp CANDIDATE_SET=ltl_top1med_norm_v1 SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 WAVLM_PRETRAINED=1 WAVLM_MODEL=microsoft/wavlm-base-plus WAVLM_BATCH_SIZE=16 OUT_DIR=runs/E0870_val402_wavlm_clipdiff_vecmlp_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0870_*/sweep_summary.json`
+    - `runs/E0870_*/best_config.json`
+    - `runs/E0870_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+
+- [x] E0871: WavLM+CLIPdiff vec-MLP Stage-1 (`av_wavlm_clipdiff_vec_mlp`) — quick test402 (SEEDS=0..2) + diagnose
+  - command:
+    - `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0870_*/best_config.json EVENTNESS=av_wavlm_clipdiff_vec_mlp SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 WAVLM_PRETRAINED=1 WAVLM_MODEL=microsoft/wavlm-base-plus WAVLM_BATCH_SIZE=16 OUT_DIR=runs/E0871_quick_test402_wavlm_clipdiff_vecmlp_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0871_*/metrics.json OUT_DIR=runs/E0871_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0871_*/metrics.json`
+    - `runs/E0871_*/diagnose.json`
+  - required_metrics:
+    - `metrics.json`: `paired_ttest.anchored_vs_uniform.p`, `summary.anchored_top2.mean`, `summary.uniform.mean` (report Δ)
+
+- [x] E0872: WavLM+CLIPdiff vec-MLP Stage-1 (`av_wavlm_clipdiff_vec_mlp`) — full test402 (SEEDS=0..9) (skipped: E0871 not promoted)
+  - command:
+    - `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0870_*/best_config.json EVENTNESS=av_wavlm_clipdiff_vec_mlp SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 WAVLM_PRETRAINED=1 WAVLM_MODEL=microsoft/wavlm-base-plus WAVLM_BATCH_SIZE=16 OUT_DIR=runs/E0872_full_test402_wavlm_clipdiff_vecmlp_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0872_*/metrics.json OUT_DIR=runs/E0872_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  - required_artifacts: []
+  - required_metrics: []
+
 ### Run Queue (Long-Video QA; sequential)
 - [x] E0600 (real; ppl): IntentQA VLM evaluation under budgeted frame selection (val n=253; seed=0)
   - command: `OUT_DIR=runs/E0600_intentqa_vlm_eval_full_20260210-041911 SPLIT=val LIMIT=256 METHODS=uniform,random,audio,cheap_visual,fused,ql2l_clap,ql2l_asr_bm25 B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=250 bash scripts/e0600_intentqa_vlm_eval.sh`
@@ -525,6 +652,14 @@
 | E0821 | success | quick test402: anchored=0.71443 vs uniform=0.71294 (Δ=+0.00149; p=0.9007) | `runs/E0821_quick_test402_wavlm_cliplossgain_20260212-113152/` | fallback_used_frac≈0.970; fails promotion gate (no full test) |
 | E0830 | success | val402 sweep best=`ltlkeepadjv2_adj2_shift0_std0p25`: anchored=0.74530 vs uniform=0.74680 (Δ=-0.00150; p=0.5286) | `runs/E0830_val402_wavlm_clipmil_20260212-115213/` | WavLM+CLIP MIL Stage-1 (`av_wavlm_clip_mil_mlp`); fallback_used_frac=0.0; fails val sweep |
 | E0831 | success | quick test402: anchored=0.71153 vs uniform=0.71294 (Δ=-0.00141; p=0.8594) | `runs/E0831_quick_test402_wavlm_clipmil_20260212-115656/` | fallback_used_frac=0.0; fails promotion gate (no full test) |
+| E0840 | success | val402 sweep best=`ltltop1medn_thr0p5_shift1`: anchored=0.74023 vs uniform=0.74680 (Δ=-0.00657; p=0.5425) | `runs/E0840_val402_wavlm_clipevt_mlp_20260212-121939/` | WavLM+CLIP supervised eventness (BCE MLP); fails val sweep |
+| E0841 | success | quick test402: anchored=0.71526 vs uniform=0.71294 (Δ=+0.00232; p=0.2430) | `runs/E0841_quick_test402_wavlm_clipevt_mlp_20260212-122228/` | fallback_used_frac≈0.483; fails promotion gate (no full test) |
+| E0850 | success | val402 sweep best=`ltltop1medn_thr0p5_shift0`: anchored=0.74813 vs uniform=0.74680 (Δ=+0.00133; p=0.9001) | `runs/E0850_val402_wavlm_clipevt_tcn_20260212-122411/` | WavLM+CLIP supervised eventness (TCN); weak val; not promoted |
+| E0851 | success | quick test402: anchored=0.70597 vs uniform=0.71294 (Δ=-0.00697; p=0.6731) | `runs/E0851_quick_test402_wavlm_clipevt_tcn_20260212-122630/` | fallback_used_frac≈0.679; harmful on quick; skip full |
+| E0860 | success | val402 sweep best=`ltlsep3_thr0p6_shift1`: anchored=0.74140 vs uniform=0.74680 (Δ=-0.00540; p=0.2532) | `runs/E0860_val402_vecmlp_sep3_20260212-122905/` | Stage-2 sep3 gate attempt for vec-MLP; harmful on val |
+| E0861 | success | quick test402: anchored=0.70614 vs uniform=0.71294 (Δ=-0.00680; p=0.5991) | `runs/E0861_quick_test402_vecmlp_sep3_20260212-123220/` | fallback_used_frac≈0.231; harmful on quick; skip full |
+| E0870 | success | val402 sweep best=`ltltop1medn_thr0p5_shift0`: anchored=0.74638 vs uniform=0.74680 (Δ=-0.00042; p=0.9509) | `runs/E0870_val402_wavlm_clipdiff_vecmlp_20260212-123504/` | WavLM+CLIPdiff vec-MLP Stage-1; near-zero on val |
+| E0871 | success | quick test402: anchored=0.71940 vs uniform=0.71294 (Δ=+0.00647; p=0.5134) | `runs/E0871_quick_test402_wavlm_clipdiff_vecmlp_20260212-123718/` | fallback_used_frac≈0.510; still far from +2%; not promoted |
 
 > Note: The authoritative runnable queue for the current `docs/plan.md` is the checklist above. The `## Experiments` catalog below is an archive; its internal `[ ]` fields are not a TODO list.
 

@@ -4403,6 +4403,145 @@ def _compute_scores_by_clip(
             if (i + 1) % 200 == 0 or (i + 1) == len(clip_ids):
                 dt = _time.time() - t0
                 print(f"[scores] {i+1}/{len(clip_ids)} clips ({dt:.1f}s)", flush=True)
+    elif method in ("av_wavlm_clip_evt_mlp", "av_wavlm_clip_evt_tcn"):
+        # Supervised A+V eventness on strong frozen backbones:
+        #   feats[t] = concat( l2norm(WavLM audio emb[t]), l2norm(low-res CLIP emb[t]) )
+        #
+        # This is a direct attempt to distill oracle event seconds: train a lightweight model to predict
+        # (label != 0) per second on the train split, then use per-second logits as Stage-1 scores.
+        #
+        # Compared to MIL:
+        #   - BCE MLP may improve calibration (but can be flatter).
+        #   - TCN may improve temporal stability and reduce far-anchor errors.
+        if caches_dir is None:
+            raise ValueError(f"{method} requires caches_dir to load CLIP features")
+        if train_ids is None or labels_by_clip is None:
+            raise ValueError(f"{method} requires train_ids and labels_by_clip")
+
+        import os
+
+        from avs.audio.wavlm_probe import WavLMEmbeddingProbe, WavLMProbeConfig
+        from avs.experiments.ave_p0 import _train_audio_basic_mlp_eventness, _train_audio_tcn_eventness
+
+        import numpy as np
+        import torch
+
+        caches_dir = Path(caches_dir)
+        train_ids = [str(x) for x in train_ids]
+
+        pretrained = os.environ.get("WAVLM_PRETRAINED", "1") != "0"
+        model_name = os.environ.get("WAVLM_MODEL", "microsoft/wavlm-base-plus")
+        batch_size_env = os.environ.get("WAVLM_BATCH_SIZE")
+        batch_size = int(batch_size_env) if (batch_size_env is not None and str(batch_size_env).strip() != "") else None
+
+        wavlm_dtype = "float16" if str(audio_device).startswith("cuda") else "float32"
+        wavlm_probe = WavLMEmbeddingProbe(
+            WavLMProbeConfig(
+                model_name=str(model_name),
+                pretrained=bool(pretrained),
+                device=str(audio_device),
+                dtype=str(wavlm_dtype),
+            )
+        )
+
+        wavlm_emb_by_clip = wavlm_probe.embeddings_per_second_by_clip_ids(
+            clip_ids=train_ids,
+            processed_dir=processed_dir,
+            num_segments=int(num_segments),
+            batch_size=batch_size,
+        )
+
+        # Precompute embeddings for the remaining ids once to avoid per-clip probe overhead.
+        missing_ids = [str(cid) for cid in clip_ids if str(cid) not in wavlm_emb_by_clip]
+        if missing_ids:
+            emb_missing = wavlm_probe.embeddings_per_second_by_clip_ids(
+                clip_ids=missing_ids,
+                processed_dir=processed_dir,
+                num_segments=int(num_segments),
+                batch_size=batch_size,
+            )
+            wavlm_emb_by_clip.update(emb_missing)
+
+        def _load_vis_feats_npz_low(cache_path: Path) -> np.ndarray:
+            with np.load(cache_path) as z:
+                if "res_112" in z.files:
+                    v = z["res_112"]
+                else:
+                    avail = sorted(int(k.split("_", 1)[1]) for k in z.files if k.startswith("res_"))
+                    if not avail:
+                        raise ValueError(f"no res_* arrays in cache: {cache_path}")
+                    v = z[f"res_{avail[0]}"]
+            return np.asarray(v, dtype=np.float32)[: int(num_segments)]
+
+        def _l2norm(x: np.ndarray) -> np.ndarray:
+            x = np.asarray(x, dtype=np.float32)
+            denom = np.linalg.norm(x, axis=-1, keepdims=True).astype(np.float32)
+            denom = np.maximum(denom, 1e-6)
+            return (x / denom).astype(np.float32, copy=False)
+
+        feats_by_train: dict[str, np.ndarray] = {}
+        for i, cid in enumerate(train_ids):
+            cache_path = caches_dir / f"{cid}.npz"
+            if not cache_path.exists():
+                raise FileNotFoundError(f"missing cache: {cache_path}")
+            a = wavlm_emb_by_clip.get(cid)
+            if a is None:
+                raise ValueError(f"internal error: missing wavlm embedding for train clip_id={cid!r}")
+            v_low = _load_vis_feats_npz_low(cache_path)
+            feats_by_train[cid] = np.concatenate([_l2norm(a), _l2norm(v_low)], axis=1).astype(np.float32, copy=False)
+
+            if (i + 1) % 200 == 0 or (i + 1) == len(train_ids):
+                dt = _time.time() - t0
+                print(f"[{method}] feats train {i+1}/{len(train_ids)} clips ({dt:.1f}s)", flush=True)
+
+        if method == "av_wavlm_clip_evt_mlp":
+            model = _train_audio_basic_mlp_eventness(
+                clip_ids_train=train_ids,
+                labels_by_clip=labels_by_clip,
+                audio_feats_by_clip=feats_by_train,
+                device="cpu",
+                epochs=80,
+                batch_size=2048,
+                lr=2e-3,
+                hidden_dim=256,
+                dropout=0.1,
+            )
+        else:
+            model = _train_audio_tcn_eventness(
+                clip_ids_train=train_ids,
+                labels_by_clip=labels_by_clip,
+                audio_feats_by_clip=feats_by_train,
+                device="cpu",
+                epochs=80,
+                batch_size=128,
+                lr=1e-3,
+                hidden_channels=128,
+                kernel_size=3,
+                dropout=0.1,
+            )
+
+        model_cpu = model.to(torch.device("cpu"))
+        model_cpu.eval()
+
+        for i, cid in enumerate(clip_ids):
+            feats = feats_by_train.get(cid)
+            if feats is None:
+                cache_path = caches_dir / f"{cid}.npz"
+                if not cache_path.exists():
+                    raise FileNotFoundError(f"missing cache: {cache_path}")
+                a = wavlm_emb_by_clip.get(cid)
+                if a is None:
+                    raise ValueError(f"internal error: missing wavlm embedding for clip_id={cid!r}")
+                v_low = _load_vis_feats_npz_low(cache_path)
+                feats = np.concatenate([_l2norm(a), _l2norm(v_low)], axis=1).astype(np.float32, copy=False)
+
+            with torch.no_grad():
+                s_np = model_cpu(torch.from_numpy(feats).float()).squeeze(-1).detach().cpu().numpy().astype(np.float32)
+            out[cid] = [float(x) for x in s_np.tolist()]
+
+            if (i + 1) % 200 == 0 or (i + 1) == len(clip_ids):
+                dt = _time.time() - t0
+                print(f"[scores] {i+1}/{len(clip_ids)} clips ({dt:.1f}s)", flush=True)
     elif method in (
         "av_clipdiff_lr",
         "av_clipdiff_mlp",
@@ -5035,6 +5174,141 @@ def _compute_scores_by_clip(
                 if d.shape[0] != int(num_segments):
                     raise ValueError(f"unexpected clip feature shape for {cid}: {d.shape}")
                 feats = np.concatenate([a, d], axis=1).astype(np.float32, copy=False)
+
+            with torch.no_grad():
+                logits = model_cpu(torch.from_numpy(feats).float()).squeeze(-1)
+                s_np = logits.detach().cpu().numpy().astype(np.float32)
+            out[cid] = [float(x) for x in s_np.tolist()]
+
+            if (i + 1) % 200 == 0 or (i + 1) == len(clip_ids):
+                dt = _time.time() - t0
+                print(f"[scores] {i+1}/{len(clip_ids)} clips ({dt:.1f}s)", flush=True)
+    elif method == "av_wavlm_clipdiff_vec_mlp":
+        # Supervised, lightweight A+V scoring: WavLM embeddings + CLIP diff *vector* (directional semantic motion).
+        # Trains on train split to predict event vs background; returns per-second logits as Stage-1 scores.
+        #
+        # Motivation: `av_clipdiff_vec_mlp` is the current strongest deployable Stage-1 family; swapping the
+        # basic audio features for a stronger frozen audio backbone (WavLM) is a high-upside, low-risk change.
+        if caches_dir is None:
+            raise ValueError(f"{method} requires caches_dir to load CLIP features")
+        if train_ids is None or labels_by_clip is None:
+            raise ValueError(f"{method} requires train_ids and labels_by_clip")
+
+        import os
+
+        from avs.audio.wavlm_probe import WavLMEmbeddingProbe, WavLMProbeConfig
+        from avs.experiments.ave_p0 import _train_audio_basic_mlp_eventness
+
+        import numpy as np
+        import torch
+
+        caches_dir = Path(caches_dir)
+        train_ids = [str(x) for x in train_ids]
+
+        pretrained = os.environ.get("WAVLM_PRETRAINED", "1") != "0"
+        model_name = os.environ.get("WAVLM_MODEL", "microsoft/wavlm-base-plus")
+        batch_size_env = os.environ.get("WAVLM_BATCH_SIZE")
+        batch_size = int(batch_size_env) if (batch_size_env is not None and str(batch_size_env).strip() != "") else None
+
+        wavlm_dtype = "float16" if str(audio_device).startswith("cuda") else "float32"
+        wavlm_probe = WavLMEmbeddingProbe(
+            WavLMProbeConfig(
+                model_name=str(model_name),
+                pretrained=bool(pretrained),
+                device=str(audio_device),
+                dtype=str(wavlm_dtype),
+            )
+        )
+
+        wavlm_emb_by_clip = wavlm_probe.embeddings_per_second_by_clip_ids(
+            clip_ids=train_ids,
+            processed_dir=processed_dir,
+            num_segments=int(num_segments),
+            batch_size=batch_size,
+        )
+
+        # Precompute embeddings for the remaining ids once to avoid per-clip probe overhead.
+        missing_ids = [str(cid) for cid in clip_ids if str(cid) not in wavlm_emb_by_clip]
+        if missing_ids:
+            emb_missing = wavlm_probe.embeddings_per_second_by_clip_ids(
+                clip_ids=missing_ids,
+                processed_dir=processed_dir,
+                num_segments=int(num_segments),
+                batch_size=batch_size,
+            )
+            wavlm_emb_by_clip.update(emb_missing)
+
+        def _load_vis_diff_npz(cache_path: Path) -> np.ndarray:
+            with np.load(cache_path) as z:
+                if "res_112" in z.files:
+                    v = z["res_112"]
+                else:
+                    avail = sorted(int(k.split("_", 1)[1]) for k in z.files if k.startswith("res_"))
+                    if not avail:
+                        raise ValueError(f"no res_* arrays in cache: {cache_path}")
+                    v = z[f"res_{avail[0]}"]
+            v = np.asarray(v, dtype=np.float32)
+            v = v / (np.linalg.norm(v, axis=1, keepdims=True) + 1e-12)
+            d = np.zeros_like(v, dtype=np.float32)
+            d[1:] = v[1:] - v[:-1]
+            return d[: int(num_segments)]
+
+        def _l2norm(x: np.ndarray) -> np.ndarray:
+            x = np.asarray(x, dtype=np.float32)
+            denom = np.linalg.norm(x, axis=-1, keepdims=True).astype(np.float32)
+            denom = np.maximum(denom, 1e-6)
+            return (x / denom).astype(np.float32, copy=False)
+
+        feats_by_train: dict[str, np.ndarray] = {}
+        for i, cid in enumerate(train_ids):
+            cache_path = caches_dir / f"{cid}.npz"
+            if not cache_path.exists():
+                raise FileNotFoundError(f"missing cache: {cache_path}")
+            a = wavlm_emb_by_clip.get(cid)
+            if a is None:
+                raise ValueError(f"internal error: missing wavlm embedding for train clip_id={cid!r}")
+            d = _load_vis_diff_npz(cache_path)
+
+            if a.shape[0] != int(num_segments):
+                raise ValueError(f"unexpected wavlm embedding shape for {cid}: {a.shape}")
+            if d.shape[0] != int(num_segments):
+                raise ValueError(f"unexpected clip feature shape for {cid}: {d.shape}")
+            feats_by_train[cid] = np.concatenate([_l2norm(a), d], axis=1).astype(np.float32, copy=False)
+
+            if (i + 1) % 200 == 0 or (i + 1) == len(train_ids):
+                dt = _time.time() - t0
+                print(f"[{method}] feats train {i+1}/{len(train_ids)} clips ({dt:.1f}s)", flush=True)
+
+        model = _train_audio_basic_mlp_eventness(
+            clip_ids_train=train_ids,
+            labels_by_clip=labels_by_clip,
+            audio_feats_by_clip=feats_by_train,
+            device="cpu",
+            epochs=50,
+            batch_size=2048,
+            lr=2e-3,
+            hidden_dim=256,
+            dropout=0.1,
+        )
+        model_cpu = model.to(torch.device("cpu"))
+        model_cpu.eval()
+
+        for i, cid in enumerate(clip_ids):
+            feats = feats_by_train.get(cid)
+            if feats is None:
+                cache_path = caches_dir / f"{cid}.npz"
+                if not cache_path.exists():
+                    raise FileNotFoundError(f"missing cache: {cache_path}")
+                a = wavlm_emb_by_clip.get(cid)
+                if a is None:
+                    raise ValueError(f"internal error: missing wavlm embedding for clip_id={cid!r}")
+                d = _load_vis_diff_npz(cache_path)
+
+                if a.shape[0] != int(num_segments):
+                    raise ValueError(f"unexpected wavlm embedding shape for {cid}: {a.shape}")
+                if d.shape[0] != int(num_segments):
+                    raise ValueError(f"unexpected clip feature shape for {cid}: {d.shape}")
+                feats = np.concatenate([_l2norm(a), d], axis=1).astype(np.float32, copy=False)
 
             with torch.no_grad():
                 logits = model_cpu(torch.from_numpy(feats).float()).squeeze(-1)
@@ -6153,6 +6427,9 @@ def main(argv: list[str] | None = None) -> int:
             "wavlm_evt_mlp",
             "av_wavlm_clip_lossgain_mlp",
             "av_wavlm_clip_mil_mlp",
+            "av_wavlm_clip_evt_mlp",
+            "av_wavlm_clip_evt_tcn",
+            "av_wavlm_clipdiff_vec_mlp",
         ):
             scores_json = out_dir / "eventness_scores.json"
         if scores_json is not None:
