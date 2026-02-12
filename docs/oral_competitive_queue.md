@@ -423,19 +423,24 @@ Results:
 Decision:
 - Not competitive on val402 in any setup; do not promote to quick/full test402.
 
-## 20) Track R (planned): DINOv2 Stage-1-only caches (`STAGE1_CACHES_DIR`)
+## 20) Track R: DINOv2 Stage-1-only caches (`STAGE1_CACHES_DIR`)
 
 Idea:
 - Try a non-CLIP self-supervised backbone for Stage-1 scoring (motion/change proxy via feature diffs),
   while keeping Stage-2 fixed to the official CLIP cache for comparability.
 
-Plan (fixed gate; sequential):
-1) Build DINOv2 caches for official train+val+test (112/160/224/352).
-2) Run val402 sweep with `EVENTNESS=av_clipdiff_vec_mlp` under keepadj candidate set.
-3) Promote only if val402 Δ is competitive vs the current best family; otherwise stop (no test402 spend).
+Runs:
+- Cache build (r∈{112,160,224,352,448}):
+  - Train+val: `runs/E0919_build_cache_dinov2_fill_trainval_20260213-001226/cache_build.json` (num_total_ids=3703)
+  - Test: `runs/E0919_build_cache_dinov2_fill_test_20260213-002118/cache_build.json` (adds 394 test clips; total `.npz`=4097)
+  - Cache dir: `runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch14_dinov2_112_160_224_352_448/`
 
-Queue (see `docs/experiment.md`):
-- E0919: cache build (`timm:vit_base_patch14_dinov2`)
-- E0920: val402 sweep (Stage-1-only caches)
-- E0921: quick test402 + diagnose (only if promoted)
-- E0922: full test402 + diagnose (only if promoted)
+Results:
+- Val402 sweep (keepadj; SEEDS=0..2): `runs/E0920_val402_vecmlp_keepadj_stage1dinov2_20260213-001634/sweep_summary.json`
+  - best: `ltlkeepadj_adj2_shift0_std0p55` (anchored=0.75520 vs uniform=0.74680; Δ=+0.00840; p=0.4031)
+- Quick test402 (SEEDS=0..2): `runs/E0921_quick_test402_vecmlp_keepadj_stage1dinov2_20260213-002346/metrics.json`
+  - anchored=0.72189 vs uniform=0.71294 (Δ=+0.00896; p=0.5825)
+  - diagnose: `runs/E0921_quick_test402_vecmlp_keepadj_stage1dinov2_20260213-002346/diagnose.json`
+
+Decision:
+- Not promoted to full test402 (Δ is still far from +2% and not significant on quick).
