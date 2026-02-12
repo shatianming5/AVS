@@ -553,3 +553,20 @@ Runs:
 
 Decision:
 - Not promotable: transfer is positive but far from +2% (and not significant) on quick test402.
+
+## 27) Track Y: XAttn Eventness + Stage-1 SigLIP Cache (Stage-2 unchanged)
+
+Idea:
+- Keep Stage-2 on the strong baseline CLIP cache, but swap **only Stage-1 visual features** to SigLIP via `STAGE1_CACHES_DIR`
+  (attempt to close the oracle gap using a stronger vision backbone without destabilizing Stage-2).
+
+Runs:
+- E0937 val402 sweep (SEEDS=0..2): `runs/E0937_val402_xattn_evt_stage1siglip_20260213-021919/sweep_summary.json`
+  - best: `ltlkeepadj_adj1_shift0_std0p6` (Δ=+0.00682; p=0.4311)
+- E0938 quick test402 (SEEDS=0..2): `runs/E0938_quick_test402_xattn_evt_stage1siglip_20260213-022855/metrics.json`
+  - anchored=0.71857 vs uniform=0.71294; Δ=+0.00564; p=0.6689
+  - diagnose: `runs/E0938_quick_test402_xattn_evt_stage1siglip_20260213-022855/diagnose.json` (fallback_used_frac≈0.152)
+- E0939 full test402: skipped (E0938 not promoted).
+
+Decision:
+- Not promotable: quick test402 does not materially improve over the existing best full-test result.
