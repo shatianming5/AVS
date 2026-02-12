@@ -621,3 +621,39 @@ Runs:
 
 Decision:
 - Not promotable: val402 gain is not competitive; skip quick/full.
+
+## 32) Track AD: CACE-Net (MM'24) Temporal Localizer as Stage-1 Eventness (external teacher)
+
+Motivation:
+- The +2% chase likely needs a **qualitatively different** Stage-1 than “swap backbone / similarity”: use an explicit supervised
+  AVE temporal localizer to produce sharper per-second scores (closer to Oracle anchors).
+- We use the official CACE-Net weights from HF, and export its `is_event_scores` logits into the AVE-P0 `scores-json` format.
+
+Implementation (repo-side):
+- Stage-1 backend `EVENTNESS=cace_net_evt` loads pre-exported scores via `CACE_NET_SCORES_JSON` and plugs into the existing
+  `val402 sweep → quick test402 → full test402` gate.
+- Exporter script: `scripts/e0952_export_cace_net_eventness.py`
+  - `--visual-source=processed_frames`: extract VGG19 pool5 from the existing `processed/<vid>/frames/{0..9}.jpg`
+  - `--visual-source=raw_video_sample16`: sample multiple frames per second from raw videos (optional; slower)
+
+Runs (processed-frames export):
+- E0952 export scores: `runs/E0952_export_cace_evt_20260213-040137/cace_evt_scores.json` (unique_vids=4097)
+- E0953 val402 sweep (keepadj): `runs/E0953_val402_cace_evt_keepadj_20260213-040611/sweep_summary.json`
+  - best: `ltlkeepadj_adj1_shift0_std0p6` (Δ=-0.00091; p=0.8948) → not promoted
+- E0954 val402 sweep (gini_v2): `runs/E0954_val402_cace_evt_gini_v2_20260213-041040/sweep_summary.json`
+  - best: `ltlgini2_gini0p5_shift1` (Δ=+0.00224; p=0.7671) → promote to quick test402 only
+- E0955 quick test402: `runs/E0955_quick_test402_cace_evt_gini_v2_20260213-041313/metrics.json`
+  - anchored=0.72114 vs uniform=0.71294 (Δ=+0.00821; p=0.5097)
+  - diagnose: `runs/E0955_quick_test402_cace_evt_gini_v2_20260213-041313/diagnose.json`
+  - decision: not promoted to full
+- E0956 val402 sweep (top1med_norm): `runs/E0956_val402_cace_evt_top1med_norm_v1_20260213-041404/sweep_summary.json`
+  - best: `ltltop1medn_thr0p5_shift0` (Δ=-0.00474; p=0.5405) → not promoted
+
+Runs (raw-video export, 4 frames/sec):
+- E0957 export scores: `runs/E0957_export_cace_evt_rawfps4_20260213-042012/cace_evt_scores.json` (unique_vids=4097)
+- E0958 val402 sweep (gini_v2): `runs/E0958_val402_cace_evt_rawfps4_gini_v2_20260213-043133/sweep_summary.json`
+  - best: `ltlgini2_gini0p45_shift0` (Δ=-0.00640; p=0.5632) → not promoted
+
+Decision:
+- CACE-Net as a Stage-1 teacher does **not** materially improve the +2% gate under the current protocol; best quick test402 is
+  still below the existing ~+1% full-test result.

@@ -1056,6 +1056,85 @@
   - required_metrics: []
   - results: skipped (E0949 not promotable).
 
+- [x] E0952: Export CACE-Net Stage-1 eventness scores (external; processed frames)
+  - command: `python scripts/e0952_export_cace_net_eventness.py --visual-source processed_frames --processed-dir runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed --weights /home/zechuan/.cache/huggingface/hub/models--xianghe--cace-net/snapshots/576350280d49c6fa02d971a671e4992c9ad2f3f7/expLoss_Seed3917_guide_Co-Guide_psai_0.3_Contrastive_True_contras-coeff_1.0__lambda_0.6/model_epoch_46_top1_80.796_task_Supervised_best_model_psai_0.3_lambda_0.6.pth.tar --out-json runs/E0952_export_cace_evt_$(date +%Y%m%d-%H%M%S)/cace_evt_scores.json --device cuda:0 --batch-size 16 --vgg-batch-size 128`
+  - configs: []
+  - seeds: []
+  - required_artifacts:
+    - `runs/E0952_*/cace_evt_scores.json`
+  - required_metrics: []
+  - results: `runs/E0952_export_cace_evt_20260213-040137/cace_evt_scores.json` (unique_vids=4097).
+
+- [x] E0953: CACE-Net Stage-1 (`cace_net_evt`) — val402 sweep (`ltl_adaptive_keepadj_v1`; SEEDS=0..2)
+  - command: `CACE_NET_SCORES_JSON=runs/E0952_*/cace_evt_scores.json PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=cace_net_evt CANDIDATE_SET=ltl_adaptive_keepadj_v1 SEEDS=0,1,2 AUDIO_DEVICE=cpu TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0953_val402_cace_evt_keepadj_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0953_*/sweep_summary.json`
+    - `runs/E0953_*/best_config.json`
+    - `runs/E0953_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - results: `runs/E0953_val402_cace_evt_keepadj_20260213-040611/sweep_summary.json` best=`ltlkeepadj_adj1_shift0_std0p6`, Δ=-0.00091 (p=0.8948) → not promoted.
+
+- [x] E0954: CACE-Net Stage-1 (`cace_net_evt`) — val402 sweep (`ltl_gini_v2`; SEEDS=0..2)
+  - command: `CACE_NET_SCORES_JSON=runs/E0952_*/cace_evt_scores.json PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=cace_net_evt CANDIDATE_SET=ltl_gini_v2 SEEDS=0,1,2 AUDIO_DEVICE=cpu TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0954_val402_cace_evt_gini_v2_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0954_*/sweep_summary.json`
+    - `runs/E0954_*/best_config.json`
+    - `runs/E0954_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - results: `runs/E0954_val402_cace_evt_gini_v2_20260213-041040/sweep_summary.json` best=`ltlgini2_gini0p5_shift1`, Δ=+0.00224 (p=0.7671) → promote to quick test402 only.
+
+- [x] E0955: CACE-Net Stage-1 (`cace_net_evt`) — quick test402 (from E0954 best; SEEDS=0..2) + diagnose
+  - command:
+    - `CACE_NET_SCORES_JSON=runs/E0952_*/cace_evt_scores.json PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0954_*/best_config.json EVENTNESS=cace_net_evt SEEDS=0,1,2 AUDIO_DEVICE=cpu TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0955_quick_test402_cace_evt_gini_v2_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0955_*/metrics.json OUT_DIR=runs/E0955_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0955_*/metrics.json`
+    - `runs/E0955_*/diagnose.json`
+  - required_metrics:
+    - `metrics.json`: `paired_ttest.anchored_vs_uniform.p`, `summary.anchored_top2.mean`, `summary.uniform.mean` (report Δ)
+  - results: `runs/E0955_quick_test402_cace_evt_gini_v2_20260213-041313/metrics.json` anchored=0.72114 vs uniform=0.71294 (Δ=+0.00821; p=0.5097) → not promoted (skip full).
+
+- [x] E0956: CACE-Net Stage-1 (`cace_net_evt`) — val402 sweep (`ltl_top1med_norm_v1`; SEEDS=0..2)
+  - command: `CACE_NET_SCORES_JSON=runs/E0952_*/cace_evt_scores.json PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=cace_net_evt CANDIDATE_SET=ltl_top1med_norm_v1 SEEDS=0,1,2 AUDIO_DEVICE=cpu TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0956_val402_cace_evt_top1med_norm_v1_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0956_*/sweep_summary.json`
+    - `runs/E0956_*/best_config.json`
+    - `runs/E0956_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - results: `runs/E0956_val402_cace_evt_top1med_norm_v1_20260213-041404/sweep_summary.json` best=`ltltop1medn_thr0p5_shift0`, Δ=-0.00474 (p=0.5405) → not promoted.
+
+- [x] E0957: Export CACE-Net Stage-1 eventness scores (external; raw video sampling, 4 frames/sec)
+  - command: `python scripts/e0952_export_cace_net_eventness.py --visual-source raw_video_sample16 --raw-videos-dir data/AVE/raw/videos --seconds 10 --frames-per-second 4 --weights /home/zechuan/.cache/huggingface/hub/models--xianghe--cace-net/snapshots/576350280d49c6fa02d971a671e4992c9ad2f3f7/expLoss_Seed3917_guide_Co-Guide_psai_0.3_Contrastive_True_contras-coeff_1.0__lambda_0.6/model_epoch_46_top1_80.796_task_Supervised_best_model_psai_0.3_lambda_0.6.pth.tar --out-json runs/E0957_export_cace_evt_rawfps4_$(date +%Y%m%d-%H%M%S)/cace_evt_scores.json --device cuda:0 --batch-size 4 --vgg-batch-size 128`
+  - configs: []
+  - seeds: []
+  - required_artifacts:
+    - `runs/E0957_*/cace_evt_scores.json`
+  - required_metrics: []
+  - results: `runs/E0957_export_cace_evt_rawfps4_20260213-042012/cace_evt_scores.json` (unique_vids=4097).
+
+- [x] E0958: CACE-Net Stage-1 (`cace_net_evt`) — val402 sweep (rawfps4 scores; `ltl_gini_v2`; SEEDS=0..2)
+  - command: `CACE_NET_SCORES_JSON=runs/E0957_*/cace_evt_scores.json PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=cace_net_evt CANDIDATE_SET=ltl_gini_v2 SEEDS=0,1,2 AUDIO_DEVICE=cpu TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0958_val402_cace_evt_rawfps4_gini_v2_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0958_*/sweep_summary.json`
+    - `runs/E0958_*/best_config.json`
+    - `runs/E0958_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - results: `runs/E0958_val402_cace_evt_rawfps4_gini_v2_20260213-043133/sweep_summary.json` best=`ltlgini2_gini0p45_shift0`, Δ=-0.00640 (p=0.5632) → not promoted.
+
 ### Run Queue (Long-Video QA; sequential)
 - [x] E0600 (real; ppl): IntentQA VLM evaluation under budgeted frame selection (val n=253; seed=0)
   - command: `OUT_DIR=runs/E0600_intentqa_vlm_eval_full_20260210-041911 SPLIT=val LIMIT=256 METHODS=uniform,random,audio,cheap_visual,fused,ql2l_clap,ql2l_asr_bm25 B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=250 bash scripts/e0600_intentqa_vlm_eval.sh`
@@ -1491,6 +1570,13 @@
 | E0943 | success | val402 sweep (XAttn eventness; Stage-1 vis_res=352): best=`ltlkeepadj_adj1_shift1_std0p5`, anchored-uniform Δ=-0.00224; p=0.5038 | `runs/E0943_val402_xattn_evt_vis352_20260213-024540/` | not promoted (negative on val402) |
 | E0946 | success | val402 sweep (WavLM+CLIPdiff vec-MLP; keepadj): best=`ltlkeepadj_adj1_shift0_std0p6`, anchored-uniform Δ=+0.00283; p=0.7692 | `runs/E0946_val402_wavlm_clipdiff_vecmlp_keepadj_20260213-030005/` | not promoted |
 | E0949 | success | val402 sweep (CLIPdiff vec-MLP; keepadj; Stage-1 SigLIP cache): best=`ltlkeepadj_adj2_shift0_std0p6`, anchored-uniform Δ=+0.00490; p=0.6126 | `runs/E0949_val402_vecmlp_keepadj_stage1siglip_20260213-030437/` | not promoted |
+| E0952 | success | export CACE-Net eventness scores (processed frames): unique_vids=4097 | `runs/E0952_export_cace_evt_20260213-040137/` | `cace_evt_scores.json` |
+| E0953 | success | val402 sweep (CACE evt; keepadj): best=`ltlkeepadj_adj1_shift0_std0p6`, Δ=-0.00091; p=0.8948 | `runs/E0953_val402_cace_evt_keepadj_20260213-040611/` | not promoted |
+| E0954 | success | val402 sweep (CACE evt; gini_v2): best=`ltlgini2_gini0p5_shift1`, Δ=+0.00224; p=0.7671 | `runs/E0954_val402_cace_evt_gini_v2_20260213-041040/` | promoted to quick test402 only |
+| E0955 | success | quick test402 (CACE evt; gini_v2 best): anchored=0.72114 vs uniform=0.71294 (Δ=+0.00821; p=0.5097) | `runs/E0955_quick_test402_cace_evt_gini_v2_20260213-041313/` | diagnose: `runs/E0955_quick_test402_cace_evt_gini_v2_20260213-041313/diagnose.json`; skip full |
+| E0956 | success | val402 sweep (CACE evt; top1med_norm): best=`ltltop1medn_thr0p5_shift0`, Δ=-0.00474; p=0.5405 | `runs/E0956_val402_cace_evt_top1med_norm_v1_20260213-041404/` | not promoted |
+| E0957 | success | export CACE-Net eventness scores (raw videos; 4 frames/sec): unique_vids=4097 | `runs/E0957_export_cace_evt_rawfps4_20260213-042012/` | `cace_evt_scores.json` |
+| E0958 | success | val402 sweep (CACE evt; rawfps4; gini_v2): best=`ltlgini2_gini0p45_shift0`, Δ=-0.00640; p=0.5632 | `runs/E0958_val402_cace_evt_rawfps4_gini_v2_20260213-043133/` | not promoted |
 
 > Note: The authoritative runnable queue for the current `docs/plan.md` is the checklist above. The `## Experiments` catalog below is an archive; its internal `[ ]` fields are not a TODO list.
 
