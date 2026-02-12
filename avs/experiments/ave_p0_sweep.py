@@ -3269,6 +3269,29 @@ def _compute_scores_by_clip(
     clip_ids = [str(x) for x in clip_ids]
     out: dict[str, list[float]] = {}
 
+    if method == "cace_net_evt":
+        # External, pretrained AVE temporal localizer scores (e.g., CACE-Net).
+        #
+        # We keep the main pipeline self-contained by consuming a pre-exported JSON mapping:
+        #   { "<clip_id>": [score_t0, ..., score_t9], ... }
+        #
+        # Expected usage:
+        #   CACE_NET_SCORES_JSON=/path/to/cace_eventness_scores.json EVENTNESS=cace_net_evt ...
+        scores_env = os.environ.get("CACE_NET_SCORES_JSON")
+        if scores_env is None or str(scores_env).strip() == "":
+            raise ValueError("cace_net_evt requires CACE_NET_SCORES_JSON pointing to a JSON mapping clip_id -> scores.")
+        scores_path = Path(str(scores_env))
+        if not scores_path.is_file():
+            raise FileNotFoundError(f"cace_net_evt: CACE_NET_SCORES_JSON not found: {scores_path}")
+        print(f"[{method}] loading external scores: {scores_path}", flush=True)
+        scores_all = _load_scores_json(scores_path)
+        missing = [cid for cid in clip_ids if cid not in scores_all]
+        if missing:
+            raise KeyError(f"cace_net_evt: missing {len(missing)} clip_ids in {scores_path} (example: {missing[0]!r})")
+        for cid in clip_ids:
+            out[cid] = [float(x) for x in scores_all[cid][: int(num_segments)]]
+        return out
+
     stage1_caches_env = os.environ.get("STAGE1_CACHES_DIR")
     if stage1_caches_env is not None and str(stage1_caches_env).strip() != "":
         # Allow using a different vision backbone / cache just for Stage-1 scoring while keeping
