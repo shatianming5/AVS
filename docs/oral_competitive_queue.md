@@ -501,7 +501,7 @@ Runs:
 Decision:
 - Not promotable; keepadj remains the only semi-competitive Stage-2 family under these scores.
 
-## 25) Track W: SigLIP Stage-2 Backbone Swap (in progress)
+## 25) Track W: SigLIP Stage-2 Backbone Swap (done; not promoted)
 
 Idea:
 - Try a qualitatively stronger vision backbone that is (a) patch16 (token accounting compatible) and (b) known to be strong
@@ -513,7 +513,17 @@ Implementation:
 - Add a timm pooling fallback for models without a CLS token (SigLIP uses attention pooling by default):
   - `avs/vision/clip_vit.py`: if `global_pool='token'` is unsupported, fall back to the model default `global_pool` (e.g., `map`).
 
-Queue:
-- E0930: build SigLIP caches (train+val then test) under:
-  - `runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch16_siglip_224_webli_112_160_224_352_448/`
-- E0931→E0933: run the standard promotion gate (val402 → quick test402 → full test402 if promoted).
+Runs:
+- E0930 caches:
+  - train+val: `runs/E0930_build_cache_siglip_trainval_20260213-011101/cache_build.json` (ok=true, missing=0)
+  - test: `runs/E0930_build_cache_siglip_test_20260213-013806/cache_build.json` (ok=true, missing=0)
+  - caches: `runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch16_siglip_224_webli_112_160_224_352_448/`
+- E0931 val402 sweep (SEEDS=0..2): `runs/E0931_val402_siglip_stage2_vecmlp_keepadj_20260213-014809/sweep_summary.json`
+  - best: `ltlkeepadj_adj2_shift1_std0p6` (Δ=+0.01297; p=0.0982)
+- E0932 quick test402 (SEEDS=0..2): `runs/E0932_quick_test402_siglip_stage2_vecmlp_keepadj_20260213-015409/metrics.json`
+  - anchored=0.33350 vs uniform=0.33085; Δ=+0.00265; p=0.5427
+  - diagnose: `runs/E0932_quick_test402_siglip_stage2_vecmlp_keepadj_20260213-015409/diagnose.json` (fallback_used_frac≈0.853)
+- E0933 full test402: skipped (E0932 not promoted).
+
+Decision:
+- Not promotable: quick test402 collapses and fallback is much higher than baseline.
