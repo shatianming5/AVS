@@ -291,4 +291,11 @@ Goal:
 - std0.35 quick (SEEDS=0..2): `runs/E0898_quick_test402_vecmlp_df7_maxhigh1_std0p35_20260212-134530/metrics.json` (Δ=+0.00871; p=0.5286; fallback≈0.189)
 - std0.45 quick (SEEDS=0..2): `runs/E0899_quick_test402_vecmlp_df7_maxhigh1_std0p45_20260212-134637/metrics.json` (Δ=+0.00498; p=0.7523; fallback≈0.311)
 - std0.65 quick (SEEDS=0..2): `runs/E0900_quick_test402_vecmlp_df7_maxhigh1_std0p65_20260212-134717/metrics.json` (Δ=+0.00373; p=0.7991; fallback≈0.624)
+
+### L4) `k=1` (single-anchor allocation; removes 2-anchor regime)
+
+- Quick test402 (SEEDS=0..2): `runs/E0901_quick_test402_vecmlp_df7_k1_20260212-135506/metrics.json`
+  - anchored=0.72504 vs uniform=0.71294 (Δ=+0.01211; p=0.3983)
+  - diagnose: `runs/E0901_quick_test402_vecmlp_df7_k1_20260212-135506/diagnose.json` (`anchors_len_fallback_frac≈0.552`)
+- Decision: modest quick gain, still far from +2; not promoted.
 - Conclusion: lowering the std gate reduces fallback but hurts Δ on quick; the best remaining df7 family result is still `E0643` on full test402 (Δ=+0.01045; p≈0.0395).

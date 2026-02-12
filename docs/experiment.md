@@ -464,6 +464,16 @@
   - required_metrics:
     - `metrics.json`: `paired_ttest.anchored_vs_uniform.p`, `summary.anchored_top2.mean`, `summary.uniform.mean` (report Δ)
 
+- [x] E0901: Vec-MLP Stage-2 ablation (df7 keepadj; `k=1`) — quick test402 (SEEDS=0..2) + diagnose
+  - command: `OUT_DIR=runs/E0901_quick_test402_vecmlp_df7_k1_$(date +%Y%m%d-%H%M%S) && mkdir -p "$OUT_DIR" && jq '.k=1 | .max_high_anchors=1 | .name="ltlkeepadj_adj2_shift1_std0p55_df7_k1_s0-2"' runs/E0643_full_test402_vecmlp_keepadj_adj2_shift1_std0p55_df7_officialids_s0-9_20260211-001604/config.json > "$OUT_DIR/config.json" && PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 BEST_CONFIG_JSON="$OUT_DIR/config.json" EVENTNESS=av_clipdiff_vec_mlp SEEDS=0,1,2 AUDIO_DEVICE=cuda:1 TRAIN_DEVICE=cuda:0 SCORES_JSON=runs/E0610_ave_p0_sweep_official_val_av_clipdiff_vec_mlp_ltl_adaptive_v1_20260210-200224/eventness_scores.json OUT_DIR="$OUT_DIR" bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh && IN_METRICS="$OUT_DIR/metrics.json" OUT_DIR="$OUT_DIR" bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0901_*/metrics.json`
+    - `runs/E0901_*/diagnose.json`
+  - required_metrics:
+    - `metrics.json`: `paired_ttest.anchored_vs_uniform.p`, `summary.anchored_top2.mean`, `summary.uniform.mean` (report Δ)
+
 ### Run Queue (Long-Video QA; sequential)
 - [x] E0600 (real; ppl): IntentQA VLM evaluation under budgeted frame selection (val n=253; seed=0)
   - command: `OUT_DIR=runs/E0600_intentqa_vlm_eval_full_20260210-041911 SPLIT=val LIMIT=256 METHODS=uniform,random,audio,cheap_visual,fused,ql2l_clap,ql2l_asr_bm25 B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=250 bash scripts/e0600_intentqa_vlm_eval.sh`
@@ -862,6 +872,7 @@
 | E0898 | success | quick test402: anchored=0.72164 vs uniform=0.71294 (Δ=+0.00871; p=0.5286) | `runs/E0898_quick_test402_vecmlp_df7_maxhigh1_std0p35_20260212-134530/` | maxhigh1 std sweep (0.35): fallback decreases (≈0.189) but Δ worsens |
 | E0899 | success | quick test402: anchored=0.71791 vs uniform=0.71294 (Δ=+0.00498; p=0.7523) | `runs/E0899_quick_test402_vecmlp_df7_maxhigh1_std0p45_20260212-134637/` | maxhigh1 std sweep (0.45): fallback≈0.311; Δ worsens |
 | E0900 | success | quick test402: anchored=0.71667 vs uniform=0.71294 (Δ=+0.00373; p=0.7991) | `runs/E0900_quick_test402_vecmlp_df7_maxhigh1_std0p65_20260212-134717/` | maxhigh1 std sweep (0.65): fallback≈0.624; Δ worsens |
+| E0901 | success | quick test402: anchored=0.72504 vs uniform=0.71294 (Δ=+0.01211; p=0.3983) | `runs/E0901_quick_test402_vecmlp_df7_k1_20260212-135506/` | df7 keepadj ablation (`k=1`): fallback≈0.552; still below +2%; not promoted |
 
 > Note: The authoritative runnable queue for the current `docs/plan.md` is the checklist above. The `## Experiments` catalog below is an archive; its internal `[ ]` fields are not a TODO list.
 
