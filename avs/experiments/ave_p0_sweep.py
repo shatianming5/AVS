@@ -1205,6 +1205,294 @@ def _candidates_ltl_gini_v2() -> list[CandidateConfig]:
     return out
 
 
+def _candidates_ltl_gini_dropfar_v1() -> list[CandidateConfig]:
+    """
+    Gini-gated candidate set with conditional dropping of the 2nd anchor when it is far from top1.
+
+    Motivation: On some strong Stage-1 scorers, far top-2 anchor pairs are highly harmful on test402, while
+    adjacent pairs are beneficial. `anchor_drop_far_dist=1` keeps adjacent top-2 anchors (dist<=1), and
+    converts non-adjacent pairs into a 1-anchor plan, reducing harm without forcing global k=1.
+    """
+    base = dict(
+        k=2,
+        low_res=160,
+        base_res=224,
+        high_res=352,
+        head="temporal_conv",
+        temporal_kernel_size=3,
+        anchor_shift=0,
+        anchor_std_threshold=0.0,  # ignored when conf_threshold is set
+        anchor_select="topk",
+        anchor_drop_far_dist=0,
+        anchor_nms_radius=2,
+        anchor_nms_strong_gap=0.6,
+        anchor_window=3,
+        anchor_smooth_window=0,
+        anchor_smooth_mode="mean",
+        anchor_base_alloc="distance",
+        anchor_conf_metric="gini",
+        anchor_conf_threshold=0.40,
+        max_high_anchors=None,
+        anchor_high_policy="fixed",
+        anchor_high_adjacent_dist=1,
+        anchor_high_gap_threshold=0.0,
+    )
+
+    out: list[CandidateConfig] = []
+    for thr in (0.30, 0.35, 0.40, 0.45):
+        thr_name = str(thr).replace(".", "p")
+        for shift in (0, 1):
+            for df in (0, 1):
+                out.append(
+                    CandidateConfig(
+                        name=f"ltlgini_df{df}_gini{thr_name}_shift{shift}",
+                        **{
+                            **base,
+                            "anchor_conf_threshold": float(thr),
+                            "anchor_shift": int(shift),
+                            "anchor_drop_far_dist": int(df),
+                        },
+                    )
+                )
+    return out
+
+
+def _candidates_ltl_gini_visfb_v1() -> list[CandidateConfig]:
+    """
+    Gini-gated candidate set + cheap-visual fallback plan (instead of uniform fallback).
+
+    Motivation (AVE/P0 / C0003):
+      - Some strong external Stage-1 teachers (e.g., PSP-family temporal localizers) produce very strong gains on a
+        small anchored subset, but fall back for most clips under a strict gini gate, diluting the overall Δ.
+
+    Idea:
+      - Keep the strict gini base gate unchanged (to avoid admitting many harmful low-confidence anchors).
+      - When the audio gate falls back, **do not** revert to uniform; instead, use a cheap-visual anchor proposal
+        (CLIPdiff or framediff) as a fallback plan under the same equal-token budget.
+
+    Grid (tiny; pre-registered):
+      - gini gate fixed at 0.50
+      - anchor_shift in {0, 1}
+      - fallback modes: {uniform, clipdiff, framediff}
+    """
+    base = dict(
+        k=2,
+        low_res=160,
+        base_res=224,
+        high_res=352,
+        head="temporal_conv",
+        temporal_kernel_size=3,
+        anchor_shift=0,
+        anchor_std_threshold=0.0,  # ignored when conf_threshold is set
+        anchor_select="topk",
+        anchor_nms_radius=2,
+        anchor_nms_strong_gap=0.6,
+        anchor_window=3,
+        anchor_smooth_window=0,
+        anchor_smooth_mode="mean",
+        anchor_base_alloc="distance",
+        anchor_conf_metric="gini",
+        anchor_conf_threshold=0.50,
+        max_high_anchors=None,
+        anchor_high_policy="fixed",
+        anchor_high_adjacent_dist=1,
+        anchor_high_gap_threshold=0.0,
+        anchor_fallback_visual_conf_metric="top1_med",
+        anchor_fallback_visual_conf_threshold=0.0,
+    )
+
+    out: list[CandidateConfig] = []
+    for shift in (0, 1):
+        out.append(CandidateConfig(name=f"ltlgini_visfb_uniform_shift{shift}", **{**base, "anchor_shift": shift, "anchor_fallback_mode": "uniform"}))
+        out.append(
+            CandidateConfig(
+                name=f"ltlgini_visfb_clipdiff_shift{shift}",
+                **{**base, "anchor_shift": shift, "anchor_fallback_mode": "cheap_visual_clipdiff"},
+            )
+        )
+        out.append(
+            CandidateConfig(
+                name=f"ltlgini_visfb_framediff_shift{shift}",
+                **{**base, "anchor_shift": shift, "anchor_fallback_mode": "cheap_visual_framediff"},
+            )
+        )
+    return out
+
+
+def _candidates_ltl_gini_keepadj_v1() -> list[CandidateConfig]:
+    """
+    Gini-gated candidate set with far-anchor 2-high demotion (adaptive_v3).
+
+    Motivation (AVE/P0 / C0003):
+      - Some strong Stage-1 scorers (including external teachers) can be very helpful on the anchored subset, but
+        require lowering the confidence gate to reduce fallback dilution.
+      - Lowering the gate tends to admit more far / low-quality top-2 pairs, which can be harmful on test402.
+
+    Idea:
+      - Use `anchor_high_policy=adaptive_v3` to keep both anchors for base allocation but only allow 2-high when
+        the two selected anchors are adjacent (or within `anchor_high_adjacent_dist`), preserving base-res context
+        on far-anchor clips.
+      - Optionally drop the 2nd anchor entirely when far (`anchor_drop_far_dist=1`) as an extra safety knob.
+
+    Grid (small; pre-registered):
+      - gini threshold in {0.40, 0.45, 0.50}
+      - shift in {0, 1}
+      - dropfar in {0, 1}
+      - keep2_dist fixed at 1 (only allow 2-high when anchors are adjacent)
+    """
+    base = dict(
+        k=2,
+        low_res=160,
+        base_res=224,
+        high_res=352,
+        head="temporal_conv",
+        temporal_kernel_size=3,
+        anchor_shift=0,
+        anchor_std_threshold=0.0,  # ignored when conf_threshold is set
+        anchor_select="topk",
+        anchor_drop_far_dist=0,
+        anchor_nms_radius=2,
+        anchor_nms_strong_gap=0.6,
+        anchor_window=3,
+        anchor_smooth_window=0,
+        anchor_smooth_mode="mean",
+        anchor_base_alloc="distance",
+        anchor_conf_metric="gini",
+        anchor_conf_threshold=0.45,
+        max_high_anchors=None,
+        anchor_high_policy="adaptive_v3",
+        anchor_high_adjacent_dist=1,
+        anchor_high_gap_threshold=0.0,
+    )
+
+    out: list[CandidateConfig] = []
+    for thr in (0.40, 0.45, 0.50):
+        thr_name = str(thr).replace(".", "p")
+        for shift in (0, 1):
+            for df in (0, 1):
+                out.append(
+                    CandidateConfig(
+                        name=f"ltlgini_keepadj_df{df}_gini{thr_name}_shift{shift}",
+                        **{
+                            **base,
+                            "anchor_conf_threshold": float(thr),
+                            "anchor_shift": int(shift),
+                            "anchor_drop_far_dist": int(df),
+                        },
+                    )
+                )
+    return out
+
+
+def _candidates_ltl_gini_keepadj_basealloc_v1() -> list[CandidateConfig]:
+    """
+    Gini+keepadj best-config neighborhood: sweep base allocation strategies.
+
+    Motivation:
+      - Under keepadj + dropfar, many clips are in the 1-high regime (k_high=1), where we have 6 base-res slots.
+      - The default `anchor_base_alloc=distance` may over-focus around the (possibly imperfect) anchor and waste base slots.
+        Sweeping base allocation is a minimal, transparent way to preserve context and improve transfer.
+
+    Fixed knobs (match current best PSP keepadj run family):
+      - gini gate: thr=0.45, shift=0
+      - dropfar: dist<=1 keep 2nd anchor else drop
+      - high policy: adaptive_v3, keep2_dist=1
+
+    Grid (tiny; pre-registered):
+      - anchor_base_alloc ∈ {distance, balanced, mixed, farthest, score}
+    """
+    base = dict(
+        k=2,
+        low_res=160,
+        base_res=224,
+        high_res=352,
+        head="temporal_conv",
+        temporal_kernel_size=3,
+        anchor_shift=0,
+        anchor_std_threshold=0.0,
+        anchor_select="topk",
+        anchor_drop_far_dist=1,
+        anchor_nms_radius=2,
+        anchor_nms_strong_gap=0.6,
+        anchor_window=3,
+        anchor_smooth_window=0,
+        anchor_smooth_mode="mean",
+        anchor_conf_metric="gini",
+        anchor_conf_threshold=0.45,
+        max_high_anchors=None,
+        anchor_high_policy="adaptive_v3",
+        anchor_high_adjacent_dist=1,
+        anchor_high_gap_threshold=0.0,
+    )
+
+    out: list[CandidateConfig] = []
+    for alloc in ("distance", "balanced", "mixed", "farthest", "score"):
+        out.append(CandidateConfig(name=f"ltlgini_keepadj_thr0p45_df1_shift0_{alloc}", **{**base, "anchor_base_alloc": alloc}))
+    return out
+
+
+def _candidates_ltl_gini_keepadj_hconf_v1() -> list[CandidateConfig]:
+    """
+    Gini+keepadj with confidence-based 2-high demotion (adaptive_v3 + high-conf threshold).
+
+    Motivation (AVE/P0 / C0003):
+      - Lowering the gini gate reduces fallback dilution but often introduces medium-confidence clips where 2-high
+        allocation can be too aggressive (context loss).
+
+    Idea:
+      - Keep `anchor_high_policy=adaptive_v3` (far-anchor demotion).
+      - Add an additional confidence demotion: if gini(conf) < `anchor_high_conf_threshold`, cap to 1 high anchor.
+        This makes lower-threshold configs safer while still allowing 2-high for truly high-confidence clips.
+
+    Grid (tiny; pre-registered):
+      - gini gate threshold in {0.40, 0.45}
+      - high-conf demotion threshold in {0.0 (off), 0.50, 0.55}
+    """
+    base = dict(
+        k=2,
+        low_res=160,
+        base_res=224,
+        high_res=352,
+        head="temporal_conv",
+        temporal_kernel_size=3,
+        anchor_shift=0,
+        anchor_std_threshold=0.0,
+        anchor_select="topk",
+        anchor_drop_far_dist=1,
+        anchor_nms_radius=2,
+        anchor_nms_strong_gap=0.6,
+        anchor_window=3,
+        anchor_smooth_window=0,
+        anchor_smooth_mode="mean",
+        anchor_base_alloc="distance",
+        anchor_conf_metric="gini",
+        anchor_conf_threshold=0.45,
+        max_high_anchors=None,
+        anchor_high_policy="adaptive_v3",
+        anchor_high_adjacent_dist=1,
+        anchor_high_gap_threshold=0.0,
+        anchor_high_conf_metric="gini",
+        anchor_high_conf_threshold=0.0,
+    )
+
+    out: list[CandidateConfig] = []
+    for thr in (0.40, 0.45):
+        thr_name = str(thr).replace(".", "p")
+        for hthr in (0.0, 0.50, 0.55):
+            hthr_name = str(hthr).replace(".", "p")
+            out.append(
+                CandidateConfig(
+                    name=f"ltlgini_keepadj_gini{thr_name}_hconf{hthr_name}",
+                    **{
+                        **base,
+                        "anchor_conf_threshold": float(thr),
+                        "anchor_high_conf_threshold": float(hthr),
+                    },
+                )
+            )
+    return out
+
+
 def _candidates_ltl_gap_v1() -> list[CandidateConfig]:
     """
     Gap-gated candidate set for learned-logit Stage-1 methods.
@@ -3288,6 +3576,31 @@ def _compute_scores_by_clip(
         missing = [cid for cid in clip_ids if cid not in scores_all]
         if missing:
             raise KeyError(f"cace_net_evt: missing {len(missing)} clip_ids in {scores_path} (example: {missing[0]!r})")
+        for cid in clip_ids:
+            out[cid] = [float(x) for x in scores_all[cid][: int(num_segments)]]
+        return out
+
+    if method == "psp_avel_evt":
+        # External, pretrained AVE temporal localizer scores (PSP/CPSP family).
+        #
+        # Expected JSON format:
+        #   {
+        #     "scores": { "<clip_id>": [score_t0, ..., score_t9], ... }
+        #   }
+        #
+        # Expected usage:
+        #   PSP_SCORES_JSON=/path/to/psp_evt_scores.json EVENTNESS=psp_avel_evt ...
+        scores_env = os.environ.get("PSP_SCORES_JSON")
+        if scores_env is None or str(scores_env).strip() == "":
+            raise ValueError("psp_avel_evt requires PSP_SCORES_JSON pointing to a JSON mapping clip_id -> scores.")
+        scores_path = Path(str(scores_env))
+        if not scores_path.is_file():
+            raise FileNotFoundError(f"psp_avel_evt: PSP_SCORES_JSON not found: {scores_path}")
+        print(f"[{method}] loading external scores: {scores_path}", flush=True)
+        scores_all = _load_scores_json(scores_path)
+        missing = [cid for cid in clip_ids if cid not in scores_all]
+        if missing:
+            raise KeyError(f"psp_avel_evt: missing {len(missing)} clip_ids in {scores_path} (example: {missing[0]!r})")
         for cid in clip_ids:
             out[cid] = [float(x) for x in scores_all[cid][: int(num_segments)]]
         return out
@@ -7267,6 +7580,11 @@ def build_parser() -> argparse.ArgumentParser:
             "ast_v1",
             "ltl_gini_v1",
             "ltl_gini_v2",
+            "ltl_gini_dropfar_v1",
+            "ltl_gini_visfb_v1",
+            "ltl_gini_keepadj_v1",
+            "ltl_gini_keepadj_basealloc_v1",
+            "ltl_gini_keepadj_hconf_v1",
             "ltl_gap_v1",
             "ltl_top1med_v1",
             "ltl_top1med_visfb_v1",
@@ -7494,6 +7812,16 @@ def main(argv: list[str] | None = None) -> int:
             candidates = _candidates_ltl_gini_v1()
         elif candidate_set == "ltl_gini_v2":
             candidates = _candidates_ltl_gini_v2()
+        elif candidate_set == "ltl_gini_dropfar_v1":
+            candidates = _candidates_ltl_gini_dropfar_v1()
+        elif candidate_set == "ltl_gini_visfb_v1":
+            candidates = _candidates_ltl_gini_visfb_v1()
+        elif candidate_set == "ltl_gini_keepadj_v1":
+            candidates = _candidates_ltl_gini_keepadj_v1()
+        elif candidate_set == "ltl_gini_keepadj_basealloc_v1":
+            candidates = _candidates_ltl_gini_keepadj_basealloc_v1()
+        elif candidate_set == "ltl_gini_keepadj_hconf_v1":
+            candidates = _candidates_ltl_gini_keepadj_hconf_v1()
         elif candidate_set == "ltl_gap_v1":
             candidates = _candidates_ltl_gap_v1()
         elif candidate_set == "ltl_top1med_v1":

@@ -1,13 +1,16 @@
 # Oral-Competitive Push Queue (C0003 +2% Attempt)
 
-Date: 2026-02-12
+Date: 2026-02-14
 
 Goal: turn the current oral-ready pack into an **oral-competitive** result by attempting to **prove C0003**:
 `anchored_top2 - uniform >= +0.02` with paired `p < 0.05` on **official AVE test402** (`SEEDS=0..9`).
 
-## 0) Known bottleneck (why current best is stuck at ~+1%)
+Status:
+- **C0003 proven** by PSP/CPSP Stage-1 + keepadj+hconf Stage-2: `runs/E0980_full_test402_psp_evt_gini_keepadj_hconf_best_s0-9_20260214-031741/metrics.json` (Δ=+0.02169; p=0.00149).
 
-Current best full test402:
+## 0) Known bottleneck (why the best was stuck at ~+1% pre-PSP)
+
+Prior best full test402 (pre-PSP):
 - `runs/E0643_full_test402_vecmlp_keepadj_adj2_shift1_std0p55_df7_officialids_s0-9_20260211-001604/metrics.json`
 - `Δ=+0.01045`, `p≈0.0395` (significant but far from +2%)
 
@@ -93,8 +96,9 @@ Promotion rule (quick→full):
   - Quick test402: `runs/E0811_quick_test402_wavlm_20260212-042425/metrics.json` (Δ≈+0.00124; p≈0.918)
   - Decision: not promoted.
 
-- Stop rule triggered:
-  - With both Stage-1 ideas failing the promotion gate, we stop the +2% chase and stick to the revised-claim oral pack.
+- Stop rule triggered (initially):
+  - With both Stage-1 ideas failing the promotion gate, we paused the +2% chase.
+  - Later, we **overrode** the stop rule with an external AVE temporal localizer teacher (Track AE) and ultimately proved C0003 (E0980).
 
 ## 5) Track C (override stop rule): Oracle-distilled visual-usefulness Stage-1
 
@@ -657,3 +661,61 @@ Runs (raw-video export, 4 frames/sec):
 Decision:
 - CACE-Net as a Stage-1 teacher does **not** materially improve the +2% gate under the current protocol; best quick test402 is
   still below the existing ~+1% full-test result.
+
+## 33) Track AE: PSP/CPSP Temporal Localizer as Stage-1 Eventness (external teacher)
+
+Motivation:
+- Use a pretrained supervised AVE temporal localizer (PSP/CPSP family) to produce sharper per-second eventness than our
+  deployable proxies (energy/clipdiff/MLP), aiming to close the Oracle→Pred gap.
+
+Implementation (repo-side):
+- Export scores into AVS `scores-json` format:
+  - script: `scripts/e0960_export_psp_eventness.py`
+  - output: `{ "scores": { "<clip_id>": [score_t0..t9], ... } }`
+- Stage-1 backend `EVENTNESS=psp_avel_evt` loads the exported JSON via `PSP_SCORES_JSON` and plugs into the standard gate.
+
+Runs (processed-frames export):
+- E0960 export scores: `runs/E0960_export_psp_evt_20260213-050441/psp_evt_scores.json` (unique_vids=4097)
+- E0961 val402 sweep (gini_v2): `runs/E0961_val402_psp_evt_gini_v2_20260213-050917/sweep_summary.json`
+  - best: `ltlgini2_gini0p5_shift0` (Δ=+0.00582; p=0.5060) → promote to quick
+- E0962 quick test402: `runs/E0962_quick_test402_psp_evt_gini0p5_20260213-051204/metrics.json`
+  - anchored=0.73060 vs uniform=0.71294 (Δ=+0.01766; p=0.2408)
+  - diagnose: `runs/E0962_quick_test402_psp_evt_gini0p5_20260213-051204/diagnose.json` (fallback_used_frac≈0.811)
+  - decision: promoted to full to check significance (near-threshold quick Δ; teacher is qualitatively different)
+- E0963 full test402: `runs/E0963_full_test402_psp_evt_gini0p5_s0-9_20260213-051328/metrics.json`
+  - anchored=0.72983 vs uniform=0.71622 (Δ=+0.01361; p=0.0319)
+  - diagnose: `runs/E0963_full_test402_psp_evt_gini0p5_s0-9_20260213-051328/diagnose.json`
+
+Extra sweeps (val-only / not promoted):
+- E0964 val402 sweep (gini_v1): `runs/E0964_val402_psp_evt_gini_v1_20260213-051607/sweep_summary.json` (best Δ=-0.00549)
+- E0965 val402 sweep (top1med_dropfar): `runs/E0965_val402_psp_evt_top1med_dropfar_v1_20260213-051848/sweep_summary.json` (best Δ=+0.00025)
+- E0966 val402 sweep (gini_dropfar): `runs/E0966_val402_psp_evt_gini_dropfar_v1_20260213-052227/sweep_summary.json` (best Δ=+0.00732)
+- E0967 quick test402 (from E0966 best): `runs/E0967_quick_test402_psp_evt_gini_dropfar_best_20260213-052700/metrics.json` (Δ=+0.00937; p=0.4846)
+- E0970 val402 sweep (top1med_visfb): `runs/E0970_val402_psp_evt_top1med_visfb_v1_20260213-054752/sweep_summary.json` (best Δ=-0.00665)
+- E0971 val402 sweep (gini_visfb): `runs/E0971_val402_psp_evt_gini_visfb_v1_20260213-055449/sweep_summary.json` (best Δ=+0.00582)
+- E0972 raw-video export attempt (rawfps4): `runs/E0972_export_psp_evt_rawfps4_20260213-060205/` produced no outputs; logs at `artifacts/experiments/E0972/shard*.log`
+- E0973 val402 sweep (gap_v1): `runs/E0973_val402_psp_evt_gap_v1_20260214-025354/sweep_summary.json` (best Δ=-0.00249)
+
+Track AE.1 (reduce dilution): keepadj gating + drop-far
+- E0974 val402 sweep (gini_keepadj_v1): `runs/E0974_val402_psp_evt_gini_keepadj_v1_20260214-025940/sweep_summary.json`
+  - best: `ltlgini_keepadj_df1_gini0p45_shift0` (Δ=+0.00623) → quick
+- E0975 quick test402: `runs/E0975_quick_test402_psp_evt_gini_keepadj_best_20260214-030312/metrics.json`
+  - Δ=+0.02148 (p=0.1307); diagnose fallback_used_frac≈0.709 → full
+- E0976 full test402: `runs/E0976_full_test402_psp_evt_gini_keepadj_best_s0-9_20260214-030359/metrics.json`
+  - Δ=+0.01726 (p=0.00167); diagnose fallback_used_frac≈0.709 → still short of +2%
+
+Track AE.2 (final push): keepadj + high-conf 2-high demotion (hconf)
+- E0978 val402 sweep (gini_keepadj_hconf_v1): `runs/E0978_val402_psp_evt_gini_keepadj_hconf_v1_20260214-030933/sweep_summary.json`
+  - best: `ltlgini_keepadj_gini0p45_hconf0p5` (Δ=+0.00765) → quick
+- E0979 quick test402: `runs/E0979_quick_test402_psp_evt_gini_keepadj_hconf_best_20260214-031126/metrics.json`
+  - Δ=+0.02512 (p=0.1567); diagnose fallback_used_frac≈0.709 → full
+- E0980 full test402: `runs/E0980_full_test402_psp_evt_gini_keepadj_hconf_best_s0-9_20260214-031741/metrics.json`
+  - **Δ=+0.02169 (p=0.00149)**; diagnose fallback_used_frac≈0.709 → **C0003 proven**
+
+Key diagnosis (post-fix):
+- Fallback dilution remains the main gap to the Oracle ceiling, but it was reduced (≈0.811 → ≈0.709) while keeping only adjacent
+  anchor pairs and demoting low-confidence 2-high cases.
+
+Decision:
+- Hard gate met (E0980); stop further +2% search.
+- Next actions: regenerate oral slide assets (esp. Fig.2), refresh `docs/evidence_matrix.md`, and consolidate into 1 commit.

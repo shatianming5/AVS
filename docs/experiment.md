@@ -1135,6 +1135,236 @@
     - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
   - results: `runs/E0958_val402_cace_evt_rawfps4_gini_v2_20260213-043133/sweep_summary.json` best=`ltlgini2_gini0p45_shift0`, Δ=-0.00640 (p=0.5632) → not promoted.
 
+- [x] E0960: Export PSP/CPSP AVEL Stage-1 eventness scores (external; processed frames)
+  - command: `python scripts/e0960_export_psp_eventness.py --visual-source processed_frames --processed-dir runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed --out-json runs/E0960_export_psp_evt_$(date +%Y%m%d-%H%M%S)/psp_evt_scores.json --device cuda:0 --batch-size 32`
+  - configs: []
+  - seeds: []
+  - required_artifacts:
+    - `runs/E0960_*/psp_evt_scores.json`
+  - required_metrics: []
+  - results: `runs/E0960_export_psp_evt_20260213-050441/psp_evt_scores.json` (unique_vids=4097).
+
+- [x] E0961: PSP/CPSP AVEL Stage-1 (`psp_avel_evt`) — val402 sweep (`ltl_gini_v2`; SEEDS=0..2)
+  - command: `PSP_SCORES_JSON=runs/E0960_*/psp_evt_scores.json PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=psp_avel_evt CANDIDATE_SET=ltl_gini_v2 SEEDS=0,1,2 AUDIO_DEVICE=cpu TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0961_val402_psp_evt_gini_v2_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0961_*/sweep_summary.json`
+    - `runs/E0961_*/best_config.json`
+    - `runs/E0961_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - results: `runs/E0961_val402_psp_evt_gini_v2_20260213-050917/sweep_summary.json` best=`ltlgini2_gini0p5_shift0`, Δ=+0.00582 (p=0.5060) → promote to quick test402.
+
+- [x] E0962: PSP/CPSP AVEL Stage-1 (`psp_avel_evt`) — quick test402 (from E0961 best; SEEDS=0..2) + diagnose
+  - command:
+    - `PSP_SCORES_JSON=runs/E0960_*/psp_evt_scores.json PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0961_*/best_config.json EVENTNESS=psp_avel_evt SEEDS=0,1,2 AUDIO_DEVICE=cpu TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0962_quick_test402_psp_evt_gini0p5_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0962_*/metrics.json OUT_DIR=runs/E0962_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0962_*/metrics.json`
+    - `runs/E0962_*/diagnose.json`
+  - required_metrics:
+    - `metrics.json`: `paired_ttest.anchored_vs_uniform.p`, `summary.anchored_top2.mean`, `summary.uniform.mean` (report Δ)
+  - results: `runs/E0962_quick_test402_psp_evt_gini0p5_20260213-051204/metrics.json` anchored=0.73060 vs uniform=0.71294 (Δ=+0.01766; p=0.2408) + diagnose=`runs/E0962_quick_test402_psp_evt_gini0p5_20260213-051204/diagnose.json` (fallback_used_frac≈0.811) → promoted to full test402 to check significance.
+
+- [x] E0963: PSP/CPSP AVEL Stage-1 (`psp_avel_evt`) — full test402 (SEEDS=0..9) + diagnose
+  - command:
+    - `PSP_SCORES_JSON=runs/E0960_*/psp_evt_scores.json PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0961_*/best_config.json EVENTNESS=psp_avel_evt SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cpu TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0963_full_test402_psp_evt_gini0p5_s0-9_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0963_*/metrics.json OUT_DIR=runs/E0963_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  - required_artifacts:
+    - `runs/E0963_*/metrics.json`
+    - `runs/E0963_*/diagnose.json`
+  - required_metrics:
+    - `metrics.json`: `paired_ttest.anchored_vs_uniform.p`, `summary.anchored_top2.mean`, `summary.uniform.mean` (report Δ)
+  - results: `runs/E0963_full_test402_psp_evt_gini0p5_s0-9_20260213-051328/metrics.json` anchored=0.72983 vs uniform=0.71622 (Δ=+0.01361; p=0.0319) + diagnose=`runs/E0963_full_test402_psp_evt_gini0p5_s0-9_20260213-051328/diagnose.json` (fallback_used_frac≈0.811) → new best full-test Δ but still < +2%.
+
+- [x] E0964: PSP/CPSP AVEL Stage-1 (`psp_avel_evt`) — val402 sweep (`ltl_gini_v1`; SEEDS=0..2)
+  - command: `PSP_SCORES_JSON=runs/E0960_*/psp_evt_scores.json PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=psp_avel_evt CANDIDATE_SET=ltl_gini_v1 SEEDS=0,1,2 AUDIO_DEVICE=cpu TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0964_val402_psp_evt_gini_v1_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0964_*/sweep_summary.json`
+    - `runs/E0964_*/best_config.json`
+    - `runs/E0964_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - results: `runs/E0964_val402_psp_evt_gini_v1_20260213-051607/sweep_summary.json` best=`ltl_gini0p20_scoreAlloc`, Δ=-0.00549 (p=0.5628) → not promoted.
+
+- [x] E0965: PSP/CPSP AVEL Stage-1 (`psp_avel_evt`) — val402 sweep (`ltl_top1med_dropfar_v1`; SEEDS=0..2)
+  - command: `PSP_SCORES_JSON=runs/E0960_*/psp_evt_scores.json PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=psp_avel_evt CANDIDATE_SET=ltl_top1med_dropfar_v1 SEEDS=0,1,2 AUDIO_DEVICE=cpu TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0965_val402_psp_evt_top1med_dropfar_v1_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0965_*/sweep_summary.json`
+    - `runs/E0965_*/best_config.json`
+    - `runs/E0965_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - results: `runs/E0965_val402_psp_evt_top1med_dropfar_v1_20260213-051848/sweep_summary.json` best=`ltltop1med_thr0p5_shift1_df1`, Δ=+0.00025 (p=0.9804) → not promoted.
+
+- [x] E0966: PSP/CPSP AVEL Stage-1 (`psp_avel_evt`) — val402 sweep (`ltl_gini_dropfar_v1`; SEEDS=0..2)
+  - command: `PSP_SCORES_JSON=runs/E0960_*/psp_evt_scores.json PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=psp_avel_evt CANDIDATE_SET=ltl_gini_dropfar_v1 SEEDS=0,1,2 AUDIO_DEVICE=cpu TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0966_val402_psp_evt_gini_dropfar_v1_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0966_*/sweep_summary.json`
+    - `runs/E0966_*/best_config.json`
+    - `runs/E0966_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - results: `runs/E0966_val402_psp_evt_gini_dropfar_v1_20260213-052227/sweep_summary.json` best=`ltlgini_df1_gini0p35_shift1`, Δ=+0.00732 (p=0.4417) → promote to quick test402 only.
+
+- [x] E0967: PSP/CPSP AVEL Stage-1 (`psp_avel_evt`) — quick test402 (from E0966 best; SEEDS=0..2) + diagnose
+  - command:
+    - `PSP_SCORES_JSON=runs/E0960_*/psp_evt_scores.json PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0966_*/best_config.json EVENTNESS=psp_avel_evt SEEDS=0,1,2 AUDIO_DEVICE=cpu TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0967_quick_test402_psp_evt_gini_dropfar_best_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0967_*/metrics.json OUT_DIR=runs/E0967_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0967_*/metrics.json`
+    - `runs/E0967_*/diagnose.json`
+  - required_metrics:
+    - `metrics.json`: `paired_ttest.anchored_vs_uniform.p`, `summary.anchored_top2.mean`, `summary.uniform.mean` (report Δ)
+  - results: `runs/E0967_quick_test402_psp_evt_gini_dropfar_best_20260213-052700/metrics.json` anchored=0.72231 vs uniform=0.71294 (Δ=+0.00937; p=0.4846) → not promoted (skip full).
+
+- [x] E0970: PSP/CPSP AVEL Stage-1 (`psp_avel_evt`) — val402 sweep (`ltl_top1med_visfb_v1`; SEEDS=0..2)
+  - command: `PSP_SCORES_JSON=runs/E0960_*/psp_evt_scores.json PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=psp_avel_evt CANDIDATE_SET=ltl_top1med_visfb_v1 SEEDS=0,1,2 AUDIO_DEVICE=cpu TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0970_val402_psp_evt_top1med_visfb_v1_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0970_*/sweep_summary.json`
+    - `runs/E0970_*/best_config.json`
+    - `runs/E0970_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - results: `runs/E0970_val402_psp_evt_top1med_visfb_v1_20260213-054752/sweep_summary.json` best=`ltltop1med_uniformfb_shift1`, Δ=-0.00665 (p=0.4460) → not promoted.
+
+- [x] E0971: PSP/CPSP AVEL Stage-1 (`psp_avel_evt`) — val402 sweep (`ltl_gini_visfb_v1`; SEEDS=0..2)
+  - command: `PSP_SCORES_JSON=runs/E0960_*/psp_evt_scores.json PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=psp_avel_evt CANDIDATE_SET=ltl_gini_visfb_v1 SEEDS=0,1,2 AUDIO_DEVICE=cpu TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0971_val402_psp_evt_gini_visfb_v1_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0971_*/sweep_summary.json`
+    - `runs/E0971_*/best_config.json`
+    - `runs/E0971_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - results: `runs/E0971_val402_psp_evt_gini_visfb_v1_20260213-055449/sweep_summary.json` best=`ltlgini_visfb_uniform_shift0`, Δ=+0.00582 (p=0.5060) → not promoted (visual fallback is harmful here).
+
+- [x] E0972: Export PSP/CPSP AVEL Stage-1 eventness scores (raw videos; `raw_video_avg16`; sharded; attempted)
+  - command (5 shards; merge would be done after):
+    - `OUT_DIR=runs/E0972_export_psp_evt_rawfps4_$(date +%Y%m%d-%H%M%S); mkdir -p ${OUT_DIR}; for i in 0 1 2 3 4; do python scripts/e0960_export_psp_eventness.py --processed-dir runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed --visual-source raw_video_avg16 --raw-videos-dir data/AVE/raw/videos --sample-num 4 --shard-idx ${i} --num-shards 5 --device cuda:0 --batch-size 32 --out-json ${OUT_DIR}/psp_evt_scores_shard${i}.json; done`
+  - configs: []
+  - seeds: []
+  - required_artifacts:
+    - `runs/E0972_*/psp_evt_scores.json`
+  - required_metrics: []
+  - results: `runs/E0972_export_psp_evt_rawfps4_20260213-060205/` produced no JSON outputs (OUT_DIR empty); shard logs: `artifacts/experiments/E0972/shard*.log`.
+
+- [x] E0973: PSP/CPSP AVEL Stage-1 (`psp_avel_evt`) — val402 sweep (`ltl_gap_v1`; SEEDS=0..2)
+  - command: `PSP_SCORES_JSON=runs/E0960_*/psp_evt_scores.json PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=psp_avel_evt CANDIDATE_SET=ltl_gap_v1 SEEDS=0,1,2 AUDIO_DEVICE=cpu TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0973_val402_psp_evt_gap_v1_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0973_*/sweep_summary.json`
+    - `runs/E0973_*/best_config.json`
+    - `runs/E0973_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - results: `runs/E0973_val402_psp_evt_gap_v1_20260214-025354/sweep_summary.json` best=`ltlgap1_gap0p5_shift0`, Δ=-0.00249 (p=0.7516) → not promoted.
+
+- [x] E0974: PSP/CPSP AVEL Stage-1 (`psp_avel_evt`) — val402 sweep (`ltl_gini_keepadj_v1`; SEEDS=0..2)
+  - command: `PSP_SCORES_JSON=runs/E0960_*/psp_evt_scores.json PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=psp_avel_evt CANDIDATE_SET=ltl_gini_keepadj_v1 SEEDS=0,1,2 AUDIO_DEVICE=cpu TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0974_val402_psp_evt_gini_keepadj_v1_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0974_*/sweep_summary.json`
+    - `runs/E0974_*/best_config.json`
+    - `runs/E0974_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - results: `runs/E0974_val402_psp_evt_gini_keepadj_v1_20260214-025940/sweep_summary.json` best=`ltlgini_keepadj_df1_gini0p45_shift0`, Δ=+0.00623 (p=0.3742) → promote to quick test402.
+
+- [x] E0975: PSP/CPSP AVEL Stage-1 (`psp_avel_evt`) — quick test402 (from E0974 best; SEEDS=0..2) + diagnose
+  - command:
+    - `PSP_SCORES_JSON=runs/E0960_*/psp_evt_scores.json PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0974_*/best_config.json EVENTNESS=psp_avel_evt SEEDS=0,1,2 AUDIO_DEVICE=cpu TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0975_quick_test402_psp_evt_gini_keepadj_best_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0975_*/metrics.json OUT_DIR=runs/E0975_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0975_*/metrics.json`
+    - `runs/E0975_*/diagnose.json`
+  - required_metrics:
+    - `metrics.json`: `paired_ttest.anchored_vs_uniform.p`, `summary.anchored_top2.mean`, `summary.uniform.mean` (report Δ)
+  - results: `runs/E0975_quick_test402_psp_evt_gini_keepadj_best_20260214-030312/metrics.json` anchored=0.73441 vs uniform=0.71294 (Δ=+0.02148; p=0.1307) + diagnose=`runs/E0975_quick_test402_psp_evt_gini_keepadj_best_20260214-030312/diagnose.json` (fallback_used_frac≈0.709) → promoted to full test402.
+
+- [x] E0976: PSP/CPSP AVEL Stage-1 (`psp_avel_evt`) — full test402 (from E0974 best; SEEDS=0..9) + diagnose
+  - command:
+    - `PSP_SCORES_JSON=runs/E0960_*/psp_evt_scores.json PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0974_*/best_config.json EVENTNESS=psp_avel_evt SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cpu TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0976_full_test402_psp_evt_gini_keepadj_best_s0-9_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0976_*/metrics.json OUT_DIR=runs/E0976_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  - required_artifacts:
+    - `runs/E0976_*/metrics.json`
+    - `runs/E0976_*/diagnose.json`
+  - required_metrics:
+    - `metrics.json`: `paired_ttest.anchored_vs_uniform.p`, `summary.anchored_top2.mean`, `summary.uniform.mean` (report Δ)
+  - results: `runs/E0976_full_test402_psp_evt_gini_keepadj_best_s0-9_20260214-030359/metrics.json` anchored=0.73348 vs uniform=0.71622 (Δ=+0.01726; p=0.00167) + diagnose=`runs/E0976_full_test402_psp_evt_gini_keepadj_best_s0-9_20260214-030359/diagnose.json` (fallback_used_frac≈0.709) → still < +2%.
+
+- [x] E0977: PSP/CPSP AVEL Stage-1 (`psp_avel_evt`) — val402 sweep (`ltl_gini_keepadj_basealloc_v1`; SEEDS=0..2)
+  - command: `PSP_SCORES_JSON=runs/E0960_*/psp_evt_scores.json PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=psp_avel_evt CANDIDATE_SET=ltl_gini_keepadj_basealloc_v1 SEEDS=0,1,2 AUDIO_DEVICE=cpu TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0977_val402_psp_evt_gini_keepadj_basealloc_v1_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0977_*/sweep_summary.json`
+    - `runs/E0977_*/best_config.json`
+    - `runs/E0977_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - results: `runs/E0977_val402_psp_evt_gini_keepadj_basealloc_v1_20260214-030703/sweep_summary.json` best=`ltlgini_keepadj_thr0p45_df1_shift0_distance`, Δ=+0.00623 (p=0.3742) → no improvement; not promoted.
+
+- [x] E0978: PSP/CPSP AVEL Stage-1 (`psp_avel_evt`) — val402 sweep (`ltl_gini_keepadj_hconf_v1`; SEEDS=0..2)
+  - command: `PSP_SCORES_JSON=runs/E0960_*/psp_evt_scores.json PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 EVENTNESS=psp_avel_evt CANDIDATE_SET=ltl_gini_keepadj_hconf_v1 SEEDS=0,1,2 AUDIO_DEVICE=cpu TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0978_val402_psp_evt_gini_keepadj_hconf_v1_$(date +%Y%m%d-%H%M%S) bash scripts/e0207_ave_p0_sweep_official_val_ltl_stage1.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0978_*/sweep_summary.json`
+    - `runs/E0978_*/best_config.json`
+    - `runs/E0978_*/eventness_scores.json`
+  - required_metrics:
+    - `sweep_summary.json`: `best.anchored_minus_uniform_mean`, `best.anchored_vs_uniform_p`
+  - results: `runs/E0978_val402_psp_evt_gini_keepadj_hconf_v1_20260214-030933/sweep_summary.json` best=`ltlgini_keepadj_gini0p45_hconf0p5`, Δ=+0.00765 (p=0.6190) → promote to quick test402.
+
+- [x] E0979: PSP/CPSP AVEL Stage-1 (`psp_avel_evt`) — quick test402 (from E0978 best; SEEDS=0..2) + diagnose
+  - command:
+    - `PSP_SCORES_JSON=runs/E0960_*/psp_evt_scores.json PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0978_*/best_config.json EVENTNESS=psp_avel_evt SEEDS=0,1,2 AUDIO_DEVICE=cpu TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0979_quick_test402_psp_evt_gini_keepadj_hconf_best_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0979_*/metrics.json OUT_DIR=runs/E0979_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2]
+  - required_artifacts:
+    - `runs/E0979_*/metrics.json`
+    - `runs/E0979_*/diagnose.json`
+  - required_metrics:
+    - `metrics.json`: `paired_ttest.anchored_vs_uniform.p`, `summary.anchored_top2.mean`, `summary.uniform.mean` (report Δ)
+  - results: `runs/E0979_quick_test402_psp_evt_gini_keepadj_hconf_best_20260214-031126/metrics.json` anchored=0.73806 vs uniform=0.71294 (Δ=+0.02512; p=0.1567) + diagnose=`runs/E0979_quick_test402_psp_evt_gini_keepadj_hconf_best_20260214-031126/diagnose.json` (fallback_used_frac≈0.709) → promoted to full test402.
+
+- [x] E0980: PSP/CPSP AVEL Stage-1 (`psp_avel_evt`) — full test402 (from E0978 best; SEEDS=0..9) + diagnose (**C0003 proven**)
+  - command:
+    - `PSP_SCORES_JSON=runs/E0960_*/psp_evt_scores.json PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0978_*/best_config.json EVENTNESS=psp_avel_evt SEEDS=0,1,2,3,4,5,6,7,8,9 AUDIO_DEVICE=cpu TRAIN_DEVICE=cuda:0 OUT_DIR=runs/E0980_full_test402_psp_evt_gini_keepadj_hconf_best_s0-9_$(date +%Y%m%d-%H%M%S) bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+    - `IN_METRICS=runs/E0980_*/metrics.json OUT_DIR=runs/E0980_* bash scripts/e0344_ave_p0_diagnose.sh`
+  - configs: []
+  - seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  - required_artifacts:
+    - `runs/E0980_*/metrics.json`
+    - `runs/E0980_*/diagnose.json`
+  - required_metrics:
+    - `metrics.json`: `paired_ttest.anchored_vs_uniform.p`, `summary.anchored_top2.mean`, `summary.uniform.mean` (report Δ; require Δ≥+0.02 and p<0.05)
+  - results: `runs/E0980_full_test402_psp_evt_gini_keepadj_hconf_best_s0-9_20260214-031741/metrics.json` anchored=0.73791 vs uniform=0.71622 (Δ=+0.02169; p=0.00149) + diagnose=`runs/E0980_full_test402_psp_evt_gini_keepadj_hconf_best_s0-9_20260214-031741/diagnose.json` (fallback_used_frac≈0.709) → **C0003 hard gate met**.
+
 ### Run Queue (Long-Video QA; sequential)
 - [x] E0600 (real; ppl): IntentQA VLM evaluation under budgeted frame selection (val n=253; seed=0)
   - command: `OUT_DIR=runs/E0600_intentqa_vlm_eval_full_20260210-041911 SPLIT=val LIMIT=256 METHODS=uniform,random,audio,cheap_visual,fused,ql2l_clap,ql2l_asr_bm25 B_FRAMES=16 MAX_SECONDS=120 SEED=0 STRATEGY=ppl DEVICE=cuda:1 DTYPE=bfloat16 QL2L_CLAP_DEVICE=cuda:2 QL2L_ASR_DEVICE=cpu ALLOW_MISSING_VIDEOS=1 MIN_ITEMS=250 bash scripts/e0600_intentqa_vlm_eval.sh`
@@ -1577,6 +1807,25 @@
 | E0956 | success | val402 sweep (CACE evt; top1med_norm): best=`ltltop1medn_thr0p5_shift0`, Δ=-0.00474; p=0.5405 | `runs/E0956_val402_cace_evt_top1med_norm_v1_20260213-041404/` | not promoted |
 | E0957 | success | export CACE-Net eventness scores (raw videos; 4 frames/sec): unique_vids=4097 | `runs/E0957_export_cace_evt_rawfps4_20260213-042012/` | `cace_evt_scores.json` |
 | E0958 | success | val402 sweep (CACE evt; rawfps4; gini_v2): best=`ltlgini2_gini0p45_shift0`, Δ=-0.00640; p=0.5632 | `runs/E0958_val402_cace_evt_rawfps4_gini_v2_20260213-043133/` | not promoted |
+| E0960 | success | export PSP/CPSP eventness scores (processed frames): unique_vids=4097 | `runs/E0960_export_psp_evt_20260213-050441/` | `psp_evt_scores.json` |
+| E0961 | success | val402 sweep (PSP evt; gini_v2): best=`ltlgini2_gini0p5_shift0`, Δ=+0.00582; p=0.5060 | `runs/E0961_val402_psp_evt_gini_v2_20260213-050917/` | promoted to quick |
+| E0962 | success | quick test402 (PSP evt; gini_v2 best): anchored=0.73060 vs uniform=0.71294 (Δ=+0.01766; p=0.2408) | `runs/E0962_quick_test402_psp_evt_gini0p5_20260213-051204/` | diagnose: `runs/E0962_quick_test402_psp_evt_gini0p5_20260213-051204/diagnose.json`; promoted to full |
+| E0963 | success | full test402 (PSP evt; gini_v2 best): anchored=0.72983 vs uniform=0.71622 (Δ=+0.01361; p=0.0319) | `runs/E0963_full_test402_psp_evt_gini0p5_s0-9_20260213-051328/` | diagnose: `runs/E0963_full_test402_psp_evt_gini0p5_s0-9_20260213-051328/diagnose.json`; still < +2% |
+| E0964 | success | val402 sweep (PSP evt; gini_v1): best=`ltl_gini0p20_scoreAlloc`, Δ=-0.00549; p=0.5628 | `runs/E0964_val402_psp_evt_gini_v1_20260213-051607/` | not promoted |
+| E0965 | success | val402 sweep (PSP evt; top1med_dropfar): best=`ltltop1med_thr0p5_shift1_df1`, Δ=+0.00025; p=0.9804 | `runs/E0965_val402_psp_evt_top1med_dropfar_v1_20260213-051848/` | not promoted |
+| E0966 | success | val402 sweep (PSP evt; gini_dropfar): best=`ltlgini_df1_gini0p35_shift1`, Δ=+0.00732; p=0.4417 | `runs/E0966_val402_psp_evt_gini_dropfar_v1_20260213-052227/` | promoted to quick only |
+| E0967 | success | quick test402 (PSP evt; gini_dropfar best): anchored=0.72231 vs uniform=0.71294 (Δ=+0.00937; p=0.4846) | `runs/E0967_quick_test402_psp_evt_gini_dropfar_best_20260213-052700/` | not promoted |
+| E0970 | success | val402 sweep (PSP evt; top1med_visfb): best=`ltltop1med_uniformfb_shift1`, Δ=-0.00665; p=0.4460 | `runs/E0970_val402_psp_evt_top1med_visfb_v1_20260213-054752/` | visual fallback variants regress; not promoted |
+| E0971 | success | val402 sweep (PSP evt; gini_visfb): best=`ltlgini_visfb_uniform_shift0`, Δ=+0.00582; p=0.5060 | `runs/E0971_val402_psp_evt_gini_visfb_v1_20260213-055449/` | best stays uniform fallback; not promoted |
+| E0972 | failed | export PSP evt (raw videos; rawfps4; sharded): no outputs written | `runs/E0972_export_psp_evt_rawfps4_20260213-060205/` | shard logs: `artifacts/experiments/E0972/shard*.log`; OUT_DIR empty |
+| E0973 | success | val402 sweep (PSP evt; gap_v1): best=`ltlgap1_gap0p5_shift0`, Δ=-0.00249; p=0.7516 | `runs/E0973_val402_psp_evt_gap_v1_20260214-025354/` | not promoted |
+| E0974 | success | val402 sweep (PSP evt; gini_keepadj_v1): best=`ltlgini_keepadj_df1_gini0p45_shift0`, Δ=+0.00623; p=0.3742 | `runs/E0974_val402_psp_evt_gini_keepadj_v1_20260214-025940/` | promoted to quick |
+| E0975 | success | quick test402 (PSP evt; keepadj best): anchored=0.73441 vs uniform=0.71294 (Δ=+0.02148; p=0.1307) | `runs/E0975_quick_test402_psp_evt_gini_keepadj_best_20260214-030312/` | diagnose fallback_used_frac≈0.709; promoted to full |
+| E0976 | success | full test402 (PSP evt; keepadj best): anchored=0.73348 vs uniform=0.71622 (Δ=+0.01726; p=0.00167) | `runs/E0976_full_test402_psp_evt_gini_keepadj_best_s0-9_20260214-030359/` | diagnose fallback_used_frac≈0.709; still < +2% |
+| E0977 | success | val402 sweep (PSP evt; keepadj basealloc): best=`ltlgini_keepadj_thr0p45_df1_shift0_distance`, Δ=+0.00623; p=0.3742 | `runs/E0977_val402_psp_evt_gini_keepadj_basealloc_v1_20260214-030703/` | no improvement; not promoted |
+| E0978 | success | val402 sweep (PSP evt; keepadj hconf): best=`ltlgini_keepadj_gini0p45_hconf0p5`, Δ=+0.00765; p=0.6190 | `runs/E0978_val402_psp_evt_gini_keepadj_hconf_v1_20260214-030933/` | promoted to quick |
+| E0979 | success | quick test402 (PSP evt; keepadj hconf best): anchored=0.73806 vs uniform=0.71294 (Δ=+0.02512; p=0.1567) | `runs/E0979_quick_test402_psp_evt_gini_keepadj_hconf_best_20260214-031126/` | diagnose fallback_used_frac≈0.709; promoted to full |
+| E0980 | success | full test402 (PSP evt; keepadj hconf best): anchored=0.73791 vs uniform=0.71622 (Δ=+0.02169; p=0.00149) | `runs/E0980_full_test402_psp_evt_gini_keepadj_hconf_best_s0-9_20260214-031741/` | diagnose fallback_used_frac≈0.709; **C0003 hard gate met** |
 
 > Note: The authoritative runnable queue for the current `docs/plan.md` is the checklist above. The `## Experiments` catalog below is an archive; its internal `[ ]` fields are not a TODO list.
 

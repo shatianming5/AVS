@@ -33,6 +33,7 @@ def main() -> int:
     p.add_argument("--best-evidence-alignment", type=Path, required=False, default=None, help="Optional evidence_alignment.json.")
     p.add_argument("--out", type=Path, required=True, help="Output PNG path.")
     p.add_argument("--title", type=str, default="C0003 Decomposition (Why +2% Is Hard)")
+    p.add_argument("--best-label", type=str, default="Best", help="Label for the best deployable method in the bar chart.")
     args = p.parse_args()
 
     energy = _read_json(args.energy_metrics)
@@ -89,7 +90,7 @@ def main() -> int:
 
     # (A) Uniform → Best → Oracle (absolute acc, with gap annotations)
     ax0 = fig.add_subplot(2, 2, 1)
-    labels0 = ["Uniform", "Best (df7)", "Oracle"]
+    labels0 = ["Uniform", str(args.best_label), "Oracle"]
     vals0 = [uniform, anchored_best, oracle]
     ax0.bar(labels0, vals0, color=["#9aa0a6", "#1f77b4", "#2ca02c"])
     ax0.set_ylabel("Accuracy (test402)")
@@ -142,4 +143,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

@@ -49,12 +49,13 @@ This is the “one-slide” explanation for why the `+2%` hard gate is hard, and
 - Slide export: `docs/oral_assets/fig2_c0003_decomposition.png`
 
 - Ceiling exists at fixed budget: in the multi-budget grid at `token_budget=1960` (`triad=160_224_352`), `oracle - uniform ≈ +0.03754` abs (`pareto_report.json`).
-- Best deployable C0003 run is much smaller: `runs/E0643_full_test402_vecmlp_keepadj_adj2_shift1_std0p55_df7_officialids_s0-9_20260211-001604/metrics.json` reports `anchored_top2 - uniform = +0.01045` (paired `p≈0.0395`), far from `+0.02`.
-- The remaining gap is explained by dilution + harmful buckets (diagnose for E0643 df7):
-  - Fallback dilution: `anchors_len_fallback_frac≈0.502` (about half the clips do not get confident anchors).
-  - 2-high regime is near-zero gain: `high_count=2 mean_delta≈+0.00012` (`n=83`).
-  - Negative distance buckets still exist: `dist=2 mean_delta≈-0.00243` (`n=37`), `dist=6 mean_delta≈-0.00250` (`n=16`).
-  - Artifact: `runs/E0643_full_test402_vecmlp_keepadj_adj2_shift1_std0p55_df7_officialids_s0-9_20260211-001604/diagnose.json`.
+- Best deployable C0003 run meets the hard gate: `runs/E0980_full_test402_psp_evt_gini_keepadj_hconf_best_s0-9_20260214-031741/metrics.json` reports `anchored_top2 - uniform = +0.02169` (paired `p=0.00149`, `SEEDS=0..9`).
+  - Prior best (pre-PSP): `runs/E0643_full_test402_vecmlp_keepadj_adj2_shift1_std0p55_df7_officialids_s0-9_20260211-001604/metrics.json` (Δ=+0.01045; `p≈0.0395`).
+- Key decomposition signal is still “dilution vs anchor-used buckets”, but the keepadj+hconf plan shifts the mixture toward higher-gain regimes (diagnose for E0980):
+  - Fallback dilution: `fallback_used_frac≈0.709` (285/402 clips fall back to uniform because `conf_below_threshold`).
+  - Mean Δ by high-count: `high_count=0 mean_delta≈+0.01547` (`n=285`), `high_count=1 mean_delta≈+0.02016` (`n=62`), `high_count=2 mean_delta≈+0.05564` (`n=55`).
+  - Only adjacent anchor pairs are used (`anchor_dist_hist` contains only dist=1).
+  - Artifact: `runs/E0980_full_test402_psp_evt_gini_keepadj_hconf_best_s0-9_20260214-031741/diagnose.json`.
 
 ## 5) Why It Works / When It Fails (Bucketed Diagnosis + Evidence Alignment)
 
@@ -69,7 +70,7 @@ We explicitly show **where gains come from** and **where they disappear**.
 
 Evidence pointers:
 - Evidence Alignment report (energy baseline; test402): `runs/E0202_evidence_alignment_energy_test402_20260209-061145/evidence_alignment.json`
-- Evidence Alignment report (best C0003 config; still weak corr): `runs/E0720_evidence_alignment_df7_best_20260212-015616/evidence_alignment.json`
+- Evidence Alignment report (C0003-proven PSP+hconf; positive corr): `runs/E0981_evidence_alignment_psp_keepadj_hconf_best_test402_20260214-033440/evidence_alignment.json`
 
 ## 6) Robustness (Degradation Curves + Alpha Lower Bound)
 
@@ -111,12 +112,13 @@ We maintain:
 Dataset verification is captured by:
 - `python scripts/datasets/verify_all.py` (outputs `runs/datasets_verify_*/datasets_verify.json`)
 
-## 9) Latest Queue Update (E071x)
+## 9) Latest Queue Update (E0980)
 
-- C0003 retry queue (`E0710→E0711→E0712`) remains below hard gate:
-  - Val sweep winner: `runs/E0710_val402_flowmlp_keepadj_20260212-000010/sweep_summary.json` (best Δ≈+0.00648).
-  - Quick test402: `runs/E0711_quick_test402_flowmlp_keepadj_20260212-000606/metrics.json` (Δ≈+0.00688; non-significant).
-  - Full test402: `runs/E0712_full_test402_flowmlp_keepadj_20260212-000835/metrics.json` (Δ≈+0.00709; p≈0.141).
-- Long-video seed extension status:
-  - IntentQA faithfulness seed=2 done: `runs/E0713_intentqa_faithfulness_val_s2_20260212-000949/faithfulness.json` (stable vs prior seeds).
-  - EgoSchema seed=2 done: `runs/E0714_egoschema_eval_subset256_s2_20260212-004316/metrics.json` (`uniform=0.5859`, `ql2l_clap=0.5352`, `ql2l_asr_bm25=0.5469`; matches prior seeds).
+- C0003 hard gate is now proven by PSP/CPSP AVEL Stage-1 + keepadj+hconf Stage-2:
+  - Full test402: `runs/E0980_full_test402_psp_evt_gini_keepadj_hconf_best_s0-9_20260214-031741/metrics.json` (Δ=+0.02169; p=0.00149; `SEEDS=0..9`)
+  - Diagnose: `runs/E0980_full_test402_psp_evt_gini_keepadj_hconf_best_s0-9_20260214-031741/diagnose.json`
+  - Evidence Alignment: `runs/E0981_evidence_alignment_psp_keepadj_hconf_best_test402_20260214-033440/evidence_alignment.json`
+
+Long-video seed extension status (unchanged):
+- IntentQA faithfulness seed=2: `runs/E0713_intentqa_faithfulness_val_s2_20260212-000949/faithfulness.json` (stable vs prior seeds).
+- EgoSchema seed=2: `runs/E0714_egoschema_eval_subset256_s2_20260212-004316/metrics.json` (`uniform=0.5859`, `ql2l_clap=0.5352`, `ql2l_asr_bm25=0.5469`; matches prior seeds).

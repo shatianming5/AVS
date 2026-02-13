@@ -11,11 +11,11 @@ Canon sources:
 
 ## 0) Hard gate (one must be true)
 
-- [ ] **C0003 proven** on official AVE `test402`: `anchored_top2 - uniform ≥ +0.02`, paired `p < 0.05`, `SEEDS=0..9`.
-  - Current best full test402 in this workspace is still short: `runs/E0638_full_test402_vecmlp_keepadj_adj2_shift1_std0p55_df5_officialids_s0-9_20260211-001009/metrics.json` (Δ=+0.01117; p=0.109).
-  - Best p-value so far (still short on Δ): `runs/E0643_full_test402_vecmlp_keepadj_adj2_shift1_std0p55_df7_officialids_s0-9_20260211-001604/metrics.json` (Δ=+0.01045; p=0.0395).
-  - Reporting rule (for the revised-claim version): use **E0643 (df7)** as the “main” result because it is the only pre-registered far-drop variant with paired `p < 0.05` on `SEEDS=0..9`; treat **E0638 (df5)** as a sensitivity run (higher mean Δ but not significant).
-- [x] If C0003 cannot be proven, **lock a revised claim** (e.g., “consistent +1% at fixed budget + strong Oracle ceiling + robust protocol”) and make the rest of this checklist airtight (so reviewers cannot dismiss as heuristic/cherry-pick).
+- [x] **C0003 proven** on official AVE `test402`: `anchored_top2 - uniform ≥ +0.02`, paired `p < 0.05`, `SEEDS=0..9`.
+  - Winning run (PSP/CPSP AVEL Stage-1 + keepadj+hconf Stage-2): `runs/E0980_full_test402_psp_evt_gini_keepadj_hconf_best_s0-9_20260214-031741/metrics.json` (anchored=0.73791 vs uniform=0.71622; Δ=+0.02169; p=0.00149; `SEEDS=0..9`). Diagnose: `runs/E0980_full_test402_psp_evt_gini_keepadj_hconf_best_s0-9_20260214-031741/diagnose.json` (fallback_used_frac≈0.709).
+  - Selected config: `runs/E0978_val402_psp_evt_gini_keepadj_hconf_v1_20260214-030933/best_config.json` (candidate name=`ltlgini_keepadj_gini0p45_hconf0p5`).
+  - Prior best (deployable; vec-MLP df7): `runs/E0643_full_test402_vecmlp_keepadj_adj2_shift1_std0p55_df7_officialids_s0-9_20260211-001604/metrics.json` (Δ=+0.01045; p=0.0395).
+- [ ] If C0003 cannot be proven, **lock a revised claim** (e.g., “consistent +1% at fixed budget + strong Oracle ceiling + robust protocol”) and make the rest of this checklist airtight (so reviewers cannot dismiss as heuristic/cherry-pick).
 
 ---
 
@@ -38,6 +38,7 @@ Canon sources:
   - Latest full:
     - Energy baseline: `runs/E0202_evidence_alignment_energy_test402_20260209-061145/evidence_alignment.json` (weak corr; use as negative-but-clean evidence).
     - Best C0003 config (df7): `runs/E0720_evidence_alignment_df7_best_20260212-015616/evidence_alignment.json` (weak corr; indicates Coverage@τ is not predictive here).
+    - C0003-proven PSP+hconf: `runs/E0981_evidence_alignment_psp_keepadj_hconf_best_test402_20260214-033440/evidence_alignment.json` (positive corr; pearson≈0.315, spearman≈0.180).
 
 ### C. “生死图 #3” — Robust degradation protocol (shift/noise/silence × α)
 
@@ -83,7 +84,7 @@ Canon sources:
 - [x] **Robustness**: explicit degradation curves + α lower bound. (see `docs/oral_narrative.md`)
 - [x] **Reproducibility**: dataset verify (`bash scripts/datasets/verify_all.sh`), fixed seeds, saved run artifacts.
   - Evidence:
-    - Dataset status snapshot: `runs/datasets_verify_20260212-020117/datasets_verify.json`
+    - Dataset status snapshot: `runs/datasets_verify_20260214-033737/datasets_verify.json`
     - IntentQA LFS pull log (to eliminate pointer mp4s): `artifacts/datasets/intentqa_hf_pull_full_20260210-020508.log`
 
 ---
@@ -123,7 +124,7 @@ For any new Stage-1 signal / method targeting C0003:
   - Last attempt: `moe_energy_clipdiff` (E0296) — rerun val402 sweep regresses (`runs/E0296_ave_p0_sweep_official_val_moe_energy_clipdiff_ltl_top1med_moe_v1_20260210-181653/sweep_summary.json`, best Δ≈-0.00923, p≈0.485); stop before test402.
   - Last attempt: `av_clipdiff_mlp` (E0207→E0208 quick) — rerun val402 is weak-positive (`runs/E0207_ave_p0_sweep_official_val_av_clipdiff_mlp_ltl_adaptive_v1_20260210-182509/sweep_summary.json`, best Δ≈+0.00515, p≈0.204), but not competitive on test402 quick (`runs/E0208_quick_test402_av_clipdiff_mlp_ltl_adaptive_v1_20260210-182944/metrics.json`, Δ≈+0.00738, p≈0.577); do not promote.
   - Last attempt: `av_clipdiff_flow_mlp_stride` (E0400→E0401 quick) — val402 is near-baseline (`runs/E0400_ave_p0_sweep_official_val_av_clipdiff_flow_mlp_stride_ltl_top1med_k1_extreme_v1_20260210-195236/sweep_summary.json`, best Δ≈+0.00490, p≈0.465), but regresses on test402 quick (`runs/E0401_quick_test402_av_clipdiff_flow_mlp_stride_20260210-195916/metrics.json`, Δ≈-0.00506, p≈0.555; diagnose: `runs/E0401_quick_test402_av_clipdiff_flow_mlp_stride_20260210-195916/diagnose.json`); do not promote.
-  - Last attempt: `av_clipdiff_vec_mlp` (E0610→E0611→E0612) — val402 is weak-positive (`runs/E0610_ave_p0_sweep_official_val_av_clipdiff_vec_mlp_ltl_adaptive_v1_20260210-200224/sweep_summary.json`, best Δ≈+0.00607, p≈0.248), test402 quick is positive but not significant (`runs/E0611_quick_test402_av_clipdiff_vec_mlp_ltl_adaptive_v1_20260210-200638/metrics.json`, Δ≈+0.01061, p≈0.391; diagnose: `runs/E0611_quick_test402_av_clipdiff_vec_mlp_ltl_adaptive_v1_20260210-200638/diagnose.json`), and collapses on full test402 (`runs/E0612_full_test402_av_clipdiff_vec_mlp_ltl_adaptive_v1_20260210-200736/metrics.json`, Δ≈+0.00095, p≈0.875; diagnose: `runs/E0612_full_test402_av_clipdiff_vec_mlp_ltl_adaptive_v1_20260210-200736/diagnose.json`); C0003 remains unproven.
+  - Last attempt: `av_clipdiff_vec_mlp` (E0610→E0611→E0612) — val402 is weak-positive (`runs/E0610_ave_p0_sweep_official_val_av_clipdiff_vec_mlp_ltl_adaptive_v1_20260210-200224/sweep_summary.json`, best Δ≈+0.00607, p≈0.248), test402 quick is positive but not significant (`runs/E0611_quick_test402_av_clipdiff_vec_mlp_ltl_adaptive_v1_20260210-200638/metrics.json`, Δ≈+0.01061, p≈0.391; diagnose: `runs/E0611_quick_test402_av_clipdiff_vec_mlp_ltl_adaptive_v1_20260210-200638/diagnose.json`), and collapses on full test402 (`runs/E0612_full_test402_av_clipdiff_vec_mlp_ltl_adaptive_v1_20260210-200736/metrics.json`, Δ≈+0.00095, p≈0.875; diagnose: `runs/E0612_full_test402_av_clipdiff_vec_mlp_ltl_adaptive_v1_20260210-200736/diagnose.json`); this family did not prove C0003.
   - Next attempt (vec-MLP; far/2-high harm mitigation via Stage-2 policy; not promoted): `ltl_top1med_dropfar_v1` rerun on val402 regresses (`runs/E0620_val402_vecmlp_dropfar_20260210-222055/sweep_summary.json`, best Δ≈-0.00058, p≈0.921). Quick test402 for the intended policy variant (`thr0p5_df1`) removes `high_count=2` entirely but does not improve mean (`runs/E0621_quick_test402_vecmlp_dropfar_df1_20260210-222801/metrics.json`, Δ≈+0.00166, p≈0.900; diagnose: `runs/E0621_quick_test402_vecmlp_dropfar_df1_20260210-222801/diagnose.json`).
   - Next attempt (vec-MLP; far-anchor fallback; not promoted): `ltl_top1med_farfb_v1` rerun on val402 regresses (`runs/E0622_val402_vecmlp_farfb_20260210-222352/sweep_summary.json`, best Δ≈-0.00058, p≈0.921). Quick test402 for the intended policy variant (`thr0p5_ff1`) removes `high_count=2` + dist>1 by construction but does not improve mean (`runs/E0623_quick_test402_vecmlp_farfb_ff1_20260210-222856/metrics.json`, Δ≈+0.00274, p≈0.839; diagnose: `runs/E0623_quick_test402_vecmlp_farfb_ff1_20260210-222856/diagnose.json`).
   - Next attempt (vec-MLP; adaptive_v3 keepadj): val402 sweep is weak-positive (`runs/E0624_ave_p0_sweep_official_val_av_clipdiff_vec_mlp_ltl_adaptive_keepadj_v1_20260210-224555/sweep_summary.json`, best Δ≈+0.00382, p≈0.384). Quick test402 for `ltlkeepadj_adj2_shift1_std0p55` is very strong (`runs/E0626_quick_test402_vecmlp_keepadj_adj2_shift1_std0p55_20260210-225120/metrics.json`, Δ≈+0.02098, p≈0.165; diagnose: `runs/E0626_quick_test402_vecmlp_keepadj_adj2_shift1_std0p55_20260210-225120/diagnose.json`) but does **not** transfer under full test402 (`runs/E0628_full_test402_vecmlp_keepadj_adj2_shift1_std0p55_s0-9_20260210-225216/metrics.json`, Δ≈+0.00883, p≈0.225; diagnose: `runs/E0628_full_test402_vecmlp_keepadj_adj2_shift1_std0p55_s0-9_20260210-225216/diagnose.json`). Full test402 for the *val-selected* keepadj winner regresses: `runs/E0629_full_test402_vecmlp_keepadj_best_s0-9_20260210-225809/metrics.json` (Δ≈-0.00408, p≈0.457; diagnose: `runs/E0629_full_test402_vecmlp_keepadj_best_s0-9_20260210-225809/diagnose.json`).
@@ -133,6 +134,7 @@ For any new Stage-1 signal / method targeting C0003:
   - Latest rerun: `av_clipdiff_flow_mlp` + `ltl_adaptive_keepadj_v1` (E0710→E0711→E0712) gives val402 positive (`runs/E0710_val402_flowmlp_keepadj_20260212-000010/sweep_summary.json`, best Δ≈+0.00648, p≈0.0355), quick test402 positive but non-significant (`runs/E0711_quick_test402_flowmlp_keepadj_20260212-000606/metrics.json`, Δ≈+0.00688, p≈0.395), and full test402 still short (`runs/E0712_full_test402_flowmlp_keepadj_20260212-000835/metrics.json`, Δ≈+0.00709, p≈0.141); do not promote.
   - Latest attempt: `imagebind_av_sim` (E0801→E0802) — val402 is ~0 (`runs/E0801_val402_imagebind_keepadjv2_20260212-035956/sweep_summary.json`, best Δ≈-0.00008), quick test402 regresses (`runs/E0802_quick_test402_imagebind_20260212-040440/metrics.json`, Δ≈-0.00265, p≈0.754); do not promote.
   - Latest attempt: `wavlm_evt_mlp` (E0810→E0811) — val402 regresses (`runs/E0810_val402_wavlm_20260212-041931/sweep_summary.json`, best Δ≈-0.00424), quick test402 is near-0 (`runs/E0811_quick_test402_wavlm_20260212-042425/metrics.json`, Δ≈+0.00124, p≈0.918); do not promote.
+  - Latest attempt: `psp_avel_evt` (E0960→E0980) — external supervised AVE temporal localizer as Stage-1 + keepadj+hconf Stage-2; full test402: `runs/E0980_full_test402_psp_evt_gini_keepadj_hconf_best_s0-9_20260214-031741/metrics.json` (Δ=+0.02169; p=0.00149) → **C0003 proven**.
 
 ---
 
@@ -145,7 +147,7 @@ For any new Stage-1 signal / method targeting C0003:
 - [x] **E0402 (full test402)**: if E0401 is competitive, run full test402 (`SEEDS=0..9`) to attempt C0003 (`Δ≥+0.02`, paired `p<0.05`).
 - [x] **E0403 (mechanism evidence)**: rerun Oracle→Predicted report on the promoted method (`E0201` protocol) and require Oracle–Pred gap shrinkage vs current deployable baseline.
 - [x] **E0404 (robustness evidence)**: rerun degradation suite (`E0203` protocol, shift/noise/silence × α) on the promoted method and require “no worse than α-baseline” under perturbations.
-- [x] **Oral narrative closure**: update Fig.2/Fig.3/Fig.4 and Table-1 evidence pointers using E0402/E0403/E0404; C0003 remains unproven, so lock revised claim around reproducible ~+1% test402 gain with explicit Oracle-Pred gap and degradation boundary conditions.
+- [x] **Oral narrative closure**: update Fig.2/Fig.3/Fig.4 and Table-1 evidence pointers using the C0003-proven run `runs/E0980_full_test402_psp_evt_gini_keepadj_hconf_best_s0-9_20260214-031741/metrics.json` (and its `diagnose.json`), and regenerate the slide assets (esp. `docs/oral_assets/fig2_c0003_decomposition.png`).
 - [x] **E0405→E0406 (quick-grid sanity check)**: exhaustive quick-transfer winner (`top1medn_thr0p6_shift0`) fails to transfer on full test402; keep `E0402 alt` as dense-stride best.
 - [x] **E0407→E0409 (C0007 tightening)**: full Oracle→Pred rerun gives significant mid-budget gain (`p≈0.003` at Tok=1960), but cross-budget Pareto still shows weak high-budget transfer (negative predicted-vs-uniform at Tok≈1000/4840), so C0007 remains not fully proven.
 

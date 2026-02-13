@@ -1,6 +1,6 @@
 # Oral Related Work Alignment (R0700)
 
-Date: 2026-02-11
+Date: 2026-02-14
 
 This page aligns our "listen-then-look" QA add-on with the closest public work, focusing on reviewer-facing differentiators:
 
@@ -23,6 +23,7 @@ This page aligns our "listen-then-look" QA add-on with the closest public work, 
 
 - AVE (ECCV 2018) baseline code: https://github.com/YapengTian/AVE-ECCV18
 - AVE-CLIP (2022): https://arxiv.org/abs/2210.05060
+- CPSP / PSP (2022; contrastive positive sample propagation for AVE localization): https://arxiv.org/abs/2211.09980
 - CACE-Net (2024): https://arxiv.org/abs/2408.01952
 - UniAV (2024): https://arxiv.org/abs/2404.03179
 - Towards Open-Vocabulary Audio-Visual Event Localization (2024): https://arxiv.org/abs/2411.11278
@@ -31,7 +32,10 @@ This page aligns our "listen-then-look" QA add-on with the closest public work, 
 
 - LongVA (2024): https://arxiv.org/abs/2406.16852
 - LongVU (2024): https://arxiv.org/abs/2410.17434
+- Logic-in-Frames (2024; reconstructive selection): https://arxiv.org/abs/2410.02135
 - VidF4 (2024): https://arxiv.org/abs/2407.15047
+- Flow4Agent (2025; adaptive video agent): https://arxiv.org/abs/2501.01820
+- VSI (2025; inference-time dynamic selection): https://arxiv.org/abs/2506.17261
 - Efficient Video Sampling (EVS) (2025): https://arxiv.org/abs/2510.14624
 - M-LLM based Video Frame Selection (2025): https://arxiv.org/abs/2502.19680
 - Adaptive Keyframe Sampling (CVPR 2025): https://openaccess.thecvf.com/content/CVPR2025/html/Tang_Adaptive_Keyframe_Sampling_for_Long_Video_Understanding_CVPR_2025_paper.html
