@@ -32,10 +32,10 @@ This page aligns our "listen-then-look" QA add-on with the closest public work, 
 
 - LongVA (2024): https://arxiv.org/abs/2406.16852
 - LongVU (2024): https://arxiv.org/abs/2410.17434
-- Logic-in-Frames (2024; reconstructive selection): https://arxiv.org/abs/2410.02135
+- Logic-in-Frames (2025; dynamic keyframe search via semantic-logical verification): https://arxiv.org/abs/2503.13139
 - VidF4 (2024): https://arxiv.org/abs/2407.15047
-- Flow4Agent (2025; adaptive video agent): https://arxiv.org/abs/2501.01820
-- VSI (2025; inference-time dynamic selection): https://arxiv.org/abs/2506.17261
+- Flow4Agent (2025; motion-prior long-form video agent): https://arxiv.org/abs/2510.05836
+- VSI (2025; visual-subtitle integration keyframe selection): https://arxiv.org/abs/2508.06869
 - Efficient Video Sampling (EVS) (2025): https://arxiv.org/abs/2510.14624
 - M-LLM based Video Frame Selection (2025): https://arxiv.org/abs/2502.19680
 - Adaptive Keyframe Sampling (CVPR 2025): https://openaccess.thecvf.com/content/CVPR2025/html/Tang_Adaptive_Keyframe_Sampling_for_Long_Video_Understanding_CVPR_2025_paper.html
