@@ -33,8 +33,18 @@ This is intentionally *not* a full TODO list.
 
 - [x] C4: Decide whether to add an extra long-video benchmark (only if it materially reduces reviewer risk).
   - Default: **NO** (already have IntentQA/EgoSchema/AVQA + EPIC-SOUNDS under strict budgets).
-  - If YES: pick exactly one benchmark (Video-MME or LongVideoBench), run a small, reproducible subset (e.g., `n=256`) with `text_only/random` controls and fixed `B_FRAMES` budgets.
-  - Decision: NO extra benchmark for vNext; treat Video-MME/LongVideoBench as “related-work + optional future eval”.
+  - If YES: pick exactly one benchmark (Video-MME or LongVideoBench), run a small, reproducible subset (e.g., `n=256`) with priors controls (`text_only`, `random_frame1`) and fixed `B_FRAMES` budgets.
+  - Decision: **YES** (Video-MME controlled transfer; `n=256` on `test` split; YouTube-backed, best-effort download).
+
+- [x] C7: Video-MME controlled transfer (minimal but reviewer-proof).
+  - Goal: one mainstream long-video benchmark with **fixed VLM + fixed budget + only selection changes**, plus priors controls.
+  - Must report: `uniform`, `random`, `random_frame1`, `text_only` and ≥2 strong baselines (`qframe_gumbel_clip`, `maxinfo_maxvol_clip`, `mdp3_dpp_clip`) under the same `B_FRAMES`.
+  - Commands:
+    - `MAX_SECONDS=180 LIMIT=256 SEED=0 JOBS=4 bash scripts/datasets/videomme_install.sh`
+    - `B_FRAMES=16 MAX_SECONDS=180 LIMIT=256 SEED=0 bash scripts/e1101_videomme_vlm_eval.sh`
+  - Artifacts:
+    - `runs/E1101_videomme_vlm_eval_20260214-233012/metrics.json`
+    - `runs/E1101_videomme_vlm_eval_20260214-233012/predictions.jsonl`
 
 - [x] C5: Reproducibility seal before freeze.
   - Commands:

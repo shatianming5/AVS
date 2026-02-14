@@ -2305,6 +2305,35 @@ def check_qa_plan_generation(run_dir: Path) -> SmokeResult:
     return SmokeResult(name="qa_plan_generation", ok=ok, details=payload if ok else {"error": "qa_plan_generation smoke failed", **payload})
 
 
+def check_qa_baselines_determinism(run_dir: Path) -> SmokeResult:
+    import numpy as np
+
+    from avs.pipeline.qa_plan_generation import _gumbel_topk_indices, _greedy_dpp_map_indices, _greedy_maxvol_indices
+
+    rng = np.random.default_rng(0)
+    T, D, K = 12, 8, 5
+    emb = rng.standard_normal((T, D)).astype(np.float64)
+    w = rng.random(T).astype(np.float64).tolist()
+
+    g1 = _gumbel_topk_indices(w, K, seed=123)
+    g2 = _gumbel_topk_indices(w, K, seed=123)
+    mv1 = _greedy_maxvol_indices(emb, K)
+    mv2 = _greedy_maxvol_indices(emb, K)
+
+    L = emb @ emb.T + 1e-3 * np.eye(T, dtype=np.float64)
+    dpp1 = _greedy_dpp_map_indices(L, K)
+    dpp2 = _greedy_dpp_map_indices(L, K)
+
+    ok = True
+    ok = ok and g1 == g2 and len(g1) == K and len(set(g1)) == K and all(0 <= i < T for i in g1)
+    ok = ok and mv1 == mv2 and len(mv1) == K and len(set(mv1)) == K and all(0 <= i < T for i in mv1)
+    ok = ok and dpp1 == dpp2 and 0 < len(dpp1) <= K and len(set(dpp1)) == len(dpp1) and all(0 <= i < T for i in dpp1)
+
+    payload = {"gumbel_topk": g1, "maxvol": mv1, "dpp": dpp1, "T": T, "D": D, "K": K}
+    _write_json(run_dir, "qa_baselines_determinism.json", payload)
+    return SmokeResult(name="qa_baselines_determinism", ok=ok, details=payload if ok else {"error": "qa_baselines_determinism smoke failed", **payload})
+
+
 def check_ltl_budget_allocator_knapsack(run_dir: Path) -> SmokeResult:
     from avs.budget.vis_budget import VisualConfig
     from avs.metrics.time_windows import TimeWindow
@@ -2407,5 +2436,6 @@ handlers = {
     "egoschema_io": check_egoschema_io,
     "q_l2l_relevance": check_q_l2l_relevance,
     "qa_plan_generation": check_qa_plan_generation,
+    "qa_baselines_determinism": check_qa_baselines_determinism,
     "ltl_budget_allocator_knapsack": check_ltl_budget_allocator_knapsack,
 }

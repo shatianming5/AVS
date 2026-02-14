@@ -102,6 +102,9 @@ Long-video QA add-on budget curves (slide exports):
 - IntentQA: `docs/oral_assets/fig4_qa_budget_curve_intentqa.png`
 - AVQA: `docs/oral_assets/fig4_qa_budget_curve_avqa.png`
 
+Optional mainstream benchmark (controlled transfer; priors controls per VideoEval-Pro concerns):
+- Video-MME (n=239 kept; `B_FRAMES=16`, `MAX_SECONDS=180`, Qwen2-VL-2B; report `text_only/random_frame1`): `runs/E1101_videomme_vlm_eval_20260214-233012/metrics.json` (uniform=0.5272; `text_only`=0.3054; selection methods mostly non-positive vs uniform on this subset).
+
 ## 8) Reproducibility (What We Provide)
 
 We maintain:

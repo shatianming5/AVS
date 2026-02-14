@@ -115,3 +115,24 @@ python -m avs.datasets.avqa_download --split val --limit 256 --jobs 8
 Notes:
 - This repo includes a local ffmpeg bundle under `data/tools/ffmpeg/bin/` that is auto-added to PATH by our download/preprocess helpers.
 - For full-scale runs, expect some download failures due to removed/private YouTube videos; use `--write-meta-lists` to log ok/fail ids.
+
+---
+
+## 5) Video-MME (Long-video MCQ Benchmark)
+
+**Required for:** Optional controlled-transfer long-video benchmark (see `docs/experiment.md` E1100+).
+
+**Auto-download supported:** Partial.
+- Metadata: Yes (HF dataset snapshot).
+- Raw videos: Best-effort (yt-dlp from YouTube; availability may degrade over time).
+
+Expected local layout:
+- Metadata snapshot: `data/VideoMME/meta/test.jsonl`
+- Raw videos: `data/VideoMME/raw/videos/<youtube_id>.mp4`
+- Processed (fps=1 + audio): `data/VideoMME/processed/<youtube_id>/{audio.wav,frames/*.jpg}`
+
+Install (deterministic subset; downloads only the first `MAX_SECONDS` seconds per video):
+
+```bash
+MAX_SECONDS=180 LIMIT=256 SEED=0 JOBS=4 bash scripts/datasets/videomme_install.sh
+```

@@ -97,6 +97,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("egoschema_io", help="Smoke: EgoSchema metadata IO (best-effort)")
     sub.add_parser("q_l2l_relevance", help="Smoke: Q-L2L query relevance backends (BM25/TFIDF) + alpha gating")
     sub.add_parser("qa_plan_generation", help="Smoke: QA plan generation (scores -> alpha mixture selection)")
+    sub.add_parser("qa_baselines_determinism", help="Smoke: QA strong-baseline selection determinism (no model download)")
     sub.add_parser("ltl_budget_allocator_knapsack", help="Smoke: Stage-2 knapsack allocator (Lagrangian)")
     sub.add_parser("all", help="Run all smoke checks")
     return parser
@@ -162,6 +163,7 @@ def main(argv: list[str] | None = None) -> int:
             "egoschema_io",
             "q_l2l_relevance",
             "qa_plan_generation",
+            "qa_baselines_determinism",
             "ltl_budget_allocator_knapsack",
         ]
 

@@ -11,7 +11,16 @@ import hashlib
 
 from avs.datasets.intentqa import IntentQAItem, load_intentqa_split
 from avs.datasets.layout import intentqa_paths
-from avs.pipeline.qa_plan_generation import QASecSelection, build_scores, random_seconds, select_seconds_alpha_mixture, uniform_seconds
+from avs.pipeline.qa_plan_generation import (
+    QASecSelection,
+    build_scores,
+    random_seconds,
+    select_seconds_alpha_mixture,
+    select_seconds_maxinfo_maxvol_clip,
+    select_seconds_mdp3_dpp_clip,
+    select_seconds_qframe_gumbel_clip,
+    uniform_seconds,
+)
 from avs.preprocess.video_extract import ensure_processed_fps1
 from avs.vlm.qwen_vl import QwenVL, QwenVLConfig
 
@@ -118,6 +127,47 @@ def _eval_one(
             q_bar=0.0,
             reliability_metric="n/a",
         )
+    elif m == "random_frame1":
+        # Priors control: 1 random frame only (not equal-budget).
+        seconds = random_seconds(dur, 1, seed=int(seed))
+        sel = QASecSelection(
+            selected_seconds=seconds,
+            background_seconds=[],
+            anchor_seconds=seconds,
+            anchors=[],
+            alpha=0.0,
+            q_bar=0.0,
+            reliability_metric="n/a",
+        )
+    elif m == "qframe_gumbel_clip":
+        sel, dbg = select_seconds_qframe_gumbel_clip(
+            processed_dir=processed_dir,
+            query=item.question,
+            num_segments=int(dur),
+            budget_frames=int(budget_frames),
+            seed=int(seed),
+            clip_device=str(ql2l_clip_device),
+        )
+        scores_debug = {"details": dbg}
+    elif m == "maxinfo_maxvol_clip":
+        sel, dbg = select_seconds_maxinfo_maxvol_clip(
+            processed_dir=processed_dir,
+            query=item.question,
+            num_segments=int(dur),
+            budget_frames=int(budget_frames),
+            clip_device=str(ql2l_clip_device),
+        )
+        scores_debug = {"details": dbg}
+    elif m == "mdp3_dpp_clip":
+        sel, dbg = select_seconds_mdp3_dpp_clip(
+            processed_dir=processed_dir,
+            query=item.question,
+            num_segments=int(dur),
+            budget_frames=int(budget_frames),
+            seed=int(seed),
+            clip_device=str(ql2l_clip_device),
+        )
+        scores_debug = {"details": dbg}
     else:
         scores_debug = build_scores(
             processed_dir=processed_dir,

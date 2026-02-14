@@ -214,3 +214,38 @@ class EgoSchemaPaths:
 
 def egoschema_paths() -> EgoSchemaPaths:
     return EgoSchemaPaths(hf_repo_dir=data_dir() / "hf_repos" / "egoschema", root=data_dir() / "EgoSchema")
+
+
+@dataclass(frozen=True)
+class VideoMMEPaths:
+    """
+    Video-MME layout (controlled transfer; YouTube-backed).
+
+    - Metadata snapshot: data/VideoMME/meta/test.jsonl (generated via `ensure_videomme_meta`)
+    - Raw videos (yt-dlp): data/VideoMME/raw/videos/<youtube_id>.mp4
+    - Processed: data/VideoMME/processed/<youtube_id>/{audio.wav,frames/*.jpg}
+    """
+
+    root: Path
+
+    @property
+    def meta_dir(self) -> Path:
+        return self.root / "meta"
+
+    @property
+    def raw_videos_dir(self) -> Path:
+        return self.root / "raw" / "videos"
+
+    @property
+    def processed_dir(self) -> Path:
+        return self.root / "processed"
+
+    def raw_video_path(self, youtube_id: str) -> Path:
+        return self.raw_videos_dir / f"{str(youtube_id)}.mp4"
+
+    def processed_video_dir(self, youtube_id: str) -> Path:
+        return self.processed_dir / str(youtube_id)
+
+
+def videomme_paths() -> VideoMMEPaths:
+    return VideoMMEPaths(root=data_dir() / "VideoMME")

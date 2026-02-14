@@ -1,6 +1,6 @@
 # Evidence Matrix
 
-- Generated: `2026-02-14 03:37:47`
+- Generated: `2026-02-15 00:54:03`
 - Plan: `docs/plan.md`
 
 | Conclusion | Checked in plan | Local artifacts present? | Notes |
@@ -14,6 +14,7 @@
 | `C0007` | yes | yes |  |
 | `C0008` | yes | yes |  |
 | `C0009` | yes | yes |  |
+| `C0010` | yes | yes |  |
 
 ## C0001: On AVE, under a strictly equal ViT token budget, Audio-anchored sampling (with a lightweight temporal head) improves segment-level accuracy vs Uniform sampling and Random anchors.
 
@@ -48,6 +49,10 @@
 - All referenced artifacts exist locally.
 
 ## C0009: Stage-1 anchor quality degrades smoothly under shift/noise/silence on official AVE test402 for energy anchors (Recall@K,Δ).
+
+- All referenced artifacts exist locally.
+
+## C0010: Provide a controlled-transfer evaluation on a mainstream long-video QA benchmark (Video-MME) under a fixed frame budget, with explicit priors controls and strong selection baselines.
 
 - All referenced artifacts exist locally.
 

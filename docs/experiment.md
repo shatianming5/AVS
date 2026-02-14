@@ -1707,6 +1707,26 @@
     - `degradation_suite.json`: 18-row grid complete; per-row `recall_by_delta` present; `fallback_used_frac` reported
   - logs: `artifacts/experiments/E0203/run.log`
 
+- [x] E1100: Video-MME install (metadata snapshot + deterministic YouTube subset download)
+  - command: `MAX_SECONDS=180 LIMIT=256 SEED=0 JOBS=8 MIN_VIDEOS=128 TIMEOUT_SECONDS=900 bash scripts/datasets/videomme_install.sh`
+  - configs: []
+  - seeds: [0]
+  - required_artifacts:
+    - `data/VideoMME/meta/test.jsonl` (generated snapshot)
+    - `runs/videomme_download_20260214-230517/download_report.json`
+  - required_metrics:
+    - `download_report.json`: `downloaded_ok >= min_videos` and `max_seconds == 180`
+
+- [x] E1101: Video-MME controlled transfer (n=256; fixed `B_FRAMES`; report priors controls + strong baselines)
+  - command: `B_FRAMES=16 MAX_SECONDS=180 LIMIT=256 SEED=0 METHODS=uniform,random,random_frame1,text_only,audio,fused,ql2l_clip,qframe_gumbel_clip,maxinfo_maxvol_clip,mdp3_dpp_clip DEVICE=cuda:0 QL2L_CLIP_DEVICE=cuda:1 bash scripts/e1101_videomme_vlm_eval.sh`
+  - configs: []
+  - seeds: [0]
+  - required_artifacts:
+    - `runs/E1101_videomme_vlm_eval_20260214-233012/metrics.json`
+    - `runs/E1101_videomme_vlm_eval_20260214-233012/predictions.jsonl`
+  - required_metrics:
+    - `metrics.json`: include `text_only`, `random_frame1` and at least 2 strong baselines (`qframe_gumbel_clip`, `maxinfo_maxvol_clip`, `mdp3_dpp_clip`)
+
 ## Results
 | id | status | key_metrics | artifacts | notes |
 |---|---|---|---|---|
@@ -1826,6 +1846,8 @@
 | E0978 | success | val402 sweep (PSP evt; keepadj hconf): best=`ltlgini_keepadj_gini0p45_hconf0p5`, Δ=+0.00765; p=0.6190 | `runs/E0978_val402_psp_evt_gini_keepadj_hconf_v1_20260214-030933/` | promoted to quick |
 | E0979 | success | quick test402 (PSP evt; keepadj hconf best): anchored=0.73806 vs uniform=0.71294 (Δ=+0.02512; p=0.1567) | `runs/E0979_quick_test402_psp_evt_gini_keepadj_hconf_best_20260214-031126/` | diagnose fallback_used_frac≈0.709; promoted to full |
 | E0980 | success | full test402 (PSP evt; keepadj hconf best): anchored=0.73791 vs uniform=0.71622 (Δ=+0.02169; p=0.00149) | `runs/E0980_full_test402_psp_evt_gini_keepadj_hconf_best_s0-9_20260214-031741/` | diagnose fallback_used_frac≈0.709; **C0003 hard gate met** |
+| E1100 | success | Video-MME install: downloaded_ok=212/229 (fail=17); `MAX_SECONDS=180`, `LIMIT=256` | `runs/videomme_download_20260214-230517/download_report.json` | YouTube availability is best-effort; downloader clips to first 3 minutes |
+| E1101 | success | Video-MME test (n=239 kept; `B_FRAMES=16`, `MAX_SECONDS=180`): uniform=0.5272; `text_only`=0.3054 (Δ=-0.2218); `random_frame1`=0.3640; `maxinfo_maxvol_clip`=0.5356 (Δ=+0.0084; CI includes 0); most selection methods ≤ uniform on this subset | `runs/E1101_videomme_vlm_eval_20260214-233012/metrics.json` | fixed VLM, only selection changes; priors controls included; YouTube-backed (skipped_videos=17) |
 
 > Note: The authoritative runnable queue for the current `docs/plan.md` is the checklist above. The `## Experiments` catalog below is an archive; its internal `[ ]` fields are not a TODO list.
 

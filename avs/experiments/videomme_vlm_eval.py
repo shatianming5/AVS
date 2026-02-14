@@ -9,8 +9,8 @@ from pathlib import Path
 
 import numpy as np
 
-from avs.datasets.egoschema import EgoSchemaItem, load_egoschema_split
-from avs.datasets.layout import egoschema_paths
+from avs.datasets.layout import videomme_paths
+from avs.datasets.videomme import VideoMMEItem, load_videomme_split
 from avs.pipeline.qa_plan_generation import (
     QASecSelection,
     build_scores,
@@ -29,8 +29,23 @@ from avs.vlm.qwen_vl import QwenVL, QwenVLConfig
 class MethodSummary:
     method: str
     n: int
-    acc: float | None
+    acc: float
     invalid_rate: float
+
+
+def _bootstrap_ci_mean(xs: np.ndarray, *, seed: int, n_boot: int = 1000, alpha: float = 0.05) -> dict:
+    rng = np.random.default_rng(int(seed))
+    n = int(xs.size)
+    if n <= 0:
+        return {"mean": 0.0, "lo": 0.0, "hi": 0.0, "n": 0}
+    means = []
+    for _ in range(int(n_boot)):
+        idx = rng.integers(0, n, size=n)
+        means.append(float(xs[idx].mean()))
+    means = np.asarray(means, dtype=np.float64)
+    lo = float(np.quantile(means, float(alpha / 2.0)))
+    hi = float(np.quantile(means, float(1.0 - alpha / 2.0)))
+    return {"mean": float(xs.mean()), "lo": lo, "hi": hi, "n": n, "n_boot": int(n_boot)}
 
 
 def _duration_seconds_from_frames(frames_dir: Path) -> int:
@@ -58,7 +73,7 @@ def _frame_paths(processed_dir: Path, seconds: list[int]) -> list[Path]:
 def _eval_one(
     *,
     model: QwenVL,
-    item: EgoSchemaItem,
+    item: VideoMMEItem,
     processed_dir: Path,
     method: str,
     budget_frames: int,
@@ -71,13 +86,14 @@ def _eval_one(
 ) -> dict:
     dur = min(int(_duration_seconds_from_frames(processed_dir / "frames")), int(max_seconds))
     if dur <= 0:
-        raise ValueError(f"empty processed frames for video_idx={item.video_idx}")
+        raise ValueError(f"empty processed frames for youtube_id={item.youtube_id}")
 
     t0 = time.time()
     sel: QASecSelection | None = None
     scores_debug: dict | None = None
-
     m = str(method)
+
+    row_budget = int(budget_frames)
     if m == "uniform":
         seconds = uniform_seconds(dur, int(budget_frames))
         sel = QASecSelection(
@@ -100,25 +116,25 @@ def _eval_one(
             q_bar=0.0,
             reliability_metric="n/a",
         )
-    elif m == "text_only":
-        # Language-bias baseline: evaluate the VLM without providing any frames.
-        sel = QASecSelection(
-            selected_seconds=[],
-            background_seconds=[],
-            anchor_seconds=[],
-            anchors=[],
-            alpha=1.0,
-            q_bar=0.0,
-            reliability_metric="n/a",
-        )
     elif m == "random_frame1":
         seconds = random_seconds(dur, 1, seed=int(seed))
+        row_budget = 1
         sel = QASecSelection(
             selected_seconds=seconds,
             background_seconds=[],
             anchor_seconds=seconds,
             anchors=[],
             alpha=0.0,
+            q_bar=0.0,
+            reliability_metric="n/a",
+        )
+    elif m == "text_only":
+        sel = QASecSelection(
+            selected_seconds=[],
+            background_seconds=[],
+            anchor_seconds=[],
+            anchors=[],
+            alpha=1.0,
             q_bar=0.0,
             reliability_metric="n/a",
         )
@@ -176,22 +192,25 @@ def _eval_one(
         raise ValueError(f"unknown strategy={strategy!r}; expected 'ppl' or 'generate'")
 
     ok = bool(ans.ok) and ans.pred_idx is not None
-    correct = None
-    if item.answer_idx is not None:
-        correct = bool(ok and int(ans.pred_idx) == int(item.answer_idx))
-
+    correct = bool(ok and item.answer_idx is not None and int(ans.pred_idx) == int(item.answer_idx))
     return {
         "ok": True,
-        "question_idx": str(item.question_idx),
-        "video_idx": str(item.video_idx),
+        "question_id": str(item.question_id),
+        "video_id": str(item.video_id),
+        "youtube_id": str(item.youtube_id),
+        "duration_bucket": str(item.duration),
+        "domain": str(item.domain),
+        "sub_category": str(item.sub_category),
+        "task_type": str(item.task_type),
         "method": str(m),
-        "budget_frames": int(budget_frames),
+        "budget_frames": int(row_budget),
+        "max_seconds": int(max_seconds),
         "duration_seconds": int(dur),
         "selected": sel.to_jsonable(),
-        "scores_debug": None if scores_debug is None else scores_debug["details"],
+        "scores_debug": None if scores_debug is None else scores_debug.get("details"),
         "pred_idx": None if ans.pred_idx is None else int(ans.pred_idx),
         "answer_idx": None if item.answer_idx is None else int(item.answer_idx),
-        "correct": correct,
+        "correct": bool(correct),
         "invalid": bool(not ok),
         "timings": {"stage1_s": float(stage1_s), **ans.timings},
         "raw_text": str(ans.raw_text),
@@ -199,24 +218,18 @@ def _eval_one(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="EgoSchema VLM eval / prediction generation under budgeted frame selection.")
-    p.add_argument("--config", type=str, default="MC", choices=["MC", "MC_PPL", "Subset", "GENERATION"])
+    p = argparse.ArgumentParser(description="Video-MME VLM evaluation under budgeted frame selection (controlled transfer).")
     p.add_argument("--split", type=str, default="test")
-    p.add_argument("--limit", type=int, default=64)
-    p.add_argument("--methods", type=str, default="uniform,ql2l_clap,ql2l_asr_bm25", help="Comma-separated methods")
-    p.add_argument("--budget-frames", type=int, default=16)
-    p.add_argument("--max-seconds", type=int, default=120)
+    p.add_argument("--limit", type=int, default=256)
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--order", type=str, default="hash", choices=["hash", "original"])
+    p.add_argument("--methods", type=str, required=True, help="Comma-separated methods (uniform is auto-added if missing).")
+    p.add_argument("--budget-frames", type=int, default=16)
+    p.add_argument("--max-seconds", type=int, default=180)
     p.add_argument("--strategy", type=str, default="ppl", choices=["ppl", "generate"])
     p.add_argument("--out-dir", type=Path, required=True)
-    p.add_argument(
-        "--resume",
-        action="store_true",
-        help=(
-            "If out_dir/predictions.jsonl already exists, append missing rows and skip already-evaluated "
-            "(question_idx, video_idx, method) triples. Useful for long runs that may be interrupted."
-        ),
-    )
+    p.add_argument("--allow-missing-videos", action="store_true")
+    p.add_argument("--min-items", type=int, default=128)
 
     p.add_argument("--model-name", type=str, default=QwenVLConfig.model_name)
     p.add_argument("--device", type=str, default=QwenVLConfig.device)
@@ -234,92 +247,61 @@ def main(argv: list[str] | None = None) -> int:
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    items = load_egoschema_split(config=str(args.config), split=str(args.split), limit=int(args.limit) if args.limit else None)
+    items = load_videomme_split(split=str(args.split), limit=int(args.limit), seed=int(args.seed), order=str(args.order))
     methods = [m.strip() for m in str(args.methods).split(",") if m.strip()]
     if not methods:
         raise SystemExit("empty --methods")
     if "uniform" not in methods:
         methods = ["uniform"] + methods
-    labels_available = all(it.answer_idx is not None for it in items)
 
-    pred_path = out_dir / "predictions.jsonl"
-    metrics_path = out_dir / "metrics.json"
-    resume = bool(args.resume) and pred_path.exists()
-
-    n_by_method: dict[str, int] = {m: 0 for m in methods}
-    invalid_by_method: dict[str, int] = {m: 0 for m in methods}
-    correct_by_method: dict[str, int] = {m: 0 for m in methods}
-    done_keys: set[tuple[str, str, str]] = set()
-    if resume:
-        if metrics_path.exists():
-            # If metrics.json exists, the run should already be complete.
-            print(f"[egoschema] --resume: found existing metrics.json; nothing to do: {metrics_path}", flush=True)
-            print(metrics_path)
-            return 0
-
-        print(f"[egoschema] --resume: scanning existing rows: {pred_path}", flush=True)
-        with pred_path.open("r", encoding="utf-8") as f:
-            for lineno, line in enumerate(f, start=1):
-                s = line.strip()
-                if not s:
-                    continue
-                try:
-                    row = json.loads(s)
-                except json.JSONDecodeError as e:
-                    raise RuntimeError(f"invalid JSON in {pred_path}:{lineno}: {e}") from e
-
-                qidx = str(row.get("question_idx", "")).strip()
-                vidx = str(row.get("video_idx", "")).strip()
-                m = str(row.get("method", "")).strip()
-                if not qidx or not vidx or not m:
-                    raise RuntimeError(f"missing keys in {pred_path}:{lineno}: {sorted(row.keys())}")
-                if m not in n_by_method:
-                    # Don't silently mix experiments in the same output dir.
-                    raise RuntimeError(f"unexpected method={m!r} in {pred_path}:{lineno} (methods={methods})")
-
-                key = (qidx, vidx, m)
-                if key in done_keys:
-                    continue
-                done_keys.add(key)
-
-                n_by_method[m] += 1
-                if bool(row.get("invalid")):
-                    invalid_by_method[m] += 1
-                if labels_available and bool(row.get("correct")):
-                    correct_by_method[m] += 1
-
-        print(
-            f"[egoschema] --resume: loaded {len(done_keys)} rows "
-            f"(n_by_method={n_by_method}, invalid_by_method={invalid_by_method})",
-            flush=True,
-        )
-
-    p = egoschema_paths()
-    if not p.videos_dir.exists():
-        raise FileNotFoundError(f"missing extracted EgoSchema videos dir: {p.videos_dir} (run scripts/datasets/egoschema_extract_videos.sh)")
-
-    # Preprocess only the videos we need (bounded by --limit).
-    vids = sorted({it.video_idx for it in items})
+    # Preprocess required videos once (YouTube-backed; allow missing/unavailable videos if requested).
+    p = videomme_paths()
+    vids = sorted({it.youtube_id for it in items})
     pre_meta: dict[str, dict] = {}
+    ok_vids: set[str] = set()
+    skipped_vids: list[dict] = []
     t_pre = time.time()
     for i, vid in enumerate(vids):
-        video_path = p.video_path(vid)
+        video_path = p.raw_video_path(vid)
         if not video_path.exists():
-            raise FileNotFoundError(f"missing EgoSchema video: {video_path}")
-        meta = ensure_processed_fps1(
-            video_path=video_path,
-            out_dir=p.processed_video_dir(vid),
-            sample_rate=16000,
-            start_offset_sec=0.5,
-            max_seconds=int(args.max_seconds),
-            force=False,
-        )
-        pre_meta[str(vid)] = meta
-        if (i + 1) % 50 == 0 or (i + 1) == len(vids):
-            print(f"[egoschema] preprocessed {i+1}/{len(vids)} videos", flush=True)
+            if bool(args.allow_missing_videos):
+                rec = {"youtube_id": str(vid), "reason": "missing_video", "video_path": str(video_path)}
+                skipped_vids.append(rec)
+                pre_meta[str(vid)] = {"ok": False, **rec}
+                continue
+            raise FileNotFoundError(f"missing VideoMME raw video: {video_path}")
+
+        try:
+            meta = ensure_processed_fps1(
+                video_path=video_path,
+                out_dir=p.processed_video_dir(vid),
+                sample_rate=16000,
+                start_offset_sec=0.5,
+                max_seconds=int(args.max_seconds),
+                force=False,
+            )
+            pre_meta[str(vid)] = meta
+            ok_vids.add(str(vid))
+        except Exception as e:  # noqa: BLE001
+            if not bool(args.allow_missing_videos):
+                raise
+            rec = {"youtube_id": str(vid), "reason": "preprocess_failed", "video_path": str(video_path), "error": repr(e)}
+            skipped_vids.append(rec)
+            pre_meta[str(vid)] = {"ok": False, **rec}
+
+        if (i + 1) % 20 == 0 or (i + 1) == len(vids):
+            print(f"[videomme] preprocessed {i+1}/{len(vids)} videos", flush=True)
     pre_s = float(time.time() - t_pre)
 
-    # Persist preprocessing metadata early so partial runs still produce debuggable artifacts.
+    if bool(args.allow_missing_videos):
+        items_before = int(len(items))
+        items = [it for it in items if str(it.youtube_id) in ok_vids]
+        if len(items) < int(args.min_items):
+            raise SystemExit(
+                f"too few items after filtering missing/corrupted videos: kept={len(items)} "
+                f"< min_items={int(args.min_items)} (before={items_before}, skipped_videos={len(skipped_vids)})"
+            )
+
     (out_dir / "preprocess_meta.json").write_text(json.dumps(pre_meta, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     model = QwenVL(
@@ -331,17 +313,15 @@ def main(argv: list[str] | None = None) -> int:
         )
     )
 
+    correct_by_method: dict[str, list[float]] = {m: [] for m in methods}
+    invalid_by_method: dict[str, list[float]] = {m: [] for m in methods}
     t0 = time.time()
-    open_mode = "a" if resume else "w"
-    with pred_path.open(open_mode, encoding="utf-8") as f:
+    with (out_dir / "predictions.jsonl").open("w", encoding="utf-8") as f:
         for j, it in enumerate(items):
-            proc_dir = p.processed_video_dir(it.video_idx)
-            h = hashlib.sha1(f"{it.question_idx}|{it.video_idx}".encode("utf-8")).hexdigest()
+            proc_dir = p.processed_video_dir(it.youtube_id)
+            h = hashlib.sha1(f"{it.question_id}|{it.youtube_id}".encode("utf-8")).hexdigest()
             item_seed = int(args.seed) + int(h[:8], 16)
             for m in methods:
-                key = (str(it.question_idx), str(it.video_idx), str(m))
-                if resume and key in done_keys:
-                    continue
                 row = _eval_one(
                     model=model,
                     item=it,
@@ -356,32 +336,41 @@ def main(argv: list[str] | None = None) -> int:
                     ql2l_clip_device=str(args.ql2l_clip_device),
                 )
                 f.write(json.dumps(row, ensure_ascii=False) + "\n")
-                done_keys.add(key)
-                n_by_method[str(m)] += 1
-                if bool(row["invalid"]):
-                    invalid_by_method[str(m)] += 1
-                if labels_available and bool(row["correct"]):
-                    correct_by_method[str(m)] += 1
-
+                correct_by_method[str(m)].append(1.0 if row["correct"] else 0.0)
+                invalid_by_method[str(m)].append(1.0 if row["invalid"] else 0.0)
             if (j + 1) % 10 == 0 or (j + 1) == len(items):
                 f.flush()
                 dt = time.time() - t0
-                print(f"[egoschema] eval {j+1}/{len(items)} items ({dt:.1f}s)", flush=True)
-
+                print(f"[videomme] eval {j+1}/{len(items)} items ({dt:.1f}s)", flush=True)
     eval_s = float(time.time() - t0)
 
     summaries: list[MethodSummary] = []
+    acc_by_method: dict[str, np.ndarray] = {}
     for m in methods:
-        n = int(n_by_method[str(m)])
-        inv = int(invalid_by_method[str(m)])
-        invalid_rate = float(inv / n) if n else 0.0
-        acc = float(correct_by_method[str(m)] / n) if (labels_available and n) else None
-        summaries.append(MethodSummary(method=str(m), n=n, acc=acc, invalid_rate=invalid_rate))
+        correct = np.asarray(correct_by_method[str(m)], dtype=np.float64)
+        invalid = np.asarray(invalid_by_method[str(m)], dtype=np.float64)
+        acc_by_method[str(m)] = correct
+        summaries.append(
+            MethodSummary(
+                method=str(m),
+                n=int(correct.size),
+                acc=float(correct.mean()) if correct.size > 0 else 0.0,
+                invalid_rate=float(invalid.mean()) if invalid.size > 0 else 0.0,
+            )
+        )
+
+    # Paired deltas vs uniform (item-wise).
+    uniform = acc_by_method["uniform"]
+    deltas: dict[str, dict] = {}
+    for m in methods:
+        if m == "uniform":
+            continue
+        diff = acc_by_method[str(m)] - uniform
+        deltas[str(m)] = _bootstrap_ci_mean(diff, seed=int(args.seed), n_boot=300, alpha=0.05)
 
     payload = {
         "ok": True,
-        "task": "EgoSchema",
-        "config": str(args.config),
+        "task": "VideoMME",
         "split": str(args.split),
         "n_items": int(len(items)),
         "methods": methods,
@@ -390,8 +379,12 @@ def main(argv: list[str] | None = None) -> int:
         "seed": int(args.seed),
         "strategy": str(args.strategy),
         "model": {"model_name": str(args.model_name), "device": str(args.device), "dtype": str(args.dtype)},
+        "subset": {"order": str(args.order), "limit": int(args.limit)},
         "timings_s": {"preprocess": float(pre_s), "eval": float(eval_s), "total": float(pre_s + eval_s)},
         "summary": [s.__dict__ for s in summaries],
+        "delta_vs_uniform": deltas,
+        "allow_missing_videos": bool(args.allow_missing_videos),
+        "skipped_videos": skipped_vids,
         "artifacts": {
             "predictions_jsonl": str(out_dir / "predictions.jsonl"),
             "metrics_json": str(out_dir / "metrics.json"),

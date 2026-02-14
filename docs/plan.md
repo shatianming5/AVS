@@ -2265,3 +2265,11 @@ For the “冲 oral / paper-ready” minimum-decisive checklist, see: `docs/oral
   - Experiments: E0203
   - Artifacts: `runs/E0203_degradation_energy_*/degradation_suite.json`
   - Evidence (local): mean Recall@K across 18 conditions is Δ0≈0.2240 (min≈0.2174, max≈0.2307), Δ1≈0.4767, Δ2≈0.6420; fallback_used_frac=0.0.
+
+- [x] C0010: Provide a controlled-transfer evaluation on a mainstream long-video QA benchmark (Video-MME) under a fixed frame budget, with explicit priors controls and strong selection baselines.
+  - Evidence required: `metrics.json` + `predictions.jsonl` for a deterministic subset (`n≈256`) under fixed `B_FRAMES`, including `text_only` and `random_frame1` controls and ≥2 strong baselines (`qframe_gumbel_clip`, `maxinfo_maxvol_clip`, `mdp3_dpp_clip`).
+  - Experiments: E1100 (install), E1101 (eval)
+  - Artifacts:
+    - `runs/videomme_download_*/download_report.json`
+    - `runs/E1101_videomme_vlm_eval_*/metrics.json`
+    - `runs/E1101_videomme_vlm_eval_*/predictions.jsonl`

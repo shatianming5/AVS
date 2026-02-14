@@ -16,6 +16,7 @@ This page aligns our "listen-then-look" QA add-on with the closest public work, 
 - EgoSchema (NeurIPS D&B 2023): https://arxiv.org/abs/2308.09126
 - LongVideoBench (2024): https://arxiv.org/abs/2407.15754
 - Video-MME (2024): https://arxiv.org/abs/2405.21075
+- VideoEval-Pro (2025; benchmark risk: MCQ priors / random-frame strength): https://arxiv.org/abs/2505.14640
 - AVQA (dataset repo): https://github.com/AlyssaYoung/AVQA
 - MUSIC-AVQA (CVPR 2022): https://arxiv.org/abs/2203.14072
 
@@ -77,7 +78,7 @@ This page aligns our "listen-then-look" QA add-on with the closest public work, 
 - We claim a **controlled budgeted transfer result**:
   - same VLM, same prompt style, same evaluation split,
   - only frame selection differs,
-  - and we include anti-cherry-pick controls (`random`, `text_only`, and negative baselines).
+  - and we include priors / anti-cherry-pick controls (`text_only`, `random`, and `random_frame1`), consistent with VideoEval-Pro-style concerns.
 
 ## 4) How this maps to current artifacts
 
