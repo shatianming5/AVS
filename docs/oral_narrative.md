@@ -14,7 +14,7 @@ We evaluate under **strict equal visual-token budgets**.
 - For AVE (10s clips): fixed budget points (see the multi-budget grid below).
 - For EPIC-SOUNDS (up to 120s): budget defined as `max_steps × base_res` (token-equivalent) with a deterministic equal-budget low/base/high plan for anchored methods.
 - Accounting artifacts:
-  - Budgeted Pareto report + plot: `runs/E0330_mde_pareto_grid_official_av_clipdiff_mlp_local_20260209-235305/pareto_report.json`, `runs/E0330_mde_pareto_grid_official_av_clipdiff_mlp_local_20260209-235305/pareto.png`
+  - Budgeted Pareto report + plot: `runs/E0330_mde_pareto_grid_official_psp_avel_evt_20260214-155549/pareto_report.json`, `runs/E0330_mde_pareto_grid_official_psp_avel_evt_20260214-155549/pareto.png`
   - Slide export: `docs/oral_assets/fig1_pareto.png`
   - Vision efficiency calibration (tokens↔latency reference): `runs/E0408_vision_efficiency_20260209-233151/vision_efficiency.json`
 
@@ -30,8 +30,8 @@ For each fixed budget, we always compare the same method family:
    - **Cheap-visual anchors** (tests “audio is not special?”)
 
 Deliverable that packages this into one “生死图”:
-- MDE Pareto grid: `runs/E0330_mde_pareto_grid_official_av_clipdiff_mlp_local_20260209-235305/pareto.png`
-- Oracle→Predicted gap (read `oracle_minus_predicted` deltas from `pareto_report.json`): `runs/E0330_mde_pareto_grid_official_av_clipdiff_mlp_local_20260209-235305/pareto_report.json`
+- MDE Pareto grid: `runs/E0330_mde_pareto_grid_official_psp_avel_evt_20260214-155549/pareto.png`
+- Oracle→Predicted gap (read `oracle_minus_predicted` deltas from `pareto_report.json`): `runs/E0330_mde_pareto_grid_official_psp_avel_evt_20260214-155549/pareto_report.json`
 
 ## 4) Main Mechanism Evidence (What Reviewers Must Believe)
 
@@ -40,7 +40,7 @@ Deliverable that packages this into one “生死图”:
 **(iii) Random/cheap-visual do not trivially match predicted (controls).**
 
 Key evidence pointers:
-- Oracle vs Predicted gap (multi-budget; includes token_budget=1960 under `triad=160_224_352`): `runs/E0330_mde_pareto_grid_official_av_clipdiff_mlp_local_20260209-235305/pareto_report.json`
+- Oracle vs Predicted gap (multi-budget; includes token_budget=1960 under `triad=160_224_352`): `runs/E0330_mde_pareto_grid_official_psp_avel_evt_20260214-155549/pareto_report.json`
 
 ### 4.1 C0003 (+2%) Decomposition (Why It’s Hard)
 
@@ -48,7 +48,7 @@ This is the “one-slide” explanation for why the `+2%` hard gate is hard, and
 
 - Slide export: `docs/oral_assets/fig2_c0003_decomposition.png`
 
-- Ceiling exists at fixed budget: in the multi-budget grid at `token_budget=1960` (`triad=160_224_352`), `oracle - uniform ≈ +0.03754` abs (`pareto_report.json`).
+- Ceiling exists at fixed budget: in the multi-budget grid at `token_budget=1960` (`triad=160_224_352`), `oracle - uniform ≈ +0.02944` abs (`pareto_report.json`).
 - Best deployable C0003 run meets the hard gate: `runs/E0980_full_test402_psp_evt_gini_keepadj_hconf_best_s0-9_20260214-031741/metrics.json` reports `anchored_top2 - uniform = +0.02169` (paired `p=0.00149`, `SEEDS=0..9`).
   - Prior best (pre-PSP): `runs/E0643_full_test402_vecmlp_keepadj_adj2_shift1_std0p55_df7_officialids_s0-9_20260211-001604/metrics.json` (Δ=+0.01045; `p≈0.0395`).
 - Key decomposition signal is still “dilution vs anchor-used buckets”, but the keepadj+hconf plan shifts the mixture toward higher-gain regimes (diagnose for E0980):
@@ -81,10 +81,11 @@ We pre-register and execute a **degradation protocol** (shift/noise/silence × �
 
 Evidence pointers:
 - Anchor-quality degradation suite (Recall@K,Δ grid): `runs/E0203_degradation_energy_20260209-061156/degradation_suite.json`
-- Downstream degradation-accuracy grid + alpha floor checks (rows=54): `runs/E0331_degradation_accuracy_av_clipdiff_mlp_local_20260209-235316/degradation_accuracy.json`
+- Downstream degradation-accuracy grid + alpha floor checks (rows=54): `runs/E0331_degradation_accuracy_psp_avel_evt_20260214-161014/degradation_accuracy.json`
   - Slide exports:
     - `docs/oral_assets/fig3_degradation_delta_acc_alpha0p5.png`
     - `docs/oral_assets/fig3_degradation_recall_d0_alpha0p5.png`
+  - Note: for `psp_avel_evt`, degradations are applied in score space (external teacher is not recomputed from raw audio).
 
 ## 7) Cross-Dataset Proxy (Long Video)
 

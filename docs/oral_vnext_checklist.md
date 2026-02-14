@@ -23,7 +23,7 @@ This is intentionally *not* a full TODO list.
 - [x] C2: Regenerate the 1-slide “C0003 decomposition” with the winning run.
   - Must include: Oracle ceiling, Oracle→Pred gap, and the two most harmful buckets (far-anchors / 2-high regime).
   - Evidence pointers:
-    - Oracle→Pred gap grid: `runs/E0330_mde_pareto_grid_official_av_clipdiff_mlp_local_20260209-235305/pareto_report.json`
+    - Oracle→Pred gap grid: `runs/E0330_mde_pareto_grid_official_psp_avel_evt_20260214-155549/pareto_report.json`
     - Diagnose (main): `runs/E0980_full_test402_psp_evt_gini_keepadj_hconf_best_s0-9_20260214-031741/diagnose.json`
     - Slide content: `docs/oral_narrative.md` (Section 4.1).
 

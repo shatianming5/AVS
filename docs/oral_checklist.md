@@ -27,7 +27,8 @@ Canon sources:
   - Goal: one plot answers “mechanism upper bound exists”, “predicted remains behind Oracle (and can regress)”, “not any window works”, and “Pareto holds over budgets”.
   - Runner/script: `bash scripts/e0330_mde_pareto_grid_official.sh` (see E0330 in `docs/experiment.md`).
   - Artifacts: `runs/E0330_*/pareto_report.json` + `runs/E0330_*/pareto.png` + per-budget raw metrics.
-  - Latest full: `runs/E0330_mde_pareto_grid_official_av_clipdiff_mlp_local_20260209-235305/{pareto_report.json,pareto.png}`.
+  - Latest full (PSP-aligned): `runs/E0330_mde_pareto_grid_official_psp_avel_evt_20260214-155549/{pareto_report.json,pareto.png}`.
+  - Historical reference (pre-PSP): `runs/E0330_mde_pareto_grid_official_av_clipdiff_mlp_local_20260209-235305/{pareto_report.json,pareto.png}`.
   - Slide export: `docs/oral_assets/fig1_pareto.png`
 
 ### B. “生死图 #2” — Evidence Alignment + Failure bucketing
@@ -46,7 +47,9 @@ Canon sources:
   - Goal: show predicted anchors degrade gracefully and never go below the computable α-baseline (uniform fallback).
   - Runner/script: `bash scripts/e0331_degradation_accuracy_official.sh` (see E0331 in `docs/experiment.md`).
   - Artifacts: `runs/E0331_*/degradation_accuracy.json` + plots.
-  - Latest full: `runs/E0331_degradation_accuracy_av_clipdiff_mlp_local_20260209-235316/degradation_accuracy.json` (`rows=54`, `alpha_floor_checks.num_fail=0`, `alpha_floor_checks.min_margin≈+0.00025`).
+  - Latest full (PSP-aligned): `runs/E0331_degradation_accuracy_psp_avel_evt_20260214-161014/degradation_accuracy.json` (`rows=54`, `alpha_floor_checks.num_fail=0`, `alpha_floor_checks.min_margin≈+0.000995`).
+    - Note: for `psp_avel_evt`, degradations are applied in score space (external teacher is not recomputed from raw audio).
+  - Historical reference (pre-PSP): `runs/E0331_degradation_accuracy_av_clipdiff_mlp_local_20260209-235316/degradation_accuracy.json`.
   - Slide exports:
     - `docs/oral_assets/fig3_degradation_delta_acc_alpha0p5.png`
     - `docs/oral_assets/fig3_degradation_recall_d0_alpha0p5.png`

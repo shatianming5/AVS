@@ -576,6 +576,7 @@ def run_oracle_vs_predicted_ave_official(
     eventness_method: str,
     cfg: P0Config,
     include_cheap_visual: bool,
+    scores_json: Path | None,
 ) -> dict:
     """
     Minimal decision experiment for MDE-2 on AVE: compare Oracle vs Predicted (and controls)
@@ -599,12 +600,45 @@ def run_oracle_vs_predicted_ave_official(
     labels_by_clip = {**_labels_for_ids(index, train_ids), **_labels_for_ids(index, eval_ids)}
     all_ids = sorted(set(train_ids + eval_ids))
 
-    # Predicted anchors: either from a direct score function (energy/stride/av_fused) or computed inside P0
-    # (e.g., supervised audio_basic_* methods).
-    scores_by_clip_override = None
-    if str(eventness_method) in ("energy", "energy_delta", "energy_stride_max", "av_fused", "av_fused_prod"):
+    # Predicted anchors:
+    # - Either from an explicit Stage-1 score cache (scores_json), OR
+    # - from a direct score function (energy/stride/av_fused), OR
+    # - computed inside P0 (e.g., supervised audio_basic_* methods).
+    scores_by_clip_override: dict[str, list[float]] | None = None
+    if scores_json is not None:
+        scores_json = Path(scores_json)
+        if scores_json.exists():
+            scores_by_clip_override = _load_scores_json(scores_json)
+        else:
+            scores_by_clip_override = {}
+
+        missing_scores = [cid for cid in all_ids if cid not in scores_by_clip_override]
+        if missing_scores:
+            from avs.experiments.ave_p0_sweep import _compute_scores_by_clip  # local import: heavy
+
+            computed = _compute_scores_by_clip(
+                clip_ids=missing_scores,
+                processed_dir=processed_dir,
+                caches_dir=caches_dir,
+                num_segments=10,
+                eventness_method=str(eventness_method),
+                audio_device=str(audio_device),
+                ast_pretrained=bool(ast_pretrained),
+                panns_random=False,
+                panns_checkpoint=None,
+                audiomae_random=False,
+                audiomae_checkpoint=None,
+                train_ids=train_ids,
+                labels_by_clip=labels_by_clip,
+            )
+            scores_by_clip_override.update({str(k): [float(x) for x in v] for k, v in computed.items()})
+            _write_scores_json(path=scores_json, eventness_method=str(eventness_method), num_segments=10, scores_by_clip=scores_by_clip_override)
+    elif str(eventness_method) in ("energy", "energy_delta", "energy_stride_max", "av_fused", "av_fused_prod"):
         scores_by_clip_override = _scores_predicted(
-            clip_ids=all_ids, processed_dir=processed_dir, num_segments=10, eventness_method=str(eventness_method)
+            clip_ids=all_ids,
+            processed_dir=processed_dir,
+            num_segments=10,
+            eventness_method=str(eventness_method),
         )
 
     if str(eventness_method) in ("energy_autoshift_clipdiff", "energy_autoshift_clipdiff_pos"):
@@ -1303,6 +1337,8 @@ def build_parser() -> argparse.ArgumentParser:
             "moe_energy_clipdiff",
             "vision_clipdiff",
             "panns",
+            # External supervised AVE temporal localizer as Stage-1 (use with --scores-json).
+            "psp_avel_evt",
             # Supervised audio-only eventness (computed inside P0).
             "audio_basic_lr",
             "audio_basic_mlp",
@@ -1335,6 +1371,18 @@ def build_parser() -> argparse.ArgumentParser:
             "vision_binary_lr",
             "vision_binary_mlp",
         ],
+    )
+    ovp.add_argument(
+        "--base-config-json",
+        type=Path,
+        default=None,
+        help="Optional best_config.json from `ave_p0_sweep` to fix all P0 knobs (including the low/base/high triad).",
+    )
+    ovp.add_argument(
+        "--scores-json",
+        type=Path,
+        default=None,
+        help="Optional Stage-1 score cache; missing ids will be filled and written back. Required for external Stage-1 methods like psp_avel_evt.",
     )
     ovp.add_argument("--include-cheap-visual", action="store_true", help="Also run cheap-visual anchors as a control.")
     ovp.add_argument("--audio-device", type=str, default="cpu", help="Device for audio probes like PANNs (e.g., cpu, cuda:0).")
@@ -1620,6 +1668,10 @@ def main(argv: list[str] | None = None) -> int:
             head="temporal_conv",
             temporal_kernel_size=int(args.temporal_kernel_size),
         )
+        if args.base_config_json is not None:
+            cfg_obj = json.loads(Path(args.base_config_json).read_text(encoding="utf-8"))
+            cfg = _p0_config_from_json(cfg_obj)
+            cfg = replace(cfg, patch_size=16)  # enforce the project-wide default
 
         rep = run_oracle_vs_predicted_ave_official(
             out_dir=args.out_dir,
@@ -1646,6 +1698,7 @@ def main(argv: list[str] | None = None) -> int:
             eventness_method=str(args.eventness_method),
             cfg=cfg,
             include_cheap_visual=bool(args.include_cheap_visual),
+            scores_json=Path(args.scores_json) if args.scores_json is not None else None,
         )
         print(rep["out_json"])
         return 0

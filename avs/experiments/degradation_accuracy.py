@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import random
 import time
 from dataclasses import replace
@@ -222,6 +223,72 @@ def _scores_energy_stride_max_augmented(
         float(s)
         for s in eventness_energy_stride_max_per_second(x, int(sr), num_segments=int(num_segments), stride_s=0.2, win_s=0.4)
     ]
+
+
+def _round_half_away_from_zero(x: float) -> int:
+    # Python's `round(±0.5)` uses bankers rounding; here we want ±0.5 -> ±1.
+    xf = float(x)
+    if xf >= 0.0:
+        return int(math.floor(xf + 0.5))
+    return int(math.ceil(xf - 0.5))
+
+
+def _shift_scores_pad_zero(scores: list[float], shift_steps: int, *, num_segments: int) -> list[float]:
+    """
+    Shift a per-segment score sequence by integer steps, padding with zeros.
+    Positive shift delays events (pads at the front); negative shift advances events.
+    """
+    s = [float(v) for v in (scores or [])[: int(num_segments)]]
+    if len(s) < int(num_segments):
+        s = s + [0.0] * (int(num_segments) - len(s))
+
+    k = int(shift_steps)
+    if k == 0:
+        return s
+    if k > 0:
+        k = min(k, int(num_segments))
+        return [0.0] * k + s[: int(num_segments) - k]
+
+    k = min(-k, int(num_segments))
+    return s[k:] + [0.0] * k
+
+
+def _scores_scorespace_augmented(
+    *,
+    base_scores: list[float],
+    shift_s: float,
+    snr_db: float,
+    silence_ratio: float,
+    rng: np.random.Generator,
+    num_segments: int,
+) -> list[float]:
+    """
+    Proxy corruption for external Stage-1 score caches (e.g., PSP):
+    apply shift/noise/silence directly in score space.
+    """
+    shift_steps = _round_half_away_from_zero(float(shift_s))
+    s = _shift_scores_pad_zero(list(base_scores), shift_steps, num_segments=int(num_segments))
+    arr = np.asarray(s, dtype=np.float32)
+
+    # Add Gaussian noise to achieve an approximate SNR in score space.
+    sig_power = float(np.mean(arr**2)) if arr.size else 0.0
+    if sig_power > 0.0:
+        snr_linear = float(10.0 ** (float(snr_db) / 10.0))
+        if snr_linear > 0.0:
+            noise_power = sig_power / snr_linear
+            noise_std = math.sqrt(max(0.0, float(noise_power)))
+            if noise_std > 0.0:
+                noise = rng.normal(loc=0.0, scale=noise_std, size=int(num_segments)).astype(np.float32, copy=False)
+                arr = arr + noise
+
+    # Randomly zero-out segments.
+    sil = float(silence_ratio)
+    if sil > 0.0:
+        mask = rng.random(int(num_segments)) < sil
+        arr = np.where(mask, 0.0, arr)
+
+    arr = np.clip(arr, 0.0, 1.0)
+    return [float(x) for x in arr.tolist()]
 
 
 def _build_visual_side_features(
@@ -733,6 +800,16 @@ def run_ave_official_degradation_accuracy(
                             rng=rng,
                             num_segments=int(num_segments),
                         )
+                    elif str(eventness_method) == "psp_avel_evt":
+                        # External teacher scores: degrade in score space as a proxy.
+                        scores = _scores_scorespace_augmented(
+                            base_scores=clean_scores_by_clip[cid],
+                            shift_s=float(shift_s),
+                            snr_db=float(snr_db),
+                            silence_ratio=float(silence_ratio),
+                            rng=rng,
+                            num_segments=int(num_segments),
+                        )
                     elif str(eventness_method) in ("av_clipdiff_mlp", "av_clipdiff_flow_mlp", "av_clipdiff_flow_mlp_stride"):
                         if av_model is None or visual_side_by_clip is None:
                             raise ValueError(f"{eventness_method} model not initialized")
@@ -967,7 +1044,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--eventness-method",
         type=str,
         default="av_clipdiff_mlp",
-        choices=["energy", "energy_delta", "energy_stride_max", "av_clipdiff_mlp", "av_clipdiff_flow_mlp", "av_clipdiff_flow_mlp_stride"],
+        choices=[
+            "energy",
+            "energy_delta",
+            "energy_stride_max",
+            "av_clipdiff_mlp",
+            "av_clipdiff_flow_mlp",
+            "av_clipdiff_flow_mlp_stride",
+            # External score caches (scores_json required); degradations are applied in score space.
+            "psp_avel_evt",
+        ],
     )
     p.add_argument("--base-config-json", type=Path, required=True, help="best_config.json from the current AVE-P0 winner (e.g. E0223).")
     p.add_argument("--scores-json", type=Path, required=True, help="Clean Stage-1 score cache (eventness_scores.json).")

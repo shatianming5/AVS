@@ -7,7 +7,7 @@ Regeneration sources are documented below so the exports are reproducible even i
 ## Figures
 
 - `fig1_pareto.png`
-  - Source: `runs/E0330_mde_pareto_grid_official_av_clipdiff_mlp_local_20260209-235305/pareto.png`
+  - Source: `runs/E0330_mde_pareto_grid_official_psp_avel_evt_20260214-155549/pareto.png`
 
 - `fig2_c0003_decomposition.png`
   - Source script: `scripts/oral/make_c0003_decomposition_fig.py`
@@ -20,7 +20,8 @@ Regeneration sources are documented below so the exports are reproducible even i
 
 - `fig3_degradation_delta_acc_alpha0p5.png`
 - `fig3_degradation_recall_d0_alpha0p5.png`
-  - Source: `runs/E0331_degradation_accuracy_av_clipdiff_mlp_local_20260209-235316/degradation_plots/*`
+  - Source: `runs/E0331_degradation_accuracy_psp_avel_evt_20260214-161014/degradation_plots/*`
+  - Note: for `psp_avel_evt`, E0331 applies shift/noise/silence **in score space** (external teacher is not recomputed from raw audio).
 
 - `fig4_qa_budget_curve_avqa.png`
   - Source: `runs/E0702_qa_budget_curve_20260211-164607/avqa_curve/budget_curve.png`

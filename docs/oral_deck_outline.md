@@ -7,7 +7,7 @@ This outline references committed slide assets under `docs/oral_assets/` and can
 ## Slide 1: Title + One-Line Claim
 
 - Title: Listen-then-Look (Audio as a Cheap Temporal Index)
-- One-line claim (revised claim): Under **strict equal visual-token budgets**, audio-guided candidate moments yield consistent gains with a large oracle ceiling, while exposing a measurable stage-1 reliability gap.
+- One-line claim: Under **strict equal visual-token budgets**, Listen-then-Look frame selection **beats uniform by +2.17pp on official AVE test402** (paired `p=0.00149`, `SEEDS=0..9`) while retaining a large oracle ceiling and a testable stage-1 reliability gap.
 
 ## Slide 2: Problem Setup (Budget Is the Contract)
 
@@ -32,9 +32,9 @@ This outline references committed slide assets under `docs/oral_assets/` and can
 
 - Insert: `docs/oral_assets/fig2_c0003_decomposition.png`
 - Talking points:
-  - oracle ceiling vs best deployable gap (stage-1 reliability)
+  - oracle ceiling vs deployable gap (stage-1 reliability)
   - dilution (fallback fraction) + harmful buckets (far anchors / 2-high regime)
-  - this explains why the hard gate is not reached yet without a *new* stage-1 signal
+  - C0003 is met by PSP/CPSP Stage-1 + keepadj+hconf Stage-2 because it shifts the mixture toward the high-gain regimes (while still leaving oracle headroom)
 
 ## Slide 6: Life-or-Death Figure #3 (Robustness / Alpha Floor)
 
@@ -62,11 +62,10 @@ This outline references committed slide assets under `docs/oral_assets/` and can
 ## Slide 9: Limitations + What Would Make +2% Happen
 
 - Limitation: stage-1 reliability; far-anchor / 2-high harm regimes.
-- Concrete future: new stage-1 signal (not energy/clipdiff/panns/ast/fused), validated by the pre-registered promotion gate.
+- Concrete future: distill the teacher-style stage-1 into a deployable signal (not energy/clipdiff/panns/ast/fused), validated by the pre-registered promotion gate.
 
 ## Slide 10: Reproducibility / Artifact Map
 
 - “Seals”: `bash scripts/datasets/verify_all.sh`, `python scripts/plan_evidence_matrix.py --write-docs-md`, `python -m avs.smoke`
 - Ledger: `docs/experiment.md`
 - Evidence: `docs/evidence_matrix.md`
-

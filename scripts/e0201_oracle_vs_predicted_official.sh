@@ -47,6 +47,28 @@ SEEDS="${SEEDS:-0,1,2,3,4,5,6,7,8,9}"
 
 EVENTNESS="${EVENTNESS:-energy}"
 
+# Optional: fix all P0 knobs (including triad) via `ave_p0_sweep`'s best_config.json.
+BASE_CONFIG_JSON="${BASE_CONFIG_JSON:-}"
+BASE_CFG_FLAG=()
+if [[ -n "${BASE_CONFIG_JSON}" ]]; then
+  if [[ ! -f "${BASE_CONFIG_JSON}" ]]; then
+    echo "ERROR: BASE_CONFIG_JSON not found: ${BASE_CONFIG_JSON}" >&2
+    exit 2
+  fi
+  BASE_CFG_FLAG+=(--base-config-json "${BASE_CONFIG_JSON}")
+fi
+
+# Optional: Stage-1 scores cache (recommended for external teachers like PSP).
+SCORES_JSON="${SCORES_JSON:-}"
+SCORES_FLAG=()
+if [[ -n "${SCORES_JSON}" ]]; then
+  if [[ ! -f "${SCORES_JSON}" ]]; then
+    echo "ERROR: SCORES_JSON not found: ${SCORES_JSON}" >&2
+    exit 2
+  fi
+  SCORES_FLAG+=(--scores-json "${SCORES_JSON}")
+fi
+
 # AST weights are opt-in elsewhere; for ast/ast_lr runs, default to pretrained unless explicitly disabled.
 AST_PRETRAINED="${AST_PRETRAINED:-}"
 if [[ -z "${AST_PRETRAINED}" ]]; then
@@ -122,6 +144,8 @@ python -m avs.experiments.mde_ltl oracle_vs_predicted \
   --train-device "${TRAIN_DEVICE}" \
   --audio-device "${AUDIO_DEVICE}" \
   --eventness-method "${EVENTNESS}" \
+  "${BASE_CFG_FLAG[@]}" \
+  "${SCORES_FLAG[@]}" \
   "${AST_PRETRAINED_FLAG[@]}" \
   "${ANCHOR_CONF_FLAG[@]}" \
   "${CHEAP_VISUAL_FLAG[@]}"
