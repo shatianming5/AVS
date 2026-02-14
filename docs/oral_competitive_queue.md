@@ -401,7 +401,7 @@ Idea:
 - Try a qualitatively different lever than swapping Stage-1 heads: **change the vision backbone** used for caching
   (and optionally only for Stage-1 scoring) to improve anchor reliability and/or downstream robustness.
 
-Implementation (repo changes; see the uncommitted diff in this workspace):
+Implementation (repo changes; already landed in this repo):
 - `avs/vision/clip_vit.py`: add `timm:` backend (preprocess + `timm.create_model(..., num_classes=0)`).
 - `avs/pipeline/ave_p0_end2end.py`: add `--vision-model-name` and write backbone metadata into `cache_build.json`.
 - `avs/experiments/ave_p0_sweep.py`: allow `STAGE1_CACHES_DIR` override so Stage-1 can use a different cache than Stage-2.
@@ -424,8 +424,15 @@ Results:
   - top1med_norm candidate set: `runs/E0918_ave_p0_sweep_official_val_av_clipdiff_vec_mlp_ltl_top1med_norm_v1_stage1eva02_20260212-232240/sweep_summary.json`
     - best: `ltltop1medn_thr0p5_shift0` (anchored=0.74863 vs uniform=0.74680; Δ=+0.00183; p=0.8223)
 
+Update (PSP keepadj+hconf; fixed config from E0978; token_budget=1960):
+- EVA02 stage-2 full test402 (SEEDS=0..9): `runs/E1205_full_test402_psp_keepadj_hconf_eva02_s0-9_20260215-030735/metrics.json`
+  - anchored=0.75381 vs uniform=0.74654 (Δ=+0.00726; p=0.07997)
+  - Absolute improves vs CLIP PSP (E0980 anchored=0.73791), but the selection gain shrinks under EVA02.
+- MetaCLIP stage-2 is not viable: val401 uniform collapses to ~0.56 (`runs/E1202_val402_psp_keepadj_hconf_metaclip_s0-2_20260215-025621/metrics.json`).
+
 Decision:
-- Not competitive on val402 in any setup; do not promote to quick/full test402.
+- If the goal is **C0003 hard gate** (Δ≥+2% with p<0.05): keep CLIP backbone (E0980).
+- If the goal is **absolute accuracy / closer-to-SOTA**: EVA02 is a viable Stage-2 swap (but currently does not preserve the +2% selection gain).
 
 ## 20) Track R: DINOv2 Stage-1-only caches (`STAGE1_CACHES_DIR`)
 

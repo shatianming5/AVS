@@ -15,6 +15,7 @@ Canon sources:
   - Winning run (PSP/CPSP AVEL Stage-1 + keepadj+hconf Stage-2): `runs/E0980_full_test402_psp_evt_gini_keepadj_hconf_best_s0-9_20260214-031741/metrics.json` (anchored=0.73791 vs uniform=0.71622; Δ=+0.02169; p=0.00149; `SEEDS=0..9`). Diagnose: `runs/E0980_full_test402_psp_evt_gini_keepadj_hconf_best_s0-9_20260214-031741/diagnose.json` (fallback_used_frac≈0.709).
   - Selected config: `runs/E0978_val402_psp_evt_gini_keepadj_hconf_v1_20260214-030933/best_config.json` (candidate name=`ltlgini_keepadj_gini0p45_hconf0p5`).
   - Prior best (deployable; vec-MLP df7): `runs/E0643_full_test402_vecmlp_keepadj_adj2_shift1_std0p55_df7_officialids_s0-9_20260211-001604/metrics.json` (Δ=+0.01045; p=0.0395).
+  - Backbone swap note (absolute accuracy lever): EVA02 Stage-2 improves absolute accuracy but does not preserve the +2% gain: `runs/E1205_full_test402_psp_keepadj_hconf_eva02_s0-9_20260215-030735/metrics.json` (anchored=0.75381 vs uniform=0.74654; Δ=+0.00726; p=0.07997).
 - [ ] If C0003 cannot be proven, **lock a revised claim** (e.g., “consistent +1% at fixed budget + strong Oracle ceiling + robust protocol”) and make the rest of this checklist airtight (so reviewers cannot dismiss as heuristic/cherry-pick).
 
 ---

@@ -1727,6 +1727,66 @@
   - required_metrics:
     - `metrics.json`: include `text_only`, `random_frame1` and at least 2 strong baselines (`qframe_gumbel_clip`, `maxinfo_maxvol_clip`, `mdp3_dpp_clip`)
 
+### Backbone Swap (Stage-2 Vision Features; AVE-P0)
+
+- [x] E1200: Build MetaCLIP (timm) vision caches for official AVE (train+val)
+  - command: `python -m avs.pipeline.ave_p0_end2end --mode none --allow-missing --meta-dir data/AVE/meta --processed-dir runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed --caches-dir runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch16_clip_224_metaclip_2pt5b_112_160_224_352_448 --split-train train --split-eval val --train-ids-file data/AVE/meta/download_ok_train_official.txt --eval-ids-file data/AVE/meta/download_ok_val_official.txt --limit-train 3339 --limit-eval 402 --seeds 0,1 --cache-only --cache-skip-existing --cache-num-workers 5 --cache-devices cuda:0,cuda:1,cuda:2,cuda:3,cuda:4 --cache-resolutions 112,160,224,352,448 --vision-model-name timm:vit_base_patch16_clip_224.metaclip_2pt5b --vision-pretrained --out-dir runs/E1200_build_cache_metaclip_trainval_20260215-022736`
+  - configs: []
+  - seeds: []
+  - required_artifacts:
+    - `runs/E1200_build_cache_metaclip_trainval_20260215-022736/cache_build.json`
+    - `runs/E1200_build_cache_metaclip_trainval_20260215-022736/cache_only.json`
+  - required_metrics:
+    - `cache_build.json`: `ok=true`, `missing_caches=[]`
+  - logs: `artifacts/experiments/E1200/run.log`
+
+- [x] E1201: Fill MetaCLIP (timm) vision caches for official AVE (test)
+  - command: `python -m avs.pipeline.ave_p0_end2end --mode none --allow-missing --meta-dir data/AVE/meta --processed-dir runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed --caches-dir runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch16_clip_224_metaclip_2pt5b_112_160_224_352_448 --split-train train --split-eval test --train-ids-file data/AVE/meta/download_ok_train_official.txt --eval-ids-file data/AVE/meta/download_ok_test_official.txt --limit-train 3339 --limit-eval 402 --seeds 0,1 --cache-only --cache-skip-existing --cache-num-workers 5 --cache-devices cuda:0,cuda:1,cuda:2,cuda:3,cuda:4 --cache-resolutions 112,160,224,352,448 --vision-model-name timm:vit_base_patch16_clip_224.metaclip_2pt5b --vision-pretrained --out-dir runs/E1201_build_cache_metaclip_test_20260215-025229`
+  - configs: []
+  - seeds: []
+  - required_artifacts:
+    - `runs/E1201_build_cache_metaclip_test_20260215-025229/cache_build.json`
+    - `runs/E1201_build_cache_metaclip_test_20260215-025229/cache_only.json`
+  - required_metrics:
+    - `cache_build.json`: `ok=true`, `missing_caches=[]`
+  - logs: `artifacts/experiments/E1201/run.log`
+
+- [x] E1202: Backbone swap eval on official val402 (MetaCLIP stage-2; PSP keepadj+hconf; SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch16_clip_224_metaclip_2pt5b_112_160_224_352_448 BEST_CONFIG_JSON=runs/E0978_val402_psp_evt_gini_keepadj_hconf_v1_20260214-030933/best_config.json EVENTNESS=psp_avel_evt SPLIT_EVAL=val EVAL_IDS_FILE=data/AVE/meta/download_ok_val_official.txt LIMIT_EVAL=402 SEEDS=0,1,2 OUT_DIR=runs/E1202_val402_psp_keepadj_hconf_metaclip_s0-2_20260215-025621 bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+  - configs: [`runs/E0978_val402_psp_evt_gini_keepadj_hconf_v1_20260214-030933/best_config.json`]
+  - seeds: [0, 1, 2]
+  - required_artifacts: [`runs/E1202_val402_psp_keepadj_hconf_metaclip_s0-2_20260215-025621/metrics.json`]
+  - required_metrics:
+    - `metrics.json`: `summary.anchored_top2.mean`, `summary.uniform.mean`, `paired_ttest.anchored_vs_uniform.p`
+  - logs: `artifacts/experiments/E1202/run.log`
+
+- [x] E1203: Backbone swap eval on official val402 (EVA02 stage-2; PSP keepadj+hconf; SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_eva02_base_patch16_clip_224_112_160_224_352 BEST_CONFIG_JSON=runs/E0978_val402_psp_evt_gini_keepadj_hconf_v1_20260214-030933/best_config.json EVENTNESS=psp_avel_evt SPLIT_EVAL=val EVAL_IDS_FILE=data/AVE/meta/download_ok_val_official.txt LIMIT_EVAL=402 SEEDS=0,1,2 OUT_DIR=runs/E1203_val402_psp_keepadj_hconf_eva02_s0-2_20260215-025934 bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+  - configs: [`runs/E0978_val402_psp_evt_gini_keepadj_hconf_v1_20260214-030933/best_config.json`]
+  - seeds: [0, 1, 2]
+  - required_artifacts: [`runs/E1203_val402_psp_keepadj_hconf_eva02_s0-2_20260215-025934/metrics.json`]
+  - required_metrics:
+    - `metrics.json`: `summary.anchored_top2.mean`, `summary.uniform.mean`, `paired_ttest.anchored_vs_uniform.p`
+  - logs: `artifacts/experiments/E1203/run.log`
+
+- [x] E1204: Backbone swap quick test402 (EVA02 stage-2; PSP keepadj+hconf; SEEDS=0..2)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_eva02_base_patch16_clip_224_112_160_224_352 BEST_CONFIG_JSON=runs/E0978_val402_psp_evt_gini_keepadj_hconf_v1_20260214-030933/best_config.json EVENTNESS=psp_avel_evt SEEDS=0,1,2 OUT_DIR=runs/E1204_quick_test402_psp_keepadj_hconf_eva02_s0-2_20260215-030019 bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+  - configs: [`runs/E0978_val402_psp_evt_gini_keepadj_hconf_v1_20260214-030933/best_config.json`]
+  - seeds: [0, 1, 2]
+  - required_artifacts: [`runs/E1204_quick_test402_psp_keepadj_hconf_eva02_s0-2_20260215-030019/metrics.json`]
+  - required_metrics:
+    - `metrics.json`: `summary.anchored_top2.mean`, `summary.uniform.mean`, `paired_ttest.anchored_vs_uniform.p`
+  - logs: `artifacts/experiments/E1204/run.log`
+
+- [x] E1205: Backbone swap full test402 (EVA02 stage-2; PSP keepadj+hconf; SEEDS=0..9)
+  - command: `PROCESSED_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/processed CACHES_DIR=runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_eva02_base_patch16_clip_224_112_160_224_352 BEST_CONFIG_JSON=runs/E0978_val402_psp_evt_gini_keepadj_hconf_v1_20260214-030933/best_config.json EVENTNESS=psp_avel_evt OUT_DIR=runs/E1205_full_test402_psp_keepadj_hconf_eva02_s0-9_20260215-030735 bash scripts/e0208_ave_p0_best_to_test_official_ltl_stage1.sh`
+  - configs: [`runs/E0978_val402_psp_evt_gini_keepadj_hconf_v1_20260214-030933/best_config.json`]
+  - seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  - required_artifacts: [`runs/E1205_full_test402_psp_keepadj_hconf_eva02_s0-9_20260215-030735/metrics.json`]
+  - required_metrics:
+    - `metrics.json`: `summary.anchored_top2.mean`, `summary.uniform.mean`, `paired_ttest.anchored_vs_uniform.p`
+  - logs: `artifacts/experiments/E1205/run.log`
+
 ## Results
 | id | status | key_metrics | artifacts | notes |
 |---|---|---|---|---|
@@ -1848,6 +1908,12 @@
 | E0980 | success | full test402 (PSP evt; keepadj hconf best): anchored=0.73791 vs uniform=0.71622 (Δ=+0.02169; p=0.00149) | `runs/E0980_full_test402_psp_evt_gini_keepadj_hconf_best_s0-9_20260214-031741/` | diagnose fallback_used_frac≈0.709; **C0003 hard gate met** |
 | E1100 | success | Video-MME install: downloaded_ok=212/229 (fail=17); `MAX_SECONDS=180`, `LIMIT=256` | `runs/videomme_download_20260214-230517/download_report.json` | YouTube availability is best-effort; downloader clips to first 3 minutes |
 | E1101 | success | Video-MME test (n=239 kept; `B_FRAMES=16`, `MAX_SECONDS=180`): uniform=0.5272; `text_only`=0.3054 (Δ=-0.2218); `random_frame1`=0.3640; `maxinfo_maxvol_clip`=0.5356 (Δ=+0.0084; CI includes 0); most selection methods ≤ uniform on this subset | `runs/E1101_videomme_vlm_eval_20260214-233012/metrics.json` | fixed VLM, only selection changes; priors controls included; YouTube-backed (skipped_videos=17) |
+| E1200 | success | MetaCLIP cache build (timm ViT-B/16; train+val): ok=true, missing=0; res=[112,160,224,352,448]; num_npz=4097 | `runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch16_clip_224_metaclip_2pt5b_112_160_224_352_448/` | build logs: `runs/E1200_build_cache_metaclip_trainval_20260215-022736/cache_build.json`, `runs/E1201_build_cache_metaclip_test_20260215-025229/cache_build.json` |
+| E1201 | success | MetaCLIP cache fill (test): ok=true, missing=0; adds official test402 clips | `runs/REAL_AVE_OFFICIAL_RERUN_20260209-054402/caches_vit_base_patch16_clip_224_metaclip_2pt5b_112_160_224_352_448/` | out-dir: `runs/E1201_build_cache_metaclip_test_20260215-025229/cache_only.json` |
+| E1202 | success | val401 (MetaCLIP stage-2; PSP keepadj+hconf; SEEDS=0..2): anchored=0.57589 vs uniform=0.56010 (Δ=+0.01579; p=0.01498) | `runs/E1202_val402_psp_keepadj_hconf_metaclip_s0-2_20260215-025621/metrics.json` | absolute accuracy collapses vs CLIP ref (val401: uniform=0.74680; anchored=0.75445); MetaCLIP not viable here |
+| E1203 | success | val401 (EVA02 stage-2; PSP keepadj+hconf; SEEDS=0..2): anchored=0.76209 vs uniform=0.75869 (Δ=+0.00341; p=0.09950) | `runs/E1203_val402_psp_keepadj_hconf_eva02_s0-2_20260215-025934/metrics.json` | EVA02 improves absolute val accuracy vs CLIP under same config |
+| E1204 | success | quick test402 (EVA02 stage-2; PSP keepadj+hconf; SEEDS=0..2): anchored=0.75307 vs uniform=0.75746 (Δ=-0.00439; p=0.11109) | `runs/E1204_quick_test402_psp_keepadj_hconf_eva02_s0-2_20260215-030019/metrics.json` | quick-transfer is noisy; promote only based on full seeds |
+| E1205 | success | full test402 (EVA02 stage-2; PSP keepadj+hconf; SEEDS=0..9): anchored=0.75381 vs uniform=0.74654 (Δ=+0.00726; p=0.07997) | `runs/E1205_full_test402_psp_keepadj_hconf_eva02_s0-9_20260215-030735/metrics.json` | absolute improves vs CLIP PSP (E0980 anchored=0.73791); selection gain shrinks under EVA02 |
 
 > Note: The authoritative runnable queue for the current `docs/plan.md` is the checklist above. The `## Experiments` catalog below is an archive; its internal `[ ]` fields are not a TODO list.
 
