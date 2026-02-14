@@ -28,3 +28,10 @@ Regeneration sources are documented below so the exports are reproducible even i
 
 - `fig4_qa_budget_curve_intentqa.png`
   - Source: `runs/E0702_qa_budget_curve_20260211-164607/intentqa_curve/budget_curve.png`
+
+- `fig5_videomme_controls.png`
+  - Source script: `scripts/oral/make_videomme_controls_fig.py`
+  - Inputs:
+    - Video-MME controlled transfer metrics: `runs/E1101_videomme_vlm_eval_20260214-233012/metrics.json`
+  - Command:
+    - `python scripts/oral/make_videomme_controls_fig.py --metrics-json runs/E1101_videomme_vlm_eval_20260214-233012/metrics.json --out docs/oral_assets/fig5_videomme_controls.png`

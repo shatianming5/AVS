@@ -72,16 +72,39 @@ This page aligns our "listen-then-look" QA add-on with the closest public work, 
 | IntentQA / EgoSchema / AVQA | QA benchmarks | Yes | N/A | N/A | N/A |
 | **Ours (QA add-on)** | Budgeted QA transfer | Yes | Yes (`ql2l_*`) | **Yes (`ql2l_clap`, `ql2l_asr_bm25`)** | **Yes (B_FRAMES + same VLM)** |
 
+### 2.1 Same-Budget Baseline Alignment (What We Reproduce and Why)
+
+We explicitly align a few **strong, training-free frame-selection baselines** under the *same fixed budget* to make the comparison reviewer-proof:
+
+- We are **not** claiming “the strongest selector wins”.
+- We are claiming the evaluation contract: **controlled equal-budget token allocation + reliability gating**, with explainable failure modes and reproducible artifacts.
+
+Baselines we reproduce in this repo (same base VLM, fixed `B_FRAMES`, only selection changes):
+- `qframe_gumbel_clip`: Q-Frame-style training-free, query-aware selection (CLIP similarity + gumbel-topk proxy; we do **not** reproduce multi-resolution adaptation here).  
+  Reference: Q-Frame (ICCV 2025): https://openaccess.thecvf.com/content/ICCV2025/html/Zhang_Q-Frame_Query-aware_Frame_Selection_and_Multi-Resolution_Adaptation_for_Video-LLMs_ICCV_2025_paper.html
+- `maxinfo_maxvol_clip`: MaxInfo-style training-free MaxVol selection (diversity via max-volume).  
+  Reference: MaxInfo (2025): https://arxiv.org/abs/2502.03183
+- `mdp3_dpp_clip`: a list-wise diversity baseline via DPP MAP (implemented as a deterministic greedy MAP proxy).
+
+Where these appear:
+- Video-MME controlled transfer: `runs/E1101_videomme_vlm_eval_20260214-233012/metrics.json` (see also `docs/oral_assets/fig5_videomme_controls.png`).
+
 ## 3) Reviewer-facing claim boundary
 
-- We do **not** claim SOTA on the full long-video QA leaderboards.
-- We claim a **controlled budgeted transfer result**:
+- We do **not** claim long-video leaderboard SOTA.
+- We claim a **controlled equal-budget token allocation + reliability gating** story:
   - same VLM, same prompt style, same evaluation split,
-  - only frame selection differs,
-  - and we include priors / anti-cherry-pick controls (`text_only`, `random`, and `random_frame1`), consistent with VideoEval-Pro-style concerns.
+  - fixed frame budget (`B_FRAMES`) and other eval caps,
+  - only frame-selection / token-allocation changes,
+  - with explicit priors / anti-cherry-pick controls (`text_only`, `random`, `random_frame1`), consistent with VideoEval-Pro-style benchmark-risk concerns.
+
+Reviewer-proof context:
+- CVPR reviewer guidelines explicitly note that “not exceed state-of-the-art performance is not grounds for rejection”.
+  - https://cvpr.thecvf.com/Conferences/2026/ReviewerGuidelines
 
 ## 4) How this maps to current artifacts
 
 - IntentQA / EgoSchema / AVQA core runs: `docs/experiment.md` entries `E0600~E0619`
 - Bucket narrative (when/where helps): `runs/E0619_qa_bucket_report_20260211-062907/*/bucket_report.md`
 - Bucket significance: `runs/E0705_qa_bucket_significance_*/bucket_significance.json`
+- Mainstream benchmark controlled transfer (Video-MME): `docs/experiment.md` entries `E1100~E1101`

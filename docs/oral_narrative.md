@@ -6,6 +6,14 @@ This document is the **oral-ready story skeleton** that maps directly to the exp
 
 **Audio is a cheap temporal index**: we “listen” to propose a small set of candidate moments, then **allocate the visual token budget only where evidence is likely**, instead of uniformly spending compute across time.
 
+## 1.1) Claim Boundary (Reviewer-Facing; Write This Verbatim)
+
+We contribute a **controlled equal-budget token-allocation** evaluation and method family with a **reliability gate** (audio as a cheap temporal index).  
+We do **not** claim SOTA on long-video QA leaderboards; we claim **same-model, same-budget, only-selection-changes** evidence with explicit priors controls.
+
+Reviewer-proof note (context): CVPR reviewer guidelines explicitly state that “not exceed state-of-the-art performance is not grounds for rejection” and emphasize assessing a paper by its actual contributions.  
+Link: https://cvpr.thecvf.com/Conferences/2026/ReviewerGuidelines
+
 ## 2) Budget Definition Is Sealed (No Wiggle Room)
 
 We evaluate under **strict equal visual-token budgets**.
@@ -103,7 +111,42 @@ Long-video QA add-on budget curves (slide exports):
 - AVQA: `docs/oral_assets/fig4_qa_budget_curve_avqa.png`
 
 Optional mainstream benchmark (controlled transfer; priors controls per VideoEval-Pro concerns):
-- Video-MME (n=239 kept; `B_FRAMES=16`, `MAX_SECONDS=180`, Qwen2-VL-2B; report `text_only/random_frame1`): `runs/E1101_videomme_vlm_eval_20260214-233012/metrics.json` (uniform=0.5272; `text_only`=0.3054; selection methods mostly non-positive vs uniform on this subset).
+
+### 7.1 Video-MME Controlled Transfer (Reviewer-Proof Priors Controls)
+
+Goal: add **one** mainstream long-video MCQ benchmark as a *controlled transfer* check, with explicit priors controls.
+
+Protocol (sealed):
+- Base VLM: `Qwen/Qwen2-VL-2B-Instruct`
+- Split/subset: `test`, deterministic `LIMIT=256` hash-order subset; `n=239` kept (YouTube availability is best-effort)
+- Caps: `MAX_SECONDS=180` (clip to first 3 minutes)
+- Budget: selection methods use fixed `B_FRAMES=16` (same model/prompt; only selection changes)
+- Priors controls (not equal-budget by design):
+  - `text_only`: no video frames
+  - `random_frame1`: 1 random frame (VideoEval-Pro explicitly warns this can be surprisingly strong on MCQ benchmarks)
+  - Reference: VideoEval-Pro (2025): https://arxiv.org/abs/2505.14640
+
+Slide export (1-page summary): `docs/oral_assets/fig5_videomme_controls.png`  
+Canonical metrics: `runs/E1101_videomme_vlm_eval_20260214-233012/metrics.json`
+
+Headline numbers (accuracy; `n=239`):
+| Method | Acc | Δ vs uniform |
+|---|---:|---:|
+| `uniform` | 0.5272 | +0.0000 |
+| `random` | 0.4770 | -0.0502 |
+| `random_frame1` (1 frame) | 0.3640 | -0.1632 |
+| `text_only` (no video) | 0.3054 | -0.2218 |
+| `audio` | 0.4644 | -0.0628 |
+| `fused` | 0.4603 | -0.0669 |
+| `ql2l_clip` | 0.5021 | -0.0251 |
+| `qframe_gumbel_clip` | 0.4686 | -0.0586 |
+| `maxinfo_maxvol_clip` | 0.5356 | +0.0084 (boot CI includes 0) |
+| `mdp3_dpp_clip` | 0.4812 | -0.0460 |
+
+How to talk about this slide (tight framing):
+- This is **not** a leaderboard push; it is a **controlled-transfer** sanity check under a fixed budget.
+- The priors controls are there to pre-empt reviewer objections about MCQ benchmarks (VideoEval-Pro explicitly highlights MCQ priors / guessing and that even random frames can yield high accuracy on Video-MME-like settings).
+- Result: on this subset, selection is mostly non-positive vs uniform; this is **still useful evidence** because it shows the protocol is honest about negatives and that “frame selection under priors” is non-trivial.
 
 ## 8) Reproducibility (What We Provide)
 

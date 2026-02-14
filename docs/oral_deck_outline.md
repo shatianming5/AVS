@@ -7,7 +7,7 @@ This outline references committed slide assets under `docs/oral_assets/` and can
 ## Slide 1: Title + One-Line Claim
 
 - Title: Listen-then-Look (Audio as a Cheap Temporal Index)
-- One-line claim: Under **strict equal visual-token budgets**, Listen-then-Look frame selection **beats uniform by +2.17pp on official AVE test402** (paired `p=0.00149`, `SEEDS=0..9`) while retaining a large oracle ceiling and a testable stage-1 reliability gap.
+- One-line claim: Under **strict equal visual-token budgets**, Listen-then-Look is a **controlled token-allocation + reliability-gating** method (audio as a cheap temporal index) that **beats uniform by +2.17pp on official AVE test402** (paired `p=0.00149`, `SEEDS=0..9`) while retaining a large oracle ceiling and a testable stage-1 reliability gap.
 
 ## Slide 2: Problem Setup (Budget Is the Contract)
 
@@ -53,10 +53,18 @@ This outline references committed slide assets under `docs/oral_assets/` and can
   - include `text_only` and `random` baselines (anti-cherry-pick)
   - budget curves show where audio helps and where it flips (must state negatives explicitly)
 
+### Optional Slide 7b: Video-MME Controlled Transfer (Priors Controls)
+
+- Insert: `docs/oral_assets/fig5_videomme_controls.png`
+- Talking points:
+  - fixed base VLM + fixed `B_FRAMES=16` for selection methods; only selection changes
+  - include **priors controls**: `text_only` and `random_frame1` (motivated by VideoEval-Pro-style MCQ priors concerns)
+  - report negative/neutral results honestly: on this reproducible subset, strong training-free selectors are mostly non-positive vs uniform (MaxVol is slightly positive but CI crosses 0)
+
 ## Slide 8: Related Work Positioning (1 Table + 1 Boundary Sentence)
 
 - 2x2 axes: query-aware selection vs token reallocation vs training-free selection vs dynamic/agentic sampling.
-- Boundary sentence: controlled equal-budget frame selection, not long-video leaderboard SOTA.
+- Boundary sentence (write this verbatim): **controlled equal-budget token allocation + reliability gating**, not long-video leaderboard SOTA.
 - Source list: `docs/oral_related_work.md`
 
 ## Slide 9: Limitations + What Would Make +2% Happen
